@@ -123,9 +123,8 @@ sizemodel<-function(params,ERSEM.det.input=F,U_mat,V_mat,W_mat,temp.effect=T,eps
     #matrix for keeping track of senescence mortality and other (intrinsic) mortality
     SM.v = SM.u   =OM.v = OM.u   = array(0, length(x))
     
-    #empty vector to hold fishing mortality rates at each size class
-    Fvec.v = Fvec.u = rep(0,length(x))
-    
+    #empty vector to hold fishing mortality rates at each size class at time
+    Fvec.v = Fvec.u = array(0, c(length(x), Neq+1))
     
     
     #lookup tables for terms in the integrals which remain constant over time
@@ -165,9 +164,10 @@ sizemodel<-function(params,ERSEM.det.input=F,U_mat,V_mat,W_mat,temp.effect=T,eps
     #Fishing mortality (THESE PARAMETERS NEED TO BE ESTIMATED!)
     
     #Fvec[Fref:Nx] = 0.09*(x[Fref:Nx]/ log10(exp(1)) ) + 0.04 # from Benoit & Rochet 2004 
-    
-    Fvec.u[Fref.u:Nx] = rep(Fmort.u,length(Fvec.u[Fref.u:Nx]))  
-    Fvec.v[Fref.v:Nx] = rep(Fmort.v,length(Fvec.v[Fref.v:Nx]))  
+     
+      # here Fmort.u and Fmort.u= fixed catchability term for U and V to be estimated along with Fref.v and Fref.u
+    Fvec.u[Fref.u:Nx,1] = Fmort.u*effort[1]
+    Fvec.v[Fref.v:Nx,1] = Fmort.v*effort[1]
     
     #iteration over time, N [days]
     
@@ -186,26 +186,26 @@ sizemodel<-function(params,ERSEM.det.input=F,U_mat,V_mat,W_mat,temp.effect=T,eps
 
       #  ONLY IF RUNNING TO EQUILIBRIUM:
       #  below is to skip unecessary timesteps if model has reached equilibirum
-       if(i>100 & equilibrium==T )
-       {
-         # browser()
-         if(max(abs((log(U[-c(1:91),(i-1)]))-(log(U[-c(1:91),(i-2)]))))<eps
-            &max(abs((log(V[-c(1:91),(i-1)]))-(log(V[-c(1:91),(i-2)]))))<eps
-            &(abs((log(W[(i-1)]))-(log(W[(i-2)]))))<eps)
-         {
-           U[,Neq]<-U[,i-1]
-           PM.v[,Neq]<-PM.v[,i-1]
-           GG.v[,Neq]<-GG.v[,i-1]
-           V[,Neq]<-V[,i-1]
-           PM.u[,Neq]<-PM.u[,i-1]
-           GG.u[,Neq]<-GG.u[,i-1]
-           Y.u[,Neq]<-Y.u[,i-1]
-           Y.v[,Neq]<-Y.v[,i-1]
-           W[Neq]<-W[i-1]
-           return(list(U=U[,],GG.u=GG.u[,],PM.u=PM.u[,],V=V[,],GG.v=GG.v[,],PM.v=PM.v[,],Y.u=Y.u[,],Y.v=Y.v[,],W=W[], params=params))
-         }
-       }
-      
+       # if(i>100 & equilibrium==T )
+       # {
+       #   # browser()
+       #   if(max(abs((log(U[-c(1:91),(i-1)]))-(log(U[-c(1:91),(i-2)]))))<eps
+       #      &max(abs((log(V[-c(1:91),(i-1)]))-(log(V[-c(1:91),(i-2)]))))<eps
+       #      &(abs((log(W[(i-1)]))-(log(W[(i-2)]))))<eps)
+       #   {
+       #     U[,Neq]<-U[,i-1]
+       #     PM.v[,Neq]<-PM.v[,i-1]
+       #     GG.v[,Neq]<-GG.v[,i-1]
+       #     V[,Neq]<-V[,i-1]
+       #     PM.u[,Neq]<-PM.u[,i-1]
+       #     GG.u[,Neq]<-GG.u[,i-1]
+       #     Y.u[,Neq]<-Y.u[,i-1]
+       #     Y.v[,Neq]<-Y.v[,i-1]
+       #     W[Neq]<-W[i-1]
+       #     return(list(U=U[,],GG.u=GG.u[,],PM.u=PM.u[,],V=V[,],GG.v=GG.v[,],PM.v=PM.v[,],Y.u=Y.u[,],Y.v=Y.v[,],W=W[], params=params))
+       #   }
+       # }
+       # 
 
       #--------------------------------
       # Calculate Growth and Mortality
@@ -247,7 +247,7 @@ sizemodel<-function(params,ERSEM.det.input=F,U_mat,V_mat,W_mat,temp.effect=T,eps
       #PM.u[,i]<-as.vector((1-f.pel)*(A.u*10^(x*alpha.u)*pref.pel)*(U[,i]*dx)%*%(mphi))  #yr-1 
       
       
-      Z.u[,i]<- PM.u[,i] + pel.Tempeffect[i]*OM.u + pel.Tempeffect[i]*SM.u + Fvec.u     #yr-1
+      Z.u[,i]<- PM.u[,i] + pel.Tempeffect[i]*OM.u + pel.Tempeffect[i]*SM.u + Fvec.u[,i]     #yr-1
       
       # Benthos growth integral
       GG.v[,i]<-(1-def.low)*K.d*f.det #yr-1
@@ -264,7 +264,7 @@ sizemodel<-function(params,ERSEM.det.input=F,U_mat,V_mat,W_mat,temp.effect=T,eps
       
       #PM.v[,i]<-as.vector((1-f.ben)*(A.u*10^(x*alpha.u)*pref.ben)*(U[,i]*dx)%*%(mphi))  #yr-1
       
-      Z.v[,i]<-PM.v[,i]+ ben.Tempeffect[i]*OM.v + ben.Tempeffect[i]*SM.v  + Fvec.u  #yr-1
+      Z.v[,i]<-PM.v[,i]+ ben.Tempeffect[i]*OM.v + ben.Tempeffect[i]*SM.v  + Fvec.v[,i]  #yr-1
       
       #total biomass density eaten by pred (g.m-2.yr-1)
       
@@ -284,9 +284,9 @@ sizemodel<-function(params,ERSEM.det.input=F,U_mat,V_mat,W_mat,temp.effect=T,eps
       
       
       #output fisheries catches per yr at size
-      Y.u[Fref.u:Nx,i]<-Fvec.u[Fref.u:Nx]*U[Fref.u:Nx,i]*10^x[Fref.u:Nx] 
+      Y.u[Fref.u:Nx,i]<-Fvec.u[Fref.u:Nx,i]*U[Fref.u:Nx,i]*10^x[Fref.u:Nx] 
       #output fisheries catches per yr at size
-      Y.v[Fref.v:Nx,i]<-Fvec.v[Fref.v:Nx]*V[Fref.v:Nx,i]*10^x[Fref.v:Nx] 
+      Y.v[Fref.v:Nx,i]<-Fvec.v[Fref.v:Nx,i]*V[Fref.v:Nx,i]*10^x[Fref.v:Nx] 
       
       
       #------------------------------------------------
@@ -431,6 +431,13 @@ sizemodel<-function(params,ERSEM.det.input=F,U_mat,V_mat,W_mat,temp.effect=T,eps
       rm(j)
       
       
+      # increment fishing 
+      
+      Fvec.u[Fref.u:Nx,i+1] = Fmort.u*effort[i+1]
+      
+      Fvec.v[Fref.v:Nx,i+1] = Fmort.v*effort[i+1]
+      
+      
     }#end time iteration
     
     return(list(U=U[,],GG.u=GG.u[,],PM.u=PM.u[,],V=V[,],GG.v=GG.v[,],PM.v=PM.v[,],Y.u=Y.u[,],Y.v=Y.v[,],W=W[], params=params))
@@ -449,7 +456,7 @@ sizemodel<-function(params,ERSEM.det.input=F,U_mat,V_mat,W_mat,temp.effect=T,eps
 
 sizeparam<-function(equilibrium=F, dx=0.1,xmin=-12,xmax=6,xmin.consumer.u=-7,xmin.consumer.v=-7,tmax=100,
                     tstepspryr=48,fmort.u =0.0,fminx.u=1, fmort.v = 0.0,fminx.v=1,er=0.5,pp=-3,slope=-1,lat=NA,
-                    lon=NA,depth=500,sst=20,sft=20,
+                    lon=NA,depth=500,sst=20,sft=20, effort = 1.0, search_vol=640,
                     use.init = FALSE, U.initial = NA, V.initial = NA ,W.initial = NA){
   #---------------------------------------------------------------------------------------
   # FUNCTION TO GET Parameters of model
@@ -486,6 +493,9 @@ sizeparam<-function(equilibrium=F, dx=0.1,xmin=-12,xmax=6,xmin.consumer.u=-7,xmi
   param$min.fishing.size.u= fminx.u # minimum log10 body size fished for predators
   param$min.fishing.size.v= fminx.v # minimum log10 body size fished for detritivores
   
+  # get effort and rescale so that max is set to 1
+  param$effort = effort/max(effort)
+  
   # benthic-pelagic coupling parameters
   
   # set predator coupling to benthos, depth dependent - 0.75 above 500 m, 0.5 between 500-1800 and 0 below 	1800m (suggestions of values from Clive Trueman based on stable isotope work, and proportion of biomass, 	Rockall Trough studies)
@@ -504,7 +514,7 @@ sizeparam<-function(equilibrium=F, dx=0.1,xmin=-12,xmax=6,xmin.consumer.u=-7,xmi
   
   param$q0=2.0      # Mean log10 predator prey mass ratio  100:1.
   param$sd.q=1.0    # 0.6 to 1.0 for lognormal prey preference function. 
-  param$A.u=64    # originally 640, but using Quest-fish default of 64 hourly rate volume searched constant m3.yr-1 for fish. need to check this value, its quite large.
+  param$A.u=search_vol    # originally 640, but if 64 then using Quest-fish default of 64 hourly rate volume searched constant m3.yr-1 for fish. need to check this value, its quite large.
   param$A.v=param$A.u*0.1    # hourly rate volume filtered constant m3.yr-1 for benthos. this value yields believable growth curve.
   # approximatelty 10 times less than A.u
   param$alpha.u=0.82  #exponent for metabolic requirements plus swimming for predators(Ware et al 1978)

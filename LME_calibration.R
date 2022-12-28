@@ -4,6 +4,7 @@
 
 library(devtools)
 library(tidyverse)
+library(lubridate)
 
 # Function to run model
 run_model<-function(input_filepath, output_filepath,model_filepath, LMEnumber=42){
@@ -23,12 +24,11 @@ run_model<-function(input_filepath, output_filepath,model_filepath, LMEnumber=42
   #create monthly inputs for fishing
   lme_clim$Year<-year(lme_clim$t)
   lme_clim<-left_join(lme_clim,lme_fish,by="Year")
-  # convert fishing effort and catch to monthly values (divide values by 12)
-  lme_clim$NomActive/12
-  lme_clim$NomActive_area_m2/12
-  lme_clim$catch_tonnes/12
-  lme_clim$catch_tonnes_area_m2/12
-  
+  # convert fishing effort and catch per yr (divide values by 12)
+  lme_clim$NomActive
+  lme_clim$NomActive_area_m2
+  lme_clim$catch_tonnes
+  lme_clim$catch_tonnes_area_m2
   
   # set up params
   params <- sizeparam(equilibrium = FALSE
@@ -37,25 +37,26 @@ run_model<-function(input_filepath, output_filepath,model_filepath, LMEnumber=42
                       ,xmin.consumer.v = -3
                       ,tmax = length(lme_clim$sst)/12
                       ,tstepspryr  =  12
-                      ,fmort.u = 0.0
+                      ,search_vol = 64.0
+                      ,fmort.u = 0.5
                       ,fminx.u = 0
-                      ,fmort.v = 0.0
+                      ,fmort.v = 0.5
                       ,fminx.v = -1
-                      ,depth = median(lme_clim$depth)
+                      ,depth = mean(lme_clim$depth)
                       ,er = lme_clim$er
                       ,pp = lme_clim$intercept
                       ,slope = lme_clim$slope
                       ,sst = lme_clim$sst
                       ,sft = lme_clim$sbt
-                      ,use.init = FALSE)      
+                      ,use.init = FALSE,effort = lme_clim$NomActive)      
   
   # run model through time
  
   result_set <- sizemodel(params) 
   
   # returns all outputs of the model 
-  saveRDS(result_set,filename=paset("dbpm_calibration_LMEnumber_catchability.rds"))
-  
+  # saveRDS(result_set,filename=paste("dbpm_calibration_LMEnumber_catchability.rds"))
+  return(result_set)
 }
 
 
@@ -66,14 +67,14 @@ getError <-function(model=result_set,LMEnumber){
   # sum across all sizes fished and months to get total catch per year by functional group
   # converted to g ww per m^2, multiplying by depth assumption
   
-  TotalUbiomass <- apply(result_set$U[params$ref:params$Nx,]*params$dx*10^params$x[params$ref:params$Nx],2,sum)*min(depth,100)
-  TotalVbiomass <- apply(result_set$V[params$ref.det:params$Nx,]*params$dx*10^params$x[params$ref.det:params$Nx],2,sum)*min(depth,100)
-  TotalW <- result_set$W[]*min(depth,100)
+  TotalUbiomass <- apply(result_set$U[params$ref:params$Nx,]*params$dx*10^params$x[params$ref:params$Nx],2,sum)*min(params$depth,100)
+  TotalVbiomass <- apply(result_set$V[params$ref.det:params$Nx,]*params$dx*10^params$x[params$ref.det:params$Nx],2,sum)*min(params$depth,100)
+  TotalW <- result_set$W[]*min(params$depth,100)
   
   #sum catches (in grams per m3 per month, across size classes) 
   
-  TotalUcatch <- apply(result_set$Y.u[,]*params$dx,2,sum)*min(depth,100)
-  TotalVcatch <- apply(result_set$Y.v[,]*params$dx,2,sum)*min(depth,100)
+  TotalUcatch <- apply(result_set$Y.u[,]*params$dx,2,sum)*min(params$depth,100)
+  TotalVcatch <- apply(result_set$Y.v[,]*params$dx,2,sum)*min(params$depth,100)
   
   
 }
