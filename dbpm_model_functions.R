@@ -103,28 +103,28 @@ sizemodel<-function(params,ERSEM.det.input=F,U_mat,V_mat,W_mat,temp.effect=T,eps
     q2 = matrix(-q1, length(x), length(y))	
     
     #matrix for recording the two size spectra 
-    V = U = array(0, c(length(x), Neq+1))
+    V = U = array(0, c(length(x), Neq))
     
     #vector to hold detrtitus biomass density (g.m-2)
-    W = array(0,Neq+1)
+    W = array(0,Neq)
     
     #matrix for keeping track of growth and reproduction from ingested food:
-    R.v=R.u=GG.v = GG.u   = array(0, c(length(x), Neq+1)) 
+    R.v=R.u=GG.v = GG.u   = array(0, c(length(x), Neq)) 
     
     #matrix for keeping track of predation mortality
-    PM.v = PM.u   = array(0, c(length(x), Neq+1))   
+    PM.v = PM.u   = array(0, c(length(x), Neq))   
     
     #matrix for keeping track of catches  
-    Y.v = Y.u  = array(0, c(length(x), Neq+1))  
+    Y.v = Y.u  = array(0, c(length(x), Neq))  
     
     #matrix for keeping track of  total mortality (Z)
-    Z.v = Z.u = array(0, c(length(x), Neq+1))
+    Z.v = Z.u = array(0, c(length(x), Neq))
     
     #matrix for keeping track of senescence mortality and other (intrinsic) mortality
     SM.v = SM.u   =OM.v = OM.u   = array(0, length(x))
     
     #empty vector to hold fishing mortality rates at each size class at time
-    Fvec.v = Fvec.u = array(0, c(length(x), Neq+1))
+    Fvec.v = Fvec.u = array(0, c(length(x), Neq))
     
     
     #lookup tables for terms in the integrals which remain constant over time
@@ -165,15 +165,21 @@ sizemodel<-function(params,ERSEM.det.input=F,U_mat,V_mat,W_mat,temp.effect=T,eps
     
     #Fvec[Fref:Nx] = 0.09*(x[Fref:Nx]/ log10(exp(1)) ) + 0.04 # from Benoit & Rochet 2004 
      
-      # here Fmort.u and Fmort.u= fixed catchability term for U and V to be estimated along with Fref.v and Fref.u
+    # here Fmort.u and Fmort.u= fixed catchability term for U and V to be estimated along with Fref.v and Fref.u
     Fvec.u[Fref.u:Nx,1] = Fmort.u*effort[1]
     Fvec.v[Fref.v:Nx,1] = Fmort.v*effort[1]
+    
+    #output fisheries catches per yr at size
+    Y.u[Fref.u:Nx,1]<-Fvec.u[Fref.u:Nx,1]*U[Fref.u:Nx,1]*10^x[Fref.u:Nx] 
+    #output fisheries catches per yr at size
+    Y.v[Fref.v:Nx,1]<-Fvec.v[Fref.v:Nx,1]*V[Fref.v:Nx,1]*10^x[Fref.v:Nx] 
+    
     
     #iteration over time, N [days]
     
     pb = txtProgressBar(min = 0, max = Neq, initial = 1, style = 3) # Initial progress bar
     
-    for (i in 1:Neq) {
+    for (i in 1:(Neq-1)) {
       
         setTxtProgressBar(pb, i) # Update progress bar
 
@@ -282,11 +288,6 @@ sizemodel<-function(params,ERSEM.det.input=F,U_mat,V_mat,W_mat,temp.effect=T,eps
       #total biomass density defecated by pred (g.m-2.yr-1)
       defbypred<-def.high*(f.pel)*10^x*U[,i]+ def.low*(f.ben)*10^x*U[,i]
       
-      
-      #output fisheries catches per yr at size
-      Y.u[Fref.u:Nx,i]<-Fvec.u[Fref.u:Nx,i]*U[Fref.u:Nx,i]*10^x[Fref.u:Nx] 
-      #output fisheries catches per yr at size
-      Y.v[Fref.v:Nx,i]<-Fvec.v[Fref.v:Nx,i]*V[Fref.v:Nx,i]*10^x[Fref.v:Nx] 
       
       
       #------------------------------------------------
@@ -436,6 +437,12 @@ sizemodel<-function(params,ERSEM.det.input=F,U_mat,V_mat,W_mat,temp.effect=T,eps
       Fvec.u[Fref.u:Nx,i+1] = Fmort.u*effort[i+1]
       
       Fvec.v[Fref.v:Nx,i+1] = Fmort.v*effort[i+1]
+      
+      
+      #output fisheries catches per yr at size
+      Y.u[Fref.u:Nx,i+1]<-Fvec.u[Fref.u:Nx,i+1]*U[Fref.u:Nx,i+1]*10^x[Fref.u:Nx] 
+      #output fisheries catches per yr at size
+      Y.v[Fref.v:Nx,i+1]<-Fvec.v[Fref.v:Nx,i+1]*V[Fref.v:Nx,i+1]*10^x[Fref.v:Nx] 
       
       
     }#end time iteration
