@@ -51,9 +51,9 @@ run_model<-function(vals = X,input=lme_clim, LMEnumber=42){
                       ,tstepspryr  =  12
                       ,search_vol = 0.64
                       ,fmort.u = f.u
-                      ,fminx.u = 0
+                      ,fminx.u = 1.0
                       ,fmort.v = f.v
-                      ,fminx.v = -1
+                      ,fminx.v = 1.0
                       ,depth = mean(input$depth)
                       ,er = input$er
                       ,pp = input$intercept
@@ -128,7 +128,8 @@ colnames(X)<-c("f.u","f.v")
 lme_input<-get_lme_inputs(LMEnumber = 42)
 X$rmse<-pbapply(X,1, getError, input=lme_input, LMEnumber = 42)
 
-saveRDS(X,file = "lhs_res_LME42.RDS")
+saveRDS(X,file = "lhs_res_LME42_b.RDS")
+#X<-readRDS(file = "lhs_res_LME42.RDS")
 
 # check this time param set with lowest error
 findmin<-which(X$rmse==min(X$rmse))
@@ -177,5 +178,6 @@ clusterEvalQ(cl, {
 })
 
 optim_result <- optim(par=as.numeric(bestvals),getError, input=lme_input, LMEnumber=42)
+
 stopCluster(cl)
 
