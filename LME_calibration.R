@@ -5,6 +5,12 @@
 library(devtools)
 library(tidyverse)
 library(lubridate)
+library(parallel)
+library(tictoc)
+library(lhs)
+library(pbapply)
+library(patchwork)
+library(optimParallel)
 
 # source model script form Github - NOT WORKING, using local
 # source_url(url = "https://github.com/Benthic-Pelagic-Size-Spectrum-Model/dbpm/blob/master/size-based-models/dynamic_sizebased_model_functions.R")
@@ -105,79 +111,65 @@ return(rmse)
 }
 
 
-
-
 ######## Carry out LHS param search
 
 # now could try again with lhs instead of the regular grid of parameters
-library(lhs)
-library(pbapply)
 
-set.seed(1234)
+LHSsearch<-function(LMEnum,iter=1) {
+  
+  LMEnum = LMEnum[1]
+  
+  set.seed(1234)
+  
+  # num "individual runs"
+  num_iter=iter
+  
+  
+  X <- data.frame(randomLHS(num_iter, 2))
+  # rows are iterations, columns are specific parameters
+  colnames(X)<-c("f.u","f.v")
+  
+  #if the first column is met_coef and you want it to be bound by say, 0.25 and 0.5, as above you do this:
+  
+  lme_input<-get_lme_inputs(LMEnumber=LMEnum)
+  X$rmse<-pbapply(X,1, getError, input=lme_input, LMEnumber = LMEnum,cl=cl)
+  
+  
+  #X<-readRDS(file = "lhs_res_LME42_b.RDS")
+  
+  # check this time param set with lowest error
+  findmin<-which(X$rmse==min(X$rmse))
+  bestvals<-X[findmin,c(1,2)]
+  
+  # check run
+  out<-run_model(X[findmin,c(1:2)],input=lme_input)
+  ## aggregate by year (mean to conserve units)
+  out <- out %>% group_by(Year) %>% filter(Year > "1949") %>% summarise(TotalCatchPerYr=mean(Totalcatch),ObsCatchPerYr=mean(catch_tonnes_area_m2,na.rm=T))
+  
+  p1<-ggplot() +
+    geom_line(data = out, aes(x = Year, y = TotalCatchPerYr)) +
+    geom_point(data = out, aes(x = Year, y = ObsCatchPerYr)) +
+    theme_classic() + theme(axis.text.x = element_text(colour="grey20", size=12, angle=90, hjust=.5, vjust=.5),
+                            axis.text.y = element_text(colour="grey20", size=12),
+                            text=element_text(size=16)) + 
+    labs(x = 'Year',
+         y = 'Tonnes per year per m2') 
+  
+  p2<-ggplot() +
+    geom_point(data = out, aes(x = TotalCatchPerYr, y = ObsCatchPerYr)) +
+    geom_abline(slope=1,intercept=0) +
+    theme_classic() + theme(axis.text.x = element_text(colour="grey20", size=12, angle=90, hjust=.5, vjust=.5),
+                            axis.text.y = element_text(colour="grey20", size=12),
+                            text=element_text(size=16)) + 
+    labs(x = 'Predicted',
+         y = 'Observed',title=paste("LME ",LMEnum,sep=""))
+  
+  p3<-p1+p2
+  
+  ggsave(paste("dbpm_LME",LMEnum,".png",sep=""), width=15, height=10)
+  
+  return(as.numeric(bestvals))
+  
+}
 
-# num "individual runs"
-num_iter=100
-
-
-X <- data.frame(randomLHS(num_iter, 2))
-# rows are iterations, columns are specific parameters
-colnames(X)<-c("f.u","f.v")
-
-#if the first column is met_coef and you want it to be bound by say, 0.25 and 0.5, as above you do this:
-
-lme_input<-get_lme_inputs(LMEnumber = 42)
-X$rmse<-pbapply(X,1, getError, input=lme_input, LMEnumber = 42)
-
-saveRDS(X,file = "lhs_res_LME42_b.RDS")
-#X<-readRDS(file = "lhs_res_LME42.RDS")
-
-# check this time param set with lowest error
-findmin<-which(X$rmse==min(X$rmse))
-bestvals<-X[findmin,c(1,2)]
-
-# check run
-out<-run_model(X[findmin,c(1:2)],input=lme_input)
-## aggregate by year (mean to conserve units)
-out <- out %>% group_by(Year) %>% filter(Year > "1949") %>% summarise(TotalCatchPerYr=mean(Totalcatch),ObsCatchPerYr=mean(catch_tonnes_area_m2,na.rm=T))
-
-p1<-ggplot() +
-  geom_line(data = out, aes(x = Year, y = TotalCatchPerYr)) +
-  geom_point(data = out, aes(x = Year, y = ObsCatchPerYr)) +
-  theme_classic() + theme(axis.text.x = element_text(colour="grey20", size=12, angle=90, hjust=.5, vjust=.5),
-                          axis.text.y = element_text(colour="grey20", size=12),
-                          text=element_text(size=16)) + 
-  labs(x = 'Year',
-       y = 'Tonnes per year per m2') 
-
-p2<-ggplot() +
-  geom_point(data = out, aes(x = TotalCatchPerYr, y = ObsCatchPerYr)) +
-  geom_abline(slope=1,intercept=0) +
-  theme_classic() + theme(axis.text.x = element_text(colour="grey20", size=12, angle=90, hjust=.5, vjust=.5),
-                          axis.text.y = element_text(colour="grey20", size=12),
-                          text=element_text(size=16)) + 
-  labs(x = 'Predicted',
-       y = 'Observed') 
-
-
-
-#### Set up function to run optimParallel across LMEs
-# # each run would need to get files for LME then do the error, return the best set of params, and make a diagnostic plot per LME
-# # Run Optim to estimate Catchability Param
-# # use best set of LHS results as initial values
-# # 
-# #
-
-library(optimParallel)
-# set up workers
-noCores <- parallel::detectCores() - 1 # keep some spare core
-cl <- parallel::makeCluster(noCores, setup_timeout = 0.5)
-setDefaultCluster(cl = cl)
-clusterExport(cl, varlist = "cl",envir=environment())
-clusterEvalQ(cl, {
-  library(optimParallel)
-})
-
-optim_result <- optim(par=as.numeric(bestvals),getError, input=lme_input, LMEnumber=42)
-
-stopCluster(cl)
 

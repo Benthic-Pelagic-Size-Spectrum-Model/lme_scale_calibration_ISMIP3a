@@ -177,11 +177,11 @@ sizemodel<-function(params,ERSEM.det.input=F,U_mat,V_mat,W_mat,temp.effect=T,eps
     
     #iteration over time, N [days]
     
-    pb = txtProgressBar(min = 0, max = Neq, initial = 1, style = 3) # Initial progress bar
+    #pb = txtProgressBar(min = 0, max = Neq, initial = 1, style = 3) # Initial progress bar
     
     for (i in 1:(Neq-1)) {
       
-        setTxtProgressBar(pb, i) # Update progress bar
+      #  setTxtProgressBar(pb, i) # Update progress bar
 
       # if(W[i]=="NaN"|W[i]<0)
       # {
