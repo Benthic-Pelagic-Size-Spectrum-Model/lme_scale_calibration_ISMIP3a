@@ -43,10 +43,12 @@ return (lme_clim)
 }
 
 # Function to run model
-run_model<-function(vals = X,input=lme_clim, LMEnumber=42){
+run_model<-function(vals = X,input=lme_input){
   
   f.u<-as.numeric(vals[1])
   f.v<-as.numeric(vals[2])
+  f.minu<-as.numeric(vals[3])
+  f.minv<-as.numeric(vals[4])
    
   # set up params
   params <- sizeparam(equilibrium = FALSE
@@ -57,9 +59,9 @@ run_model<-function(vals = X,input=lme_clim, LMEnumber=42){
                       ,tstepspryr  =  12
                       ,search_vol = 0.64
                       ,fmort.u = f.u
-                      ,fminx.u = 1.0
+                      ,fminx.u = f.minu
                       ,fmort.v = f.v
-                      ,fminx.v = 1.0
+                      ,fminx.v = f.minv
                       ,depth = mean(input$depth)
                       ,er = input$er
                       ,pp = input$intercept
@@ -82,10 +84,10 @@ run_model<-function(vals = X,input=lme_clim, LMEnumber=42){
   input$TotalW <- result_set$W[]*min(params$depth,100)
   
   #sum catches (currently in grams per m3 per year, across size classes) 
-  # convert to grams per m2, then tonnes per m2 per year (for each month)
+  # keep as grams per m2, then be sure to convert observed from tonnes per m2 per year to g.^-m2.^-yr (for each month)
   
-  input$TotalUcatch <- apply(result_set$Y.u[,]*params$dx,2,sum)*min(params$depth,100)/1e6
-  input$TotalVcatch <- apply(result_set$Y.v[,]*params$dx,2,sum)*min(params$depth,100)/1e6
+  input$TotalUcatch <- apply(result_set$Y.u[,]*params$dx,2,sum)*min(params$depth,100)
+  input$TotalVcatch <- apply(result_set$Y.v[,]*params$dx,2,sum)*min(params$depth,100)
   input$Totalcatch <- input$TotalUcatch +   input$TotalVcatch
   
   return(input)
@@ -94,14 +96,18 @@ run_model<-function(vals = X,input=lme_clim, LMEnumber=42){
 
 
 # # Error function
-getError <-function(vals = X,input,LMEnumber){
+getError <-function(vals = X,input=lme_input){
 
-result<-run_model(vals,input,LMEnumber)
+result<-run_model(vals, input)
 
 ## aggregate by year (mean to conserve units)
 out <- result %>% group_by(Year) %>% filter(Year > "1949") %>% summarise(TotalCatchPerYr=mean(Totalcatch),ObsCatchPerYr=mean(catch_tonnes_area_m2,na.rm=T))
 
-## calculate and output error
+## convert units
+
+out$ObsCatchPerYr<-out$ObsCatchPerYr*1e6
+
+## calculate and output error, convert observed from tonnes to grams (per m2 per yr)
 out$squared_error <- (out$ObsCatchPerYr- out$TotalCatchPerYr)^2
 
 rmse<-sqrt(sum(out$squared_error,na.rm=T)/sum(!is.na(out$squared_error)))
@@ -115,61 +121,73 @@ return(rmse)
 
 # now could try again with lhs instead of the regular grid of parameters
 
-LHSsearch<-function(LMEnum,iter=1) {
-  
-  LMEnum = LMEnum[1]
-  
+LHSsearch<-function(X=LME,iter=1) {
+
+  LMEnum=X
   set.seed(1234)
-  
   # num "individual runs"
   num_iter=iter
-  
-  
-  X <- data.frame(randomLHS(num_iter, 2))
+  sim <- data.frame(randomLHS(num_iter, 4))
   # rows are iterations, columns are specific parameters
-  colnames(X)<-c("f.u","f.v")
-  
-  #if the first column is met_coef and you want it to be bound by say, 0.25 and 0.5, as above you do this:
+  colnames(sim)<-c("f.u","f.v","f.minu","f.minv")
+  # adjust range of mi size params, others go form 0-1
+  sim[,"f.minu"]<- sim[,"f.minu"]*2
+  sim[,"f.minv"]<- sim[,"f.minv"]*2
   
   lme_input<-get_lme_inputs(LMEnumber=LMEnum)
-  X$rmse<-pbapply(X,1, getError, input=lme_input, LMEnumber = LMEnum,cl=cl)
   
   
+   
+# cl <- makeCluster(6)
+# #setDefaultCluster(cl = cl)
+# clusterExport(cl, varlist = c("LMEnum","lme_input","sim","iter"),envir=environment())
+# clusterEvalQ(cl, {
+#   source("LME_calibration.R")
+#    })
+# 
+
+# in pbapply setting cl = 6 calls mcapply to set up cluster (so dont need above stuff)
+sim$rmse<-pbapply(sim,1, getError, input=lme_input,cl=6)
+  
+#stopCluster(cl)
+
   #X<-readRDS(file = "lhs_res_LME42_b.RDS")
-  
   # check this time param set with lowest error
-  findmin<-which(X$rmse==min(X$rmse))
-  bestvals<-X[findmin,c(1,2)]
-  
-  # check run
-  out<-run_model(X[findmin,c(1:2)],input=lme_input)
-  ## aggregate by year (mean to conserve units)
-  out <- out %>% group_by(Year) %>% filter(Year > "1949") %>% summarise(TotalCatchPerYr=mean(Totalcatch),ObsCatchPerYr=mean(catch_tonnes_area_m2,na.rm=T))
-  
-  p1<-ggplot() +
-    geom_line(data = out, aes(x = Year, y = TotalCatchPerYr)) +
-    geom_point(data = out, aes(x = Year, y = ObsCatchPerYr)) +
-    theme_classic() + theme(axis.text.x = element_text(colour="grey20", size=12, angle=90, hjust=.5, vjust=.5),
-                            axis.text.y = element_text(colour="grey20", size=12),
-                            text=element_text(size=16)) + 
-    labs(x = 'Year',
-         y = 'Tonnes per year per m2') 
-  
-  p2<-ggplot() +
-    geom_point(data = out, aes(x = TotalCatchPerYr, y = ObsCatchPerYr)) +
-    geom_abline(slope=1,intercept=0) +
-    theme_classic() + theme(axis.text.x = element_text(colour="grey20", size=12, angle=90, hjust=.5, vjust=.5),
-                            axis.text.y = element_text(colour="grey20", size=12),
-                            text=element_text(size=16)) + 
-    labs(x = 'Predicted',
-         y = 'Observed',title=paste("LME ",LMEnum,sep=""))
-  
-  p3<-p1+p2
-  
-  ggsave(paste("dbpm_LME",LMEnum,".png",sep=""), width=15, height=10)
-  
-  return(as.numeric(bestvals))
-  
+  findmin<-which(sim$rmse==min(sim$rmse))
+  bestvals<- sim[findmin,]
+  print(bestvals[c(1:5)])
+  # 
+  # # check run
+  # out<-run_model(bestvals[c(1:4)],input=lme_input)
+  # ## aggregate by year (mean to conserve units)
+  # out <- out %>% group_by(Year) %>% filter(Year > "1949") %>% summarise(TotalCatchPerYr=mean(Totalcatch),ObsCatchPerYr=mean(catch_tonnes_area_m2,na.rm=T))
+  # out$ObsCatchPerYr<-out$ObsCatchPerYr*1e6
+  # 
+  # p1<-ggplot() +
+  #   geom_line(data = out, aes(x = Year, y = TotalCatchPerYr)) +
+  #   geom_point(data = out, aes(x = Year, y = ObsCatchPerYr)) +
+  #   theme_classic() + theme(axis.text.x = element_text(colour="grey20", size=12, angle=90, hjust=.5, vjust=.5),
+  #                           axis.text.y = element_text(colour="grey20", size=12),
+  #                           text=element_text(size=16)) + 
+  #   labs(x = 'Year',
+  #        y = 'Grams per year per m2') 
+  # 
+  # p2<-ggplot() +
+  #   geom_point(data = out, aes(x = TotalCatchPerYr, y = ObsCatchPerYr)) +
+  #   geom_abline(slope=1,intercept=0) +
+  #   theme_classic() + theme(axis.text.x = element_text(colour="grey20", size=12, angle=90, hjust=.5, vjust=.5),
+  #                           axis.text.y = element_text(colour="grey20", size=12),
+  #                           text=element_text(size=16)) + 
+  #   labs(x = 'Predicted',
+  #        y = 'Observed',title=paste("LME ",LMEnum,sep=""))
+  # 
+  # p3<-p1+p2
+  # 
+  # ggsave(paste("dbpm_LME",LMEnum,".png",sep=""), width=15, height=10)
+  # 
+  # 
+  return(bestvals)
+
 }
 
 
