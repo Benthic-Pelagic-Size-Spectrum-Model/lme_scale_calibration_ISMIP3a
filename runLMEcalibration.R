@@ -6,7 +6,7 @@
 
 # faster using pbsapply, in the LHSsearch pbapply has cl=6 which uses cluster to run in parallel, but here it is run sequentially if cl is not specified.
 lmenum=66
-lmes<-t(pbsapply(X=1:lmenum,LHSsearch,iter=300,cl=2))
+lmes<-t(pbsapply(X=1:lmenum,LHSsearch,iter=300))
 saveRDS(lmes,"bestvals_LMEs_iter300.RDS")
 
 ############### Make plots
