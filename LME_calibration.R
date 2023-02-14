@@ -17,14 +17,25 @@ library(optimParallel)
 source(file = "dbpm_model_functions.R")
 
 
+
 # Select LME and get inputs ready
 
-get_lme_inputs<-function(LMEnumber=42){
+get_lme_inputs<-function(LMEnumber=14, gridded=F){
 
+if (gridded!=T) {
 # read climate forcing inputs from THREDDS
 lme_clim<-read_csv(file="http://portal.sf.utas.edu.au/thredds/fileServer/gem/fishmip/ISIMIP3a/InputData/DBPM_lme_inputs/obsclim/0.25deg/DBPM_LME_climate_inputs_slope.csv")
 lme_clim<-subset(lme_clim, LME %in% LMEnumber)
-
+}
+  
+if (gridded==T) {
+    # read climate forcing inputs from gem, here testing on LME14
+    #filename =paste("/rd/gem/private/fishmip_inputs/ISIMIP3a/processed_forcings/lme_inputs_gridcell/obsclim/1deg/observed_LME_",LMEnumber,".csv",sep="") 
+    filename="observed_LME_14.csv"
+    lme_clim<-read_csv(file=filename)
+          }
+  
+  
 # read climate fishing inputs from THREDDS
 lme_fish<-read_csv(file="http://portal.sf.utas.edu.au/thredds/fileServer/gem/fishmip/ISIMIP3a/InputData/DBPM_lme_inputs/obsclim/0.25deg/DBPM_LME_effort_catch_input.csv")
 lme_fish<-subset(lme_fish, LME %in% LMEnumber)
@@ -33,17 +44,17 @@ lme_fish<-subset(lme_fish, LME %in% LMEnumber)
 lme_clim$Year<-year(lme_clim$t)
 lme_clim<-left_join(lme_clim,lme_fish,by="Year")
 # convert fishing effort and catch per yr (divide values by 12)
-lme_clim$NomActive
 lme_clim$NomActive_area_m2
-lme_clim$catch_tonnes
 lme_clim$catch_tonnes_area_m2
 
 #TO DO HERE: need to add a spin-up to these inputs prior to 1841 - 100 yrs at first value
 return (lme_clim)
 }
 
+
+
 # Function to run model
-run_model<-function(vals = X,input=lme_input){
+run_model<-function(vals = X,input=lme_input,withinput=T){
   
   f.u<-as.numeric(vals[1])
   f.v<-as.numeric(vals[2])
@@ -68,7 +79,7 @@ run_model<-function(vals = X,input=lme_input){
                       ,slope = input$slope
                       ,sst = input$sst
                       ,sft = input$sbt
-                      ,use.init = FALSE,effort = input$NomActive)      
+                      ,use.init = FALSE,effort = input$NomActive_area_m2)      
   
   # run model through time
   
@@ -79,6 +90,7 @@ run_model<-function(vals = X,input=lme_input){
   # returns all outputs of the model 
   # saveRDS(result_set,filename=paste("dbpm_calibration_LMEnumber_catchability.rds"))
   
+  if (withinput==T){
   input$TotalUbiomass <- apply(result_set$U[params$ref:params$Nx,]*params$dx*10^params$x[params$ref:params$Nx],2,sum)*min(params$depth,100)
   input$TotalVbiomass <- apply(result_set$V[params$ref.det:params$Nx,]*params$dx*10^params$x[params$ref.det:params$Nx],2,sum)*min(params$depth,100)
   input$TotalW <- result_set$W[]*min(params$depth,100)
@@ -91,6 +103,11 @@ run_model<-function(vals = X,input=lme_input){
   input$Totalcatch <- input$TotalUcatch +   input$TotalVcatch
   
   return(input)
+  }
+  
+  if (withinput==F) {
+    return(result_set)
+  }
   
 }
 
@@ -189,5 +206,57 @@ sim$rmse<-pbapply(sim,1, getError, input=lme_input,cl=6)
   return(bestvals)
 
 }
+
+
+
+
+# Function to run model for each LME with gridded inputs, after run_LME_calibration
+run_model_timestep<-function(input=lme_inputs_igrid, vals = unlist(bestvals_LMEs[14,]),U.initial, V.initial, W.initial){
+  
+  f.u<-as.numeric(vals[1])
+  f.v<-as.numeric(vals[2])
+  f.minu<-as.numeric(vals[3])
+  f.minv<-as.numeric(vals[4])
+  
+  # set up params for each month, across grid cells
+  params <- sizeparam (equilibrium = FALSE
+                      ,dx = 0.1
+                      ,xmin.consumer.u = -3
+                      ,xmin.consumer.v = -3
+                      ,tmax = 1/12
+                      ,tstepspryr  =  12
+                      ,search_vol = 0.64
+                      ,fmort.u = f.u
+                      ,fminx.u = f.minu
+                      ,fmort.v = f.v
+                      ,fminx.v = f.minv
+                      ,depth = input["depth"]
+                      ,er = input["er"]
+                      ,pp = input["intercept"]
+                      ,slope = input["slope"]
+                      ,sst = input["sst"]
+                      ,sft = input["sbt"]
+                      ,use.init = TRUE,effort = input["NomActive_area_m2"], U.initial =U.initial,V.initial = V.initial,W.initial = W.initial)      
+  
+  # run model for 1 timestep
+  
+  results <- sizemodel(params,use.init = T,ERSEM.det.input = F) 
+  
+  # input$TotalUbiomass <- apply(result_set$U[params$ref:params$Nx,]*params$dx*10^params$x[params$ref:params$Nx],2,sum)*min(params$depth,100)
+  # input$TotalVbiomass <- apply(result_set$V[params$ref.det:params$Nx,]*params$dx*10^params$x[params$ref.det:params$Nx],2,sum)*min(params$depth,100)
+  # input$TotalW <- result_set$W[]*min(params$depth,100)
+  # 
+  #sum catches (currently in grams per m3 per year, across size classes) 
+  # keep as grams per m2, then be sure to convert observed from tonnes per m2 per year to g.^-m2.^-yr (for each month)
+  
+  # input$TotalUcatch <- apply(result_set$Y.u[,]*params$dx,2,sum)*min(params$depth,100)
+  # input$TotalVcatch <- apply(result_set$Y.v[,]*params$dx,2,sum)*min(params$depth,100)
+  # input$Totalcatch <- input$TotalUcatch +   input$TotalVcatch
+  # 
+  return(cbind(U=results$U[,2],V=results$V[,2],Y.u=results$Y.u[,2],Y.v=results$Y.v[,2],GG.u=results$GG.u[,1],GG.v=results$GG.v[,1],PM.u=results$PM.u[,1],PM.v=results$PM.v[,1],W=results$W[2]))
+  # return next time step value for that grid
+  }
+  
+  
 
 
