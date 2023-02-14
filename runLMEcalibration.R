@@ -3,21 +3,23 @@
 # LMEs<-data.frame(LMEnum=1:lmenum,f.u=rep(0,lmenum),f.v=rep(0,lmenum),f.minu=rep(0,lmenum),f.minv=rep(0,lmenum),rmse=rep(0,lmenum))
 # for (i in 1:lmenum) LMEs[i,c(2:6)]<-LHSsearch(LMEs[i,1],iter=100)
 # saveRDS(LMEs,"bestvals_LMEs.RDS")
-
+source("LME_calibration.R")
 # faster using pbsapply, in the LHSsearch pbapply has cl=6 which uses cluster to run in parallel, but here it is run sequentially if cl is not specified.
 lmenum=66
-lmes<-t(pbsapply(X=1:lmenum,LHSsearch,iter=300,cl=2))
-saveRDS(lmes,"bestvals_LMEs_iter300.RDS")
+no_iter = 500
+no_cores <- parallel::detectCores() - 1
+lmes<-t(pbapply::pbsapply(X=1:lmenum,LHSsearch,iter=no_iter))
+saveRDS(lmes,paste0("bestvals_LMEs_iter_",no_iter,".RDS"))
 
 ############### Make plots
 
 #### Check other model performance indicators using the above estimates
-bestvals<-data.frame(readRDS("bestvals_LMEs.RDS_iter300"))
+bestvals<-data.frame(readRDS(paste0("bestvals_LMEs_iter_",no_iter,".RDS")))
 
 # add column for correlation:
 bestvals$cor<-rep(0,lmenum)
 
-pdf("CalibrationPlots_iter100.pdf",height = 6, width = 8)
+pdf(paste0("CalibrationPlots_iter_",no_iter,".pdf"),height = 6, width = 8)
 
 for (i in 1:66){
   
@@ -60,7 +62,7 @@ for (i in 1:66){
 
 dev.off()
 
-saveRDS(bestvals,"bestvals_LMEs_cor.RDS")
+saveRDS(bestvals,paste0("bestvals_LMEs_cor_",no_iter,".RDS"))
 
 #### TO DO: Check other model performance indicators using the above estimates
 
