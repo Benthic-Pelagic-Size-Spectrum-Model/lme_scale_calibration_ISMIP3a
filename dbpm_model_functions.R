@@ -20,13 +20,14 @@ gridded_sizemodel<-function(params,ERSEM.det.input=F,U_mat,V_mat,W_mat,temp.effe
     # ---------------------------------------------------------------------------------------
     # Input parameters to vary:
     
-    ui0 <- 10^pp          # time series of intercept of plankton size spectrum (estimated from GCM, biogeophysical model output or satellite data).		
-    r.plank <- r.plank   # time series of slope of plankton size spectrum (estimated from GCM, biogeophysical model output or satellite data).  	
+    
+    ui0 <- 10^pp          # gridded time series of intercept of plankton size spectrum (estimated from GCM, biogeophysical model output or satellite data).		
+    r.plank <- r.plank   # gridded time series of slope of plankton size spectrum (estimated from GCM, biogeophysical model output or satellite data).  	
     
     
-    sst <- sst            # time series of temperature in water column
-    sft <- sft		      #time series of temperature near seabed
-    sinking.rate <- sinking.rate  	      #time series of export ratio ( read in sizeparam)
+    sst <- sst            # gridded time series of temperature in water column
+    sft <- sft		      #gridded time series of temperature near seabed
+    sinking.rate <- sinking.rate  	      # gridded time series of export ratio ( read in sizeparam)
     
     
     
@@ -140,7 +141,7 @@ gridded_sizemodel<-function(params,ERSEM.det.input=F,U_mat,V_mat,W_mat,temp.effe
     # Numerical integration
     #---------------------------------------------------------------------------------------
     
-    # set up with the initial values from param
+    # set up with the initial values from param - same for all grid cells
     U[,1:(ref-1),1]<-U.init[1:(ref-1)]    #(phyto+zoo)plankton size spectrum  
     U[,ref:120,1]<-U.init[ref:120]           # set initial consumer size spectrum 
     V[,ref.det:120,1]<-V.init[ref.det:120]  # set initial detritivore spectrum  
@@ -179,11 +180,13 @@ gridded_sizemodel<-function(params,ERSEM.det.input=F,U_mat,V_mat,W_mat,temp.effe
     
     #iteration over time, N [days]
     
-    #pb = txtProgressBar(min = 0, max = Neq, initial = 1, style = 3) # Initial progress bar
+    pb = txtProgressBar(min = 0, max = Neq, initial = 1, style = 3) # Initial progress bar
     
     for (i in 1:(Neq)) {
       
-      #  setTxtProgressBar(pb, i) # Update progress bar
+      for (j in 1:(Ngrid)) {
+      
+        setTxtProgressBar(pb, i) # Update progress bar
       
       # if(W[i]=="NaN"|W[i]<0)
       # {
@@ -220,8 +223,8 @@ gridded_sizemodel<-function(params,ERSEM.det.input=F,U_mat,V_mat,W_mat,temp.effe
       #--------------------------------
       
       if (temp.effect==T) {
-        pel.Tempeffect=exp(c1 - E/(k*(sst+ 273)))
-        ben.Tempeffect=exp(c1 - E/(k*(sft+ 273)))
+        pel.Tempeffect=exp(c1 - E/(Boltzmann*(sst[j,i]+ 273)))
+        ben.Tempeffect=exp(c1 - E/(Boltzmann*(sft[j,i]+ 273)))
       }            
       
       if (temp.effect==F) {
@@ -231,64 +234,65 @@ gridded_sizemodel<-function(params,ERSEM.det.input=F,U_mat,V_mat,W_mat,temp.effe
       
       
       # feeding rates
-      f.pel<-pel.Tempeffect[i]*as.vector(((A.u*10^(x*alpha.u)*pref.pel)*(U[,,i]*dx)%*%(gphi))/(1+handling*(A.u*10^(x*alpha.u)*pref.pel)*(U[,,i]*dx)%*%(gphi))) # yr-1
+      f.pel<-pel.Tempeffect*as.vector(((A.u*10^(x*alpha.u)*pref.pel[j])*(U[j,,i]*dx)%*%(gphi))/(1+handling*(A.u*10^(x*alpha.u)*pref.pel[j])*(U[j,,i]*dx)%*%(gphi))) # yr-1
       
-      f.ben<-pel.Tempeffect[i]*as.vector(((A.u*10^(x*alpha.u)*pref.ben)*(V[,,i]*dx)%*%(gphi))/(1+handling*(A.u*10^(x*alpha.u)*pref.ben)*(V[,,i]*dx)%*%(gphi))) # yr-1
+      f.ben<-pel.Tempeffect*as.vector(((A.u*10^(x*alpha.u)*pref.ben[j])*(V[j,,i]*dx)%*%(gphi))/(1+handling*(A.u*10^(x*alpha.u)*pref.ben[j])*(V[j,,i]*dx)%*%(gphi))) # yr-1
       
-      f.det<-ben.Tempeffect[i]*((1/10^x)*A.v*10^(x*alpha.v)*W[,i])/(1+handling*(1/10^x)*A.v*10^(x*alpha.v)*W[,i]) # yr-1 
+      f.det<-ben.Tempeffect*((1/10^x)*A.v*10^(x*alpha.v)*W[j,i])/(1+handling*(1/10^x)*A.v*10^(x*alpha.v)*W[j,i]) # yr-1 
       
       # Predator growth integral 
-      GG.u[,,i]<-(1-def.high)*K.u*(f.pel) + (1-def.low)*K.v*(f.ben)                #yr-1
+      GG.u[j,,i]<-(1-def.high)*K.u*(f.pel) + (1-def.low)*K.v*(f.ben)                #yr-1
       
       
       # Reproduction
-      if (repro.on==1) R.u[,,i]<-(1-def.high)*(1-(K.u+AM.u))*(f.pel) +  (1-def.high)*(1-(K.v+AM.v))*f.ben  #yr-1
+      if (repro.on==1) R.u[j,,i]<-(1-def.high)*(1-(K.u+AM.u))*(f.pel) +  (1-def.high)*(1-(K.v+AM.v))*f.ben  #yr-1
       
       # Predator death integrals 
       
       #Satiation level of predator for pelagic prey
       
-      sat.pel<-ifelse(f.pel>0,f.pel/((A.u*10^(x*alpha.u)*pref.pel)*(U[,,i]*dx)%*%(gphi)),0)
+      sat.pel<-ifelse(f.pel>0,f.pel/((A.u*10^(x*alpha.u)*pref.pel[j])*(U[j,,i]*dx)%*%(gphi)),0)
       
-      PM.u[,,i]<-as.vector((pref.pel*A.u*expax)*(U[,,i]*sat.pel*dx)%*%(mphi))  #yr-1 
+      PM.u[j,,i]<-as.vector((pref.pel[j]*A.u*expax)*(U[j,,i]*sat.pel*dx)%*%(mphi))  #yr-1 
       
       #PM.u[,i]<-as.vector((1-f.pel)*(A.u*10^(x*alpha.u)*pref.pel)*(U[,i]*dx)%*%(mphi))  #yr-1 
       
-      
-      Z.u[,,i]<- PM.u[,,i] + pel.Tempeffect[i]*OM.u + pel.Tempeffect[i]*SM.u + Fvec.u[,,i]     #yr-1
+      #summing mortality terms - note no temperature effect on senescence mortality
+      Z.u[j,,i]<- PM.u[j,,i] + pel.Tempeffect*OM.u + SM.u + Fvec.u[j,,i]     #yr-1
       
       # Benthos growth integral
-      GG.v[,,i]<-(1-def.low)*K.d*f.det #yr-1
+      GG.v[j,,i]<-(1-def.low)*K.d*f.det #yr-1
       
       #reproduction
-      if (repro.on==1) R.v[,,i]<-(1-def.low)*(1-(K.d+AM.v))*(f.det) #yr-1
+      if (repro.on==1) R.v[j,,i]<-(1-def.low)*(1-(K.d+AM.v))*(f.det) #yr-1
       
       # Benthos death integral
       #Satiation level of predator for benthic prey  
       
-      sat.ben<-ifelse(f.ben>0,f.ben/((A.u*10^(x*alpha.v)*pref.ben)*(V[,,i]*dx)%*%(gphi)),0)
+      sat.ben<-ifelse(f.ben>0,f.ben/((A.u*10^(x*alpha.v)*pref.ben[j])*(V[j,,i]*dx)%*%(gphi)),0)
       
-      PM.v[,,i]<-ifelse(sat.ben>0,as.vector((pref.ben*A.u*expax)*(U[,,i]*sat.ben*dx)%*%(mphi)),0)  #yr-1
+      PM.v[j,,i]<-ifelse(sat.ben>0,as.vector((pref.ben[j]*A.u*expax)*(U[j,,i]*sat.ben*dx)%*%(mphi)),0)  #yr-1
       
       #PM.v[,i]<-as.vector((1-f.ben)*(A.u*10^(x*alpha.u)*pref.ben)*(U[,i]*dx)%*%(mphi))  #yr-1
       
-      Z.v[,,i]<-PM.v[,,i]+ ben.Tempeffect[i]*OM.v + ben.Tempeffect[i]*SM.v  + Fvec.v[,,i]  #yr-1
+      Z.v[j,,i]<-PM.v[j,,i]+ ben.Tempeffect*OM.v + SM.v  + Fvec.v[j,,i]  #yr-1
       
       #total biomass density eaten by pred (g.m-2.yr-1)
       
-      eatenbypred<-10^x*f.pel*U[,,i] + 10^x*f.ben*U[,,i] 
+      eatenbypred<-10^x*f.pel*U[j,,i] + 10^x*f.ben*U[j,,i] 
       
+    
       
       #detritus output (g.m-2.yr-1)
       
       # losses from detritivore scavenging/filtering only :
       
-      output.w<-sum(10^x*f.det*V[,,i]*dx)   
+      output.w<-sum(10^x*f.det*V[j,,i]*dx)   
       
       
       
       #total biomass density defecated by pred (g.m-2.yr-1)
-      defbypred<-def.high*(f.pel)*10^x*U[,,i]+ def.low*(f.ben)*10^x*U[,,i]
+      defbypred<-def.high*(f.pel)*10^x*U[j,,i]+ def.low*(f.ben)*10^x*U[j,,i]
       
       
       
@@ -309,11 +313,11 @@ gridded_sizemodel<-function(params,ERSEM.det.input=F,U_mat,V_mat,W_mat,temp.effe
           # pelagic spectrum inputs (sinking dead bodies and faeces) - export ratio used for "sinking rate"
           #  + benthic spectrum inputs (dead stuff - already on/in seafloor)
           
-          input.w<-(sinking.rate[i]*(sum(defbypred[ref:Nx]*dx)
-                                     + sum(pel.Tempeffect[i]*OM.u[1:Nx]*U[,1:Nx,i]*10^(x[1:Nx])*dx) 
-                                     + sum(pel.Tempeffect[i]*SM.u[1:Nx]*U[,1:Nx,i]*10^(x[1:Nx])*dx))
-                    + (sum(ben.Tempeffect[i]*OM.v[1:Nx]*V[,1:Nx,i]*10^(x[1:Nx])*dx) 
-                       + sum(ben.Tempeffect[i]*SM.v[1:Nx]*V[,1:Nx,i]*10^(x[1:Nx])*dx)) )
+          input.w<-(sinking.rate[j,i]*(sum(defbypred[ref:Nx]*dx)
+                                     + sum(pel.Tempeffect*OM.u[1:Nx]*U[j,1:Nx,i]*10^(x[1:Nx])*dx) 
+                                     + sum(pel.Tempeffect*SM.u[1:Nx]*U[j,1:Nx,i]*10^(x[1:Nx])*dx))
+                    + (sum(ben.Tempeffect*OM.v[1:Nx]*V[j,1:Nx,i]*10^(x[1:Nx])*dx) 
+                       + sum(ben.Tempeffect*SM.v[1:Nx]*V[j,1:Nx,i]*10^(x[1:Nx])*dx)) )
           # )
           
         }
@@ -321,7 +325,7 @@ gridded_sizemodel<-function(params,ERSEM.det.input=F,U_mat,V_mat,W_mat,temp.effe
         
         if (det.coupling==0.0) {
           
-          input.w<-sum(ben.Tempeffect[i]*OM.v[1:Nx]*V[,1:Nx,i]*10^(x[1:Nx])*dx) + sum(ben.Tempeffect[i]*SM.v[1:Nx]*V[,1:Nx,i]*10^(x[1:Nx])*dx)
+          input.w<-sum(ben.Tempeffect*OM.v[1:Nx]*V[j,1:Nx,i]*10^(x[1:Nx])*dx) + sum(ben.Tempeffect*SM.v[1:Nx]*V[j,1:Nx,i]*10^(x[1:Nx])*dx)
           
         }
         
@@ -346,30 +350,30 @@ gridded_sizemodel<-function(params,ERSEM.det.input=F,U_mat,V_mat,W_mat,temp.effe
         dW<-input.w - (output.w + burial) 
         
         
-        W[,i+1]=W[,i] + dW*delta_t        #biomass density of detritus g.m-2
+        W[j,i+1]=W[j,i] + dW*delta_t        #biomass density of detritus g.m-2
         
       }
       
       if (ERSEM.det.input==T) {
-        W[,i+1]=W[,i]
-      }
+         W[j,i+1]=W[j,i+1]
+       }
       
       
       #----------------------------------------------
       # Pelagic Predator Density (nos.m-2)- solve for time + delta_t using implicit time Euler upwind finite difference (help from Ken Andersen and Richard Law)
       
       # Matrix setup for implict differencing 
-      Ai.u<-Bi.u<-Si.u<-array(0, c(ngrid,length(x), 1))   
+      Ai.u<-Bi.u<-Si.u<-array(0, c(length(x), 1))   
       
       
-      Ai.u[,idx]<-(1/log(10))*-GG.u[,idx-1,i]*delta_t/dx
-      Bi.u[,idx]<-1+(1/log(10))*GG.u[,idx,i]*delta_t/dx +Z.u[,idx,i]*delta_t
-      Si.u[,idx]<-U[,idx,i]
+      Ai.u[idx]<-(1/log(10))*-GG.u[j,idx-1,i]*delta_t/dx
+      Bi.u[idx]<-1+(1/log(10))*GG.u[j,idx,i]*delta_t/dx +Z.u[j,idx,i]*delta_t
+      Si.u[idx]<-U[j,idx,i]
       
       # Boundary condition at upstream end 
-      Ai.u[,ref]<-0
-      Bi.u[,ref]<-1
-      Si.u[,ref]<-U[,ref,i]
+      Ai.u[ref]<-0
+      Bi.u[ref]<-1
+      Si.u[ref]<-U[j,ref,i]
       
       # Invert matrix
       
@@ -378,80 +382,94 @@ gridded_sizemodel<-function(params,ERSEM.det.input=F,U_mat,V_mat,W_mat,temp.effe
       #continuation of plankton hold constant  
       # U[1:ref,i+1]<-U[1:ref,i] 
       
-      if (use.init==T)U[,1:ref,i+1]<-ui0[,i]*10^(r.plank[,i]*x)[1:(ref)] 
+      if (use.init==T)U[j,1:ref,i+1]<-ui0[j,i]*10^(r.plank[j,i]*x)[1:(ref)] 
       
-      if (use.init==F)U[,1:ref,i+1]<-ui0[,i+1]*10^(r.plank[,i+1]*x)[1:(ref)] 
+      if (use.init==F)U[j,1:ref,i+1]<-ui0[j,i+1]*10^(r.plank[j,i+1]*x)[1:(ref)] 
       
       # apply transfer efficency of 10% *plankton density at same size  
       # if (repro.on==0)  U[ref,i+1]<-0.1*u.init.f(x,ui0,r.plank)[ref]       
       # reproduction from energy allocation
       
-      if (repro.on==1)  U[,ref,i+1]<-U[,ref,i]+ (sum(R.u[,(ref+1):Nx,i]*10^x[(ref+1):Nx]*U[,(ref+1):Nx,i]*dx)*delta_t)/(dx*10^x[ref]) - (delta_t/dx)*(1/log(10))*(GG.u[,ref,i])*U[,ref,i] -delta_t*Z.u[,ref,i]*U[,ref,i]
+      if (repro.on==1)  U[j,ref,i+1]<-U[j,ref,i]+ (sum(R.u[j,(ref+1):Nx,i]*10^x[(ref+1):Nx]*U[j,(ref+1):Nx,i]*dx)*delta_t)/(dx*10^x[ref]) - (delta_t/dx)*(1/log(10))*(GG.u[j,ref,i])*U[j,ref,i] -delta_t*Z.u[j,ref,i]*U[j,ref,i]
       
       #main loop calculation
       
-      for (j in (ref+1):(Nx)){
+      for (sz in (ref+1):(Nx)){
         
         #U[j,i+1]<-U[j,i]-(delta_t/dx)*(1/log(10))*(GG.u[j,i])*U[j,i] + (delta_t/dx)*(1/log(10))*GG.u[j-1,i]*U[j-1,i] -delta_t*Z.u[j,i]*U[j,i]
         
-        U[,j,i+1]<-(Si.u[j]-Ai.u[j]*U[,j-1,i+1])/Bi.u[j]
+        U[j,sz,i+1]<-(Si.u[sz]-Ai.u[sz]*U[j,sz-1,i+1])/Bi.u[sz]
         
         
       }
       
       #----------------------------------------------
       # Benthic Detritivore Density (nos.m-2) 
-      Ai.v<-Bi.v<-Si.v<-array(0, c(ngrid,length(x), 1))   
+      Ai.v<-Bi.v<-Si.v<-array(0, c(length(x), 1))   
       idx=(ref.det+1):Nx  #shorthand for matrix referencing
       
-      Ai.v[,idx]<-(1/log(10))*-GG.v[,idx-1,i]*delta_t/dx 
-      Bi.v[,idx]<-1+(1/log(10))*GG.v[,idx,i]*delta_t/dx +Z.v[,idx,i]*delta_t
-      Si.v[,idx]<-V[,idx,i]
+      Ai.v[idx]<-(1/log(10))*-GG.v[j,idx-1,i]*delta_t/dx 
+      Bi.v[idx]<-1+(1/log(10))*GG.v[j,idx,i]*delta_t/dx +Z.v[j,idx,i]*delta_t
+      Si.v[idx]<-V[j,idx,i]
       
       #boundary condition at upstream end
-      Ai.v[,ref.det]<-0
-      Bi.v[,ref.det]<-1
-      Si.v[,ref.det]<-V[,ref.det,i]  
+      Ai.v[ref.det]<-0
+      Bi.v[ref.det]<-1
+      Si.v[ref.det]<-V[j,ref.det,i]  
       
       #invert matrix
       #recruitment at smallest detritivore mass  
       
       #hold constant continution of plankton with sinking rate multiplier 
-      V[,1:ref.det,i+1]<-V[,1:ref.det,i]
+      V[j,1:ref.det,i+1]<-V[j,1:ref.det,i]
       
       # apply a very low of transfer effiency 1%* total biomass of detritus divided by minimum size
       # if (repro.on==0)  V[ref.det,i+1]<-(0.01*W[i+1])/(10^x[ref]) 
       
-      if (repro.on==1)  V[,ref.det,i+1]<-V[,ref.det,i]+ sum(R.v[,(ref.det+1):Nx,i]*10^x[(ref.det+1):Nx]*V[,(ref.det+1):Nx,i]*dx)*delta_t/(dx*10^x[ref.det]) - (delta_t/dx)*(1/log(10))*(GG.v[,ref.det,i])*V[,ref.det,i] -delta_t*Z.v[,ref.det,i]*V[,ref.det,i]
+      if (repro.on==1)  V[j,ref.det,i+1]<-V[j,ref.det,i]+ sum(R.v[j,(ref.det+1):Nx,i]*10^x[(ref.det+1):Nx]*V[j,(ref.det+1):Nx,i]*dx)*delta_t/(dx*10^x[ref.det]) - (delta_t/dx)*(1/log(10))*(GG.v[j,ref.det,i])*V[j,ref.det,i] -delta_t*Z.v[j,ref.det,i]*V[j,ref.det,i]
       
       
       #loop calculation
-      for (j in (ref.det+1):(Nx)){ 
+      for (sz in (ref.det+1):(Nx)){ 
         
         #V[j,i+1]<-V[j,i]-(delta_t/dx)*(1/log(10))*(GG.v[j,i])*V[j,i] + (delta_t/dx)*(1/log(10))*GG.v[j-1,i]*V[j-1,i]-delta_t*Z.v[j,i]*V[j,i] 
         
-        V[,j,i+1]<-(Si.v[,j]-Ai.v[,j]*V[,j-1,i+1])/Bi.v[,j]
+        V[j,sz,i+1]<-(Si.v[sz]-Ai.v[sz]*V[j,sz-1,i+1])/Bi.v[sz]
         
       }		
-      rm(j)
+  
       
       
-      # increment fishing 
+     
+      #output rates of fisheries catches per yr at size
+      Y.u[,Fref.u:Nx,i+1]<-Fvec.u[j,Fref.u:Nx,i]*U[j,Fref.u:Nx,i+1]*10^x[Fref.u:Nx] 
+      #output rates of fisheries catches per yr at size
+      Y.v[,Fref.v:Nx,i+1]<-Fvec.v[j,Fref.v:Nx,i]*V[j,Fref.v:Nx,i+1]*10^x[Fref.v:Nx] 
+    
       
-      Fvec.u[,Fref.u:Nx,i+1] = Fmort.u*effort[,i+1]
+      }#end across grid   
+        
       
-      Fvec.v[,Fref.v:Nx,i+1] = Fmort.v*effort[,i+1]
+      # increment and redistribute fishing effort input across grid cells for use in the next timestep
       
+      # get proportion of total fishable biomass for each grid cell
+      #output rates of fisheries catches per yr at size
+      prop.u<-(U[,Fref.u:Nx,i+1]*10^x[Fref.u:Nx])/apply(U[,Fref.u:Nx,i+1]*10^x[Fref.u:Nx]*dx,1,sum)
+      #output rates of fisheries catches per yr at size
+      prop.v<-(V[,Fref.v:Nx,i+1]*10^x[Fref.v:Nx])/apply((V[,Fref.v:Nx,i+1]*10^x[Fref.v:Nx])*dx,1,sum)
       
-      #output fisheries catches per yr at size
-      Y.u[,Fref.u:Nx,i+1]<-Fvec.u[,Fref.u:Nx,i+1]*U[,Fref.u:Nx,i+1]*10^x[Fref.u:Nx] 
-      #output fisheries catches per yr at size
-      Y.v[,Fref.v:Nx,i+1]<-Fvec.v[,Fref.v:Nx,i+1]*V[,Fref.v:Nx,i+1]*10^x[Fref.v:Nx] 
+      # rescale effort:
+      
+      Fvec.u[,Fref.u:Nx,i+1] = Fmort.u*(prop.u*effort[,i+1])
+      
+      Fvec.v[,Fref.v:Nx,i+1] = Fmort.v*(prop.v*effort[,i+1])
       
       
     }#end time iteration
+      
+      
     
-    return(list(U=U[,,],GG.u=GG.u[,,],PM.u=PM.u[,,],V=V[,],GG.v=GG.v[,,],PM.v=PM.v[,,],Y.u=Y.u[,,],Y.v=Y.v[,,],W=W[,], params=params))
+    return(list(U=U[,,],GG.u=GG.u[,,],PM.u=PM.u[,,],V=V[,,],GG.v=GG.v[,,],PM.v=PM.v[,,],Y.u=Y.u[,,],Y.v=Y.v[,,],W=W[,], params=params))
     
     
     # return(list(U=U[,Neq+1],GG.u=GG.u[,Neq],PM.u=PM.u[,Neq],V=V[,Neq+1],GG.v=GG.v[,Neq],PM.v=PM.v[,Neq],Y=Y[,Neq],W=W[Neq+1], params=params))
@@ -693,8 +711,8 @@ sizemodel<-function(params,ERSEM.det.input=F,U_mat,V_mat,W_mat,temp.effect=T,eps
       #--------------------------------
       
       if (temp.effect==T) {
-        pel.Tempeffect=exp(c1 - E/(k*(sst+ 273)))
-        ben.Tempeffect=exp(c1 - E/(k*(sft+ 273)))
+        pel.Tempeffect=exp(c1 - E/(Boltzmann*(sst+ 273)))
+        ben.Tempeffect=exp(c1 - E/(Boltzmann*(sft+ 273)))
       }            
       
       if (temp.effect==F) {
@@ -728,7 +746,7 @@ sizemodel<-function(params,ERSEM.det.input=F,U_mat,V_mat,W_mat,temp.effect=T,eps
       #PM.u[,i]<-as.vector((1-f.pel)*(A.u*10^(x*alpha.u)*pref.pel)*(U[,i]*dx)%*%(mphi))  #yr-1 
       
       
-      Z.u[,i]<- PM.u[,i] + pel.Tempeffect[i]*OM.u + pel.Tempeffect[i]*SM.u + Fvec.u[,i]     #yr-1
+      Z.u[,i]<- PM.u[,i] + pel.Tempeffect[i]*OM.u + SM.u + Fvec.u[,i]     #yr-1
       
       # Benthos growth integral
       GG.v[,i]<-(1-def.low)*K.d*f.det #yr-1
@@ -745,7 +763,7 @@ sizemodel<-function(params,ERSEM.det.input=F,U_mat,V_mat,W_mat,temp.effect=T,eps
       
       #PM.v[,i]<-as.vector((1-f.ben)*(A.u*10^(x*alpha.u)*pref.ben)*(U[,i]*dx)%*%(mphi))  #yr-1
       
-      Z.v[,i]<-PM.v[,i]+ ben.Tempeffect[i]*OM.v + ben.Tempeffect[i]*SM.v  + Fvec.v[,i]  #yr-1
+      Z.v[,i]<-PM.v[,i]+ ben.Tempeffect[i]*OM.v + SM.v  + Fvec.v[,i]  #yr-1
       
       #total biomass density eaten by pred (g.m-2.yr-1)
       
@@ -941,7 +959,7 @@ sizemodel<-function(params,ERSEM.det.input=F,U_mat,V_mat,W_mat,temp.effect=T,eps
 sizeparam<-function(equilibrium=F, dx=0.1,xmin=-12,xmax=6,xmin.consumer.u=-7,xmin.consumer.v=-7,tmax=100,
                     tstepspryr=48,fmort.u =0.0,fminx.u=1, fmort.v = 0.0,fminx.v=1,er=0.5,pp=-3,slope=-1,lat=NA,
                     lon=NA,depth=500,sst=20,sft=20, effort = 1.0, search_vol=640,
-                    use.init = FALSE, U.initial = NA, V.initial = NA ,W.initial = NA){
+                    use.init = FALSE, U.initial = NA, V.initial = NA ,W.initial = NA, Ngrid=NA){
   #---------------------------------------------------------------------------------------
   # FUNCTION TO GET Parameters of model
   #---------------------------------------------------------------------------------------
@@ -959,11 +977,11 @@ sizeparam<-function(equilibrium=F, dx=0.1,xmin=-12,xmax=6,xmin.consumer.u=-7,xmi
   param$depth = depth
   
   # plankton parameters   
-  param$pp = as.numeric(pp)     # intercept of phyto-zooplankton spectrum
-  param$r.plank= as.numeric(slope)  # slope of phyto-zooplankton spectrum
+  param$pp = pp     # intercept of phyto-zooplankton spectrum
+  param$r.plank= slope  # slope of phyto-zooplankton spectrum
   
   # export ratio
-  param$er = as.numeric(er)
+  param$er = er
   
   # temperature parameters 
   param$sst = sst     # sea-surface temperature - degrees celsius
@@ -976,9 +994,13 @@ sizeparam<-function(equilibrium=F, dx=0.1,xmin=-12,xmax=6,xmin.consumer.u=-7,xmi
   param$Fmort.v=fmort.v      # fishing mortality rate for detritivores
   param$min.fishing.size.u= fminx.u # minimum log10 body size fished for predators
   param$min.fishing.size.v= fminx.v # minimum log10 body size fished for detritivores
+
+  
+  # get effort and rescale 
+  param$effort = effort
   
   # get effort and rescale so that max is set to 1
-  param$effort = effort/max(effort)
+  #param$effort = effort/max(effort)
   
   # benthic-pelagic coupling parameters
   
@@ -1014,7 +1036,7 @@ sizeparam<-function(equilibrium=F, dx=0.1,xmin=-12,xmax=6,xmin.consumer.u=-7,xmi
   param$repro.on=1  # dynamic reproduction on=1,off=0  
   param$c1=25.22 # constant used in Jennings et al. 2008 Proc B to standardize metabolism-temperature effects# for Boltzmann equation. Derived from Simon's fit to Andy Clarke's data
   param$E=0.63   # activation energy, eV
-  param$k=8.62*10^-5 # Boltzmann's constant
+  param$Boltzmann=8.62*10^-5 # Boltzmann's constant
   
   
   # "other" mortality parameters
@@ -1065,6 +1087,8 @@ sizeparam<-function(equilibrium=F, dx=0.1,xmin=-12,xmax=6,xmin.consumer.u=-7,xmi
   param$delta_t = (1/tstepspryr)
   # number of time bins 
   param$Neq=param$tmax/param$delta_t	
+  # number of grid cells
+  param$Ngrid=Ngrid	
   
   # # Set initial values for size spectra & detritus
   

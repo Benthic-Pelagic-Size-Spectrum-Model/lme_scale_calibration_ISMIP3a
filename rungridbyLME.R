@@ -26,6 +26,7 @@ W=array(0,c(ngrid,params$Nx,ntime))
 
 results<-list(U=U,V=V,Y.u=Y.u,Y.v=Y.v,PM.u=PM.u,PM.v=PM.v,GG.u=GG.u, GG.v=GG.v)
 
+
 ####################### RUN IT
 
 for (itime in 1:length(time)){
@@ -97,3 +98,64 @@ output<-agg_outputs(input=lme_inputs_grid,results=results)
 ###compare with catch data
 
 ### TO DO: test against code without fishing
+
+###################### TEST GRIDDED MODEL
+
+lme_inputs_grid$cell <- paste(lme_inputs_grid$lat,lme_inputs_grid$lon,sep="_")
+
+depth_grid<-lme_inputs_grid %>%
+  pivot_wider(id_cols=cell,names_from = t, values_from = depth)
+  
+er_grid<-lme_inputs_grid %>%
+  pivot_wider(id_cols=cell,names_from = t, values_from = er)
+
+intercept_grid<-lme_inputs_grid %>%
+  pivot_wider(id_cols=cell,names_from = t, values_from = intercept)
+
+slope_grid<-lme_inputs_grid %>%
+  pivot_wider(id_cols=cell,names_from = t, values_from = slope)
+
+sst_grid<-lme_inputs_grid %>%
+  pivot_wider(id_cols=cell,names_from = t, values_from = sst)
+
+sbt_grid<-lme_inputs_grid %>%
+  pivot_wider(id_cols=cell,names_from = t, values_from = sbt)
+
+effort_grid<-lme_inputs_grid %>%
+  pivot_wider(id_cols=cell,names_from = t, values_from = NomActive_area_m2)
+
+
+f.u<-as.numeric(vals[1])*1000
+f.v<-as.numeric(vals[2])*1000
+f.minu<-as.numeric(vals[3])
+f.minv<-as.numeric(vals[4])
+
+# set up params for each month, across grid cells
+gridded_params <- sizeparam (equilibrium = FALSE
+                     ,dx = 0.1
+                     ,xmin.consumer.u = -3
+                     ,xmin.consumer.v = -3
+                     ,tmax = dim(er_grid[,-1])[2]/12
+                     ,tstepspryr  =  12
+                     ,search_vol = 0.64
+                     ,fmort.u = f.u
+                     ,fminx.u = f.minu
+                     ,fmort.v = f.v
+                     ,fminx.v = f.minv
+                     ,depth = data.matrix(depth_grid[,-1][,1])
+                     ,er = data.matrix(er_grid[,-1])
+                     ,pp = data.matrix(intercept_grid[,-1])
+                     ,slope = data.matrix(slope_grid[,-1])
+                     ,sst = data.matrix(sst_grid[,-1])
+                     ,sft = data.matrix(sbt_grid[,-1])
+                     ,use.init = TRUE,effort = data.matrix(effort_grid[,-1]), U.initial =U.initial,V.initial = V.initial,W.initial = W.initial, Ngrid=dim(depth_grid)[1])      
+
+# run model  for full time period across all grid cells
+
+
+grid_results<-gridded_sizemodel(gridded_params,ERSEM.det.input=F,U_mat,V_mat,W_mat,temp.effect=T,eps=1e-5,output="aggregated",
+                                use.init = FALSE, burnin.len
+                                )
+
+
+#### CHECK OUTPUTS!!
