@@ -2,9 +2,11 @@
 
 library(tidyverse)
 
+#TODO selected LME is 14, automate that
+
 # get initial values from LME-scale results
 lme_input_14<-get_lme_inputs(LMEnumber = 14,gridded = F)
-vals <- readRDS("~/Dropbox/DBPM_ISIMIP_3a/lme_scale_calibration_ISMIP3a/bestvals_LMEs.RDS")
+vals <- readRDS("~/Dropbox/DBPM_ISIMIP_3a/lme_scale_calibration_ISMIP3a/bestvals_LMEs.RDS") # on repo
 initial_results<-run_model(vals=unlist(vals),input=lme_input_14,withinput = F)
 U.initial<-rowMeans(initial_results$U[,1:12])
 V.initial<-rowMeans(initial_results$V[,1:12])
