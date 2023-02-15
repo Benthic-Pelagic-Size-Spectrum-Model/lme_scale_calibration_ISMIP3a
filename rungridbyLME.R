@@ -28,6 +28,7 @@ W=array(0,c(ngrid,params$Nx,ntime))
 
 results<-list(U=U,V=V,Y.u=Y.u,Y.v=Y.v,PM.u=PM.u,PM.v=PM.v,GG.u=GG.u, GG.v=GG.v)
 
+
 ####################### RUN IT
 
 for (itime in 1:length(time)){
@@ -99,3 +100,87 @@ output<-agg_outputs(input=lme_inputs_grid,results=results)
 ###compare with catch data
 
 ### TO DO: test against code without fishing
+
+###################### TEST GRIDDED MODEL
+
+lme_inputs_grid$cell <- paste(lme_inputs_grid$lat,lme_inputs_grid$lon,sep="_")
+
+depth_grid<-lme_inputs_grid %>%
+  pivot_wider(id_cols=cell,names_from = t, values_from = depth)
+  
+er_grid<-lme_inputs_grid %>%
+  pivot_wider(id_cols=cell,names_from = t, values_from = er)
+
+intercept_grid<-lme_inputs_grid %>%
+  pivot_wider(id_cols=cell,names_from = t, values_from = intercept)
+
+slope_grid<-lme_inputs_grid %>%
+  pivot_wider(id_cols=cell,names_from = t, values_from = slope)
+
+sst_grid<-lme_inputs_grid %>%
+  pivot_wider(id_cols=cell,names_from = t, values_from = sst)
+
+sbt_grid<-lme_inputs_grid %>%
+  pivot_wider(id_cols=cell,names_from = t, values_from = sbt)
+
+effort_grid<-lme_inputs_grid %>%
+  pivot_wider(id_cols=cell,names_from = t, values_from = NomActive_area_m2)
+
+
+f.u<-as.numeric(vals[1])
+f.v<-as.numeric(vals[2])
+f.minu<-as.numeric(vals[3])
+f.minv<-as.numeric(vals[4])
+
+# set up params for each month, across grid cells
+gridded_params <- sizeparam (equilibrium = FALSE
+                     ,dx = 0.1
+                     ,xmin.consumer.u = -3
+                     ,xmin.consumer.v = -3
+                     ,tmax = dim(er_grid[,-1])[2]/12
+                     ,tstepspryr  =  12
+                     ,search_vol = 0.64
+                     ,fmort.u = f.u
+                     ,fminx.u = f.minu
+                     ,fmort.v = f.v
+                     ,fminx.v = f.minv
+                     ,depth = data.matrix(depth_grid[,-1][,1])
+                     ,er = data.matrix(er_grid[,-1])
+                     ,pp = data.matrix(intercept_grid[,-1])
+                     ,slope = data.matrix(slope_grid[,-1])
+                     ,sst = data.matrix(sst_grid[,-1])
+                     ,sft = data.matrix(sbt_grid[,-1])
+                     ,use.init = TRUE,effort = data.matrix(effort_grid[,-1]), U.initial =U.initial,V.initial = V.initial,W.initial = W.initial, Ngrid=dim(depth_grid)[1])      
+
+# run model  for full time period across all grid cells
+
+
+grid_results<-gridded_sizemodel(gridded_params,ERSEM.det.input=F,U_mat,V_mat,W_mat,temp.effect=T,eps=1e-5,output="aggregated",
+                                use.init = FALSE, burnin.len)
+
+
+#### CHECK OUTPUTS!!
+
+### this isnt returning the correct dimensions
+getGriddedOutputs<-function(input=lme_inputs_grid,results=grid_results,params=params){
+  # returns all outputs of the model 
+  # saveRDS(result_set,filename=paste("dbpm_calibration_LMEnumber_catchability.rds"))
+    TotalUbiomass <- apply(results$U[,params$ref:params$Nx,]*params$dx*10^params$x[params$ref:params$Nx],c(1,3),sum,na.rm=T)
+    TotalVbiomass <- apply(results$V[,params$ref:params$Nx,]*params$dx*10^params$x[params$ref:params$Nx],c(1,3),sum,na.rm=T)
+    # input[input$t==time[itime]]$W <- results$W[,itime]*min(params$depth,100)
+    #sum catches (currently in grams per m3 per year, across size classes) 
+    #keep as grams per m2, then be sure to convert observed from tonnes per m2 per year to g.^-m2.^-yr (for each month)
+    TotalUcatch <- apply(results$Y.u[,params$ref:params$Nx,]*params$dx,c(1,3),sum,na.rm=T)
+    TotalVcatch <- apply(results$Y.v[,params$ref:params$Nx,]*params$dx,c(1,3),sum,na.rm=T)
+    Totalcatch <- TotalUcatch +   TotalVcatch
+    
+  
+    ## and then multiply outputs by depth to get per m2
+    
+    return(list(TotalUbiomass=TotalUbiomass, TotalVbiomass= TotalVbiomass, TotalUcatch=TotalUcatch,TotalVcatch=TotalVcatch,Totalcatch=Totalcatch))
+  
+    
+    }
+  
+
+
