@@ -125,8 +125,8 @@ effort_grid<-lme_inputs_grid %>%
   pivot_wider(id_cols=cell,names_from = t, values_from = NomActive_area_m2)
 
 
-f.u<-as.numeric(vals[1])*1000
-f.v<-as.numeric(vals[2])*1000
+f.u<-as.numeric(vals[1])
+f.v<-as.numeric(vals[2])
 f.minu<-as.numeric(vals[3])
 f.minv<-as.numeric(vals[4])
 
@@ -154,8 +154,31 @@ gridded_params <- sizeparam (equilibrium = FALSE
 
 
 grid_results<-gridded_sizemodel(gridded_params,ERSEM.det.input=F,U_mat,V_mat,W_mat,temp.effect=T,eps=1e-5,output="aggregated",
-                                use.init = FALSE, burnin.len
-                                )
+                                use.init = FALSE, burnin.len)
 
 
 #### CHECK OUTPUTS!!
+
+### this isnt returning the correct dimensions
+getGriddedOutputs<-function(input=lme_inputs_grid,results=grid_results,params=params){
+  # returns all outputs of the model 
+  # saveRDS(result_set,filename=paste("dbpm_calibration_LMEnumber_catchability.rds"))
+    TotalUbiomass <- apply(results$U[,params$ref:params$Nx,]*params$dx*10^params$x[params$ref:params$Nx],c(1,3),sum,na.rm=T)
+    TotalVbiomass <- apply(results$V[,params$ref:params$Nx,]*params$dx*10^params$x[params$ref:params$Nx],c(1,3),sum,na.rm=T)
+    # input[input$t==time[itime]]$W <- results$W[,itime]*min(params$depth,100)
+    #sum catches (currently in grams per m3 per year, across size classes) 
+    #keep as grams per m2, then be sure to convert observed from tonnes per m2 per year to g.^-m2.^-yr (for each month)
+    TotalUcatch <- apply(results$Y.u[,params$ref:params$Nx,]*params$dx,c(1,3),sum,na.rm=T)
+    TotalVcatch <- apply(results$Y.v[,params$ref:params$Nx,]*params$dx,c(1,3),sum,na.rm=T)
+    Totalcatch <- TotalUcatch +   TotalVcatch
+    
+  
+    ## and then multiply outputs by depth to get per m2
+    
+    return(list(TotalUbiomass=TotalUbiomass, TotalVbiomass= TotalVbiomass, TotalUcatch=TotalUcatch,TotalVcatch=TotalVcatch,Totalcatch=Totalcatch))
+  
+    
+    }
+  
+
+

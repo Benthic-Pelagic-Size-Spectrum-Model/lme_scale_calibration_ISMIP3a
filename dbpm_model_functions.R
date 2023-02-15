@@ -281,20 +281,14 @@ gridded_sizemodel<-function(params,ERSEM.det.input=F,U_mat,V_mat,W_mat,temp.effe
       
       eatenbypred<-10^x*f.pel*U[j,,i] + 10^x*f.ben*U[j,,i] 
       
-    
-      
       #detritus output (g.m-2.yr-1)
       
       # losses from detritivore scavenging/filtering only :
       
       output.w<-sum(10^x*f.det*V[j,,i]*dx)   
       
-      
-      
       #total biomass density defecated by pred (g.m-2.yr-1)
       defbypred<-def.high*(f.pel)*10^x*U[j,,i]+ def.low*(f.ben)*10^x*U[j,,i]
-      
-      
       
       #------------------------------------------------
       # Increment values of W,U & V	for next time step  
@@ -306,7 +300,7 @@ gridded_sizemodel<-function(params,ERSEM.det.input=F,U_mat,V_mat,W_mat,temp.effe
         
         #considering pelagic faeces as input as well as dead bodies from both pelagic and benthic communities 
         # and phytodetritus (dying sinking phytoplankton)
-        
+      
         
         if (det.coupling==1.0) {
           
@@ -384,7 +378,7 @@ gridded_sizemodel<-function(params,ERSEM.det.input=F,U_mat,V_mat,W_mat,temp.effe
       
       if (use.init==T)U[j,1:ref,i+1]<-ui0[j,i]*10^(r.plank[j,i]*x)[1:(ref)] 
       
-      if (use.init==F)U[j,1:ref,i+1]<-ui0[j,i+1]*10^(r.plank[j,i+1]*x)[1:(ref)] 
+      if (use.init==F)U[j,1:ref,i+1]<-ui0[j,i]*10^(r.plank[j,i]*x)[1:(ref)] 
       
       # apply transfer efficency of 10% *plankton density at same size  
       # if (repro.on==0)  U[ref,i+1]<-0.1*u.init.f(x,ui0,r.plank)[ref]       
@@ -452,6 +446,7 @@ gridded_sizemodel<-function(params,ERSEM.det.input=F,U_mat,V_mat,W_mat,temp.effe
       
       # increment and redistribute fishing effort input across grid cells for use in the next timestep
       
+      if (i < Neq){
       # get proportion of total fishable biomass for each grid cell
       #output rates of fisheries catches per yr at size
       prop.u<-(U[,Fref.u:Nx,i+1]*10^x[Fref.u:Nx])/apply(U[,Fref.u:Nx,i+1]*10^x[Fref.u:Nx]*dx,1,sum)
@@ -463,8 +458,8 @@ gridded_sizemodel<-function(params,ERSEM.det.input=F,U_mat,V_mat,W_mat,temp.effe
       Fvec.u[,Fref.u:Nx,i+1] = Fmort.u*(prop.u*effort[,i+1])
       
       Fvec.v[,Fref.v:Nx,i+1] = Fmort.v*(prop.v*effort[,i+1])
-      
-      
+      }
+    
     }#end time iteration
       
       
