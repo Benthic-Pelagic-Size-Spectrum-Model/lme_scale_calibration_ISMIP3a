@@ -156,7 +156,7 @@ grid_results<-gridded_sizemodel(gridded_params,ERSEM.det.input=F,U_mat,V_mat,W_m
 
 #### CHECK OUTPUTS!!
 
-### this isnt returning the correct dimensions
+### this needs to be faster or maybe just part of outputs of gridded_sizemodel
 getGriddedOutputs<-function(input=lme_inputs_grid,results=grid_results,params=params){
   # returns all outputs of the model 
   # saveRDS(result_set,filename=paste("dbpm_calibration_LMEnumber_catchability.rds"))
