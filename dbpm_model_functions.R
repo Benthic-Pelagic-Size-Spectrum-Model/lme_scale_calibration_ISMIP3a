@@ -449,9 +449,9 @@ gridded_sizemodel<-function(params,ERSEM.det.input=F,U_mat,V_mat,W_mat,temp.effe
       if (i < Neq){
       # get proportion of total fishable biomass for each grid cell
       #output rates of fisheries catches per yr at size
-      prop.u<-(U[,Fref.u:Nx,i+1]*10^x[Fref.u:Nx])/apply(U[,Fref.u:Nx,i+1]*10^x[Fref.u:Nx]*dx,1,sum)
+      prop.u<-apply(U[,Fref.u:Nx,i+1]*10^x[Fref.u:Nx]*dx,1,sum)/sum(apply(U[,Fref.u:Nx,i+1]*10^x[Fref.u:Nx]*dx,1,sum))
       #output rates of fisheries catches per yr at size
-      prop.v<-(V[,Fref.v:Nx,i+1]*10^x[Fref.v:Nx])/apply((V[,Fref.v:Nx,i+1]*10^x[Fref.v:Nx])*dx,1,sum)
+      prop.v<-apply(V[,Fref.v:Nx,i+1]*10^x[Fref.v:Nx]*dx,1,sum)/sum(apply(V[,Fref.v:Nx,i+1]*10^x[Fref.v:Nx]*dx,1,sum))
       
       # rescale effort:
       

@@ -46,13 +46,11 @@ for (itime in 1:length(time)){
   grid_results[[itime]]<-pbapply(X=as.matrix(input_igrid),c(1),run_model_timestep,vals = unlist(vals), U.initial=U.initial, V.initial=V.initial, W.initial=W.initial)
 }
 
-saveRDS(grid_results,"LME_14.rds")
-
-grid_results<-readRDS("LME_14.rds")
+#saveRDS(grid_results,"LME_14.rds")
 
 
 
-grid_results<-readRDS("LME_14.rds")
+#grid_results<-readRDS("LME_14.rds")
 
 for (itime in 1:ntime){
   for (igrid in 1:ngrid){
@@ -94,12 +92,11 @@ agg_outputs<-function(input=lme_inputs_grid,results=results,params=params){
 output<-agg_outputs(input=lme_inputs_grid,results=results)
   
   
-
 ###compare with catch data
 
 ### TO DO: test against code without fishing
 
-###################### TEST GRIDDED MODEL
+############################## SWITCH TO GRIDDED SIZE MODEL
 
 lme_inputs_grid$cell <- paste(lme_inputs_grid$lat,lme_inputs_grid$lon,sep="_")
 
@@ -163,15 +160,18 @@ grid_results<-gridded_sizemodel(gridded_params,ERSEM.det.input=F,U_mat,V_mat,W_m
 getGriddedOutputs<-function(input=lme_inputs_grid,results=grid_results,params=params){
   # returns all outputs of the model 
   # saveRDS(result_set,filename=paste("dbpm_calibration_LMEnumber_catchability.rds"))
-    TotalUbiomass <- apply(results$U[,params$ref:params$Nx,]*params$dx*10^params$x[params$ref:params$Nx],c(1,3),sum,na.rm=T)
-    TotalVbiomass <- apply(results$V[,params$ref:params$Nx,]*params$dx*10^params$x[params$ref:params$Nx],c(1,3),sum,na.rm=T)
+  input$TotalbiomassU <-   input$TotalVbiomass <- input$TotalUcatch <- input$TotalVcatch<- input$Totalcatch <- NA  
+  for(itime in 1:(dim(results$U)[3]-1)) {
+  input[input$t==time[itime],]$TotalbiomassU <- apply(results$U[,params$ref:params$Nx,itime+1]*params$dx*10^params$x[params$ref:params$Nx],1,sum,na.rm=T)
+    
+  input[input$t==time[itime],]$TotalVbiomass <- apply(results$V[,params$ref:params$Nx,itime+1]*params$dx*10^params$x[params$ref:params$Nx],1,sum,na.rm=T)
     # input[input$t==time[itime]]$W <- results$W[,itime]*min(params$depth,100)
     #sum catches (currently in grams per m3 per year, across size classes) 
     #keep as grams per m2, then be sure to convert observed from tonnes per m2 per year to g.^-m2.^-yr (for each month)
-    TotalUcatch <- apply(results$Y.u[,params$ref:params$Nx,]*params$dx,c(1,3),sum,na.rm=T)
-    TotalVcatch <- apply(results$Y.v[,params$ref:params$Nx,]*params$dx,c(1,3),sum,na.rm=T)
-    Totalcatch <- TotalUcatch +   TotalVcatch
-    
+  input[input$t==time[itime],]$TotalUcatch <- apply(results$Y.u[,params$ref:params$Nx,itime+1]*params$dx,1,sum,na.rm=T)
+  input[input$t==time[itime],]$TotalVcatch <- apply(results$Y.v[,params$ref:params$Nx,itime+1]*params$dx,1,sum,na.rm=T)
+  input[input$t==time[itime],]$Totalcatch <- input[input$t==time[itime],]$TotalUcatch +   input[input$t==time[itime],]$TotalVcatch
+  }
   
     ## and then multiply outputs by depth to get per m2
     
