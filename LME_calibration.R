@@ -91,15 +91,18 @@ run_model<-function(vals = X,input=lme_input,withinput=T){
   # saveRDS(result_set,filename=paste("dbpm_calibration_LMEnumber_catchability.rds"))
   
   if (withinput==T){
-  input$TotalUbiomass <- apply(result_set$U[params$ref:params$Nx,]*params$dx*10^params$x[params$ref:params$Nx],2,sum)*min(params$depth,100)
-  input$TotalVbiomass <- apply(result_set$V[params$ref.det:params$Nx,]*params$dx*10^params$x[params$ref.det:params$Nx],2,sum)*min(params$depth,100)
-  input$TotalW <- result_set$W[]*min(params$depth,100)
+  
+  depthadj<-ifelse(params$depth>100,100,params$depth)
+    
+  input$TotalUbiomass <- apply(result_set$U[params$ref:params$Nx,2:(params$Neq+1)]*params$dx*10^params$x[params$ref:params$Nx],2,sum)*depthadj
+  input$TotalVbiomass <- apply(result_set$V[params$ref.det:params$Nx,2:(params$Neq+1)]*params$dx*10^params$x[params$ref.det:params$Nx],2,sum)*depthadj
+  input$TotalW <- result_set$W[2:(params$Neq+1)]*depthadj
   
   #sum catches (currently in grams per m3 per year, across size classes) 
   # keep as grams per m2, then be sure to convert observed from tonnes per m2 per year to g.^-m2.^-yr (for each month)
   
-  input$TotalUcatch <- apply(result_set$Y.u[,]*params$dx,2,sum)*min(params$depth,100)
-  input$TotalVcatch <- apply(result_set$Y.v[,]*params$dx,2,sum)*min(params$depth,100)
+  input$TotalUcatch <- apply(result_set$Y.u[,2:(params$Neq+1)]*params$dx,2,sum)*depthadj
+  input$TotalVcatch <- apply(result_set$Y.v[,2:(params$Neq+1)]*params$dx,2,sum)*depthadj
   input$Totalcatch <- input$TotalUcatch +   input$TotalVcatch
   
   return(input)
@@ -207,8 +210,8 @@ sim$rmse<-pbapply(sim,1, getError, input=lme_input,cl=6)
 
 }
 
-
-
+#LME=14
+#LHS_Lme14<-LHSsearch(X=as.numeric(14),iter = 1)
 
 # Function to run model for each LME with gridded inputs, after run_LME_calibration
 run_model_timestep<-function(input=lme_inputs_igrid, vals = unlist(bestvals_LMEs[14,]),U.initial, V.initial, W.initial){
@@ -258,5 +261,33 @@ run_model_timestep<-function(input=lme_inputs_igrid, vals = unlist(bestvals_LMEs
   }
   
   
+
+
+### this needs to be faster or maybe just part of outputs of gridded_sizemodel
+getGriddedOutputs<-function(input=lme_inputs_grid,results=grid_results,params=params){
+  # returns all outputs of the model 
+  # saveRDS(result_set,filename=paste("dbpm_calibration_LMEnumber_catchability.rds"))
+  input$TotalUbiomass <-   input$TotalVbiomass <- input$TotalUcatch <- input$TotalVcatch<- input$Totalcatch <- NA  
+  cells<-unique(input$cell)
+  depthadj<-ifelse(params$depth>100,100,params$depth)
+  for(igrid in 1:length(cells)) {
+    
+    input[input$cell==cells[igrid],]$TotalUbiomass <- apply(results$U[igrid,params$ref:params$Nx,2:(params$Neq+1)]*params$dx*10^params$x[params$ref:params$Nx],2,sum,na.rm=T)*depthadj[igrid]
+    input[input$cell==cells[igrid],]$TotalVbiomass <- apply(results$V[igrid,params$ref:params$Nx,2:(params$Neq+1)]*params$dx*10^params$x[params$ref:params$Nx],2,sum,na.rm=T)*depthadj[igrid]
+    # input[input$t==time[itime]]$W <- results$W[,itime]*min(params$depth,100)
+    #sum catches (currently in grams per m3 per year, across size classes) 
+    #keep as grams per m2, then be sure to convert observed from tonnes per m2 per year to g.^-m2.^-yr (for each month)
+    input[input$cell==cells[igrid],]$TotalUcatch <- apply(results$Y.u[igrid,params$ref:params$Nx,2:(params$Neq+1)]*params$dx,2,sum,na.rm=T)*depthadj[igrid]
+    input[input$cell==cells[igrid],]$TotalVcatch <- apply(results$Y.v[igrid,params$ref:params$Nx,2:(params$Neq+1)]*params$dx,2,sum,na.rm=T)*depthadj[igrid]
+    input[input$cell==cells[igrid],]$Totalcatch <- input[input$cell==cells[igrid],]$TotalUcatch +   input[input$cell==cells[igrid],]$TotalVcatch
+  }
+  
+  ## and then multiply outputs by depth to get per m2
+  
+  return(input)
+  
+}
+
+
 
 

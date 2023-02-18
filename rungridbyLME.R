@@ -4,7 +4,8 @@ library(tidyverse)
 
 # get initial values from LME-scale results
 lme_input_14<-get_lme_inputs(LMEnumber = 14,gridded = F)
-vals <- readRDS("~/Dropbox/DBPM_ISIMIP_3a/lme_scale_calibration_ISMIP3a/bestvals_LMEs.RDS")
+vals<- readRDS("~/Dropbox/DBPM_ISIMIP_3a/lme_scale_calibration_ISMIP3a/Lme14_bestvals_LMEs_iter_300.RDS")
+#vals <- readRDS("~/Dropbox/DBPM_ISIMIP_3a/lme_scale_calibration_ISMIP3a/bestvals_LMEs.RDS")
 initial_results<-run_model(vals=unlist(vals),input=lme_input_14,withinput = F)
 U.initial<-rowMeans(initial_results$U[,1:12])
 V.initial<-rowMeans(initial_results$V[,1:12])
@@ -47,8 +48,6 @@ for (itime in 1:length(time)){
 }
 
 #saveRDS(grid_results,"LME_14.rds")
-
-
 
 #grid_results<-readRDS("LME_14.rds")
 
@@ -154,31 +153,6 @@ grid_results<-gridded_sizemodel(gridded_params,ERSEM.det.input=F,U_mat,V_mat,W_m
                                 use.init = FALSE, burnin.len)
 
 
+
+out<-getGriddedOutputs(input=lme_inputs_grid,results=grid_results,params=gridded_params)
 #### CHECK OUTPUTS!!
-
-### this needs to be faster or maybe just part of outputs of gridded_sizemodel
-getGriddedOutputs<-function(input=lme_inputs_grid,results=grid_results,params=params){
-  # returns all outputs of the model 
-  # saveRDS(result_set,filename=paste("dbpm_calibration_LMEnumber_catchability.rds"))
-  input$TotalbiomassU <-   input$TotalVbiomass <- input$TotalUcatch <- input$TotalVcatch<- input$Totalcatch <- NA  
-  for(itime in 1:(dim(results$U)[3]-1)) {
-  input[input$t==time[itime],]$TotalbiomassU <- apply(results$U[,params$ref:params$Nx,itime+1]*params$dx*10^params$x[params$ref:params$Nx],1,sum,na.rm=T)
-    
-  input[input$t==time[itime],]$TotalVbiomass <- apply(results$V[,params$ref:params$Nx,itime+1]*params$dx*10^params$x[params$ref:params$Nx],1,sum,na.rm=T)
-    # input[input$t==time[itime]]$W <- results$W[,itime]*min(params$depth,100)
-    #sum catches (currently in grams per m3 per year, across size classes) 
-    #keep as grams per m2, then be sure to convert observed from tonnes per m2 per year to g.^-m2.^-yr (for each month)
-  input[input$t==time[itime],]$TotalUcatch <- apply(results$Y.u[,params$ref:params$Nx,itime+1]*params$dx,1,sum,na.rm=T)
-  input[input$t==time[itime],]$TotalVcatch <- apply(results$Y.v[,params$ref:params$Nx,itime+1]*params$dx,1,sum,na.rm=T)
-  input[input$t==time[itime],]$Totalcatch <- input[input$t==time[itime],]$TotalUcatch +   input[input$t==time[itime],]$TotalVcatch
-  }
-  
-    ## and then multiply outputs by depth to get per m2
-    
-    return(list(TotalUbiomass=TotalUbiomass, TotalVbiomass= TotalVbiomass, TotalUcatch=TotalUcatch,TotalVcatch=TotalVcatch,Totalcatch=Totalcatch))
-  
-    
-    }
-  
-
-
