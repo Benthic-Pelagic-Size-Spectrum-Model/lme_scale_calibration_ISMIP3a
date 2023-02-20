@@ -1,12 +1,12 @@
 ##### run model across space and time using gridded inputs for each LME
 
-library(tidyverse)
+source("LME_calibration.R")
 
 #TODO selected LME is 14, automate that
 
 # get initial values from LME-scale results
 lme_input_14<-get_lme_inputs(LMEnumber = 14,gridded = F)
-vals <- readRDS("~/Dropbox/DBPM_ISIMIP_3a/lme_scale_calibration_ISMIP3a/bestvals_LMEs.RDS") # on repo
+vals <- readRDS("bestvals_LMEs.RDS")
 initial_results<-run_model(vals=unlist(vals),input=lme_input_14,withinput = F)
 U.initial<-rowMeans(initial_results$U[,1:12])
 V.initial<-rowMeans(initial_results$V[,1:12])
@@ -14,7 +14,10 @@ W.initial<-mean(initial_results$W[1:12])
 
 # get gridded inputs and run through all grid cells one timestep at a time
 
-lme_inputs_grid<-get_lme_inputs(LMEnumber = 14,gridded = T)[,c("lat","lon", "LME.x", "t","sst","sbt","er","intercept","slope","depth","NomActive_area_m2" )]
+lme_inputs_grid<-
+  get_lme_inputs(LMEnumber = 14,gridded = T)[,c("lat","lon", "LME.x", "t","sst",
+                                                "sbt","er","intercept","slope",
+                                                "depth","NomActive_area_m2" )]
 time<-unique(lme_inputs_grid$t)
 grid_results<-vector("list", length(time))
 
@@ -32,8 +35,12 @@ results<-list(U=U,V=V,Y.u=Y.u,Y.v=Y.v,PM.u=PM.u,PM.v=PM.v,GG.u=GG.u, GG.v=GG.v)
 ####################### RUN IT
 
 for (itime in 1:length(time)){
-  input_igrid<-subset(lme_inputs_grid,t==time[itime])[,c("depth", "er","intercept","slope","sst","sbt","NomActive_area_m2")]
-  grid_results[[itime]]<-pbapply(X=as.matrix(input_igrid),c(1),run_model_timestep,vals = unlist(vals), U.initial=U.initial, V.initial=V.initial, W.initial=W.initial)
+  input_igrid<-
+    subset(lme_inputs_grid,t==time[itime])[,c("depth", "er","intercept","slope",
+                                              "sst","sbt","NomActive_area_m2")]
+  grid_results[[itime]]<-pbapply(X=as.matrix(input_igrid),c(1),run_model_timestep,
+                                 vals = unlist(vals), U.initial=U.initial, 
+                                 V.initial=V.initial, W.initial=W.initial)
   #spread effort
   bio<-rep(0,length=132)
   x<-params$x
@@ -41,7 +48,11 @@ for (itime in 1:length(time)){
   Nx<-params$Nx
   fmin.u<-params$Fref.u
   fmin.v<-params$Fref.v
-  for (i in 1:132) bio[i]<-sum(grid_results[[itime]][[i]]$U[fmin.u:Nx,2]*10^x[fmin.u:Nx]*dx) + sum(grid_results[[itime]][[i]]$V[fmin.v:Nx,2]*10^x[fmin.v:Nx]*dx)
+  
+  for (i in 1:132) 
+    bio[i]<-sum(grid_results[[itime]][[i]]$U[fmin.u:Nx,2]*10^x[fmin.u:Nx]*dx) + 
+    sum(grid_results[[itime]][[i]]$V[fmin.v:Nx,2]*10^x[fmin.v:Nx]*dx)
+  
   prop_bio<-bio/sum(bio)
   input_igrid$NomActive_area_m2<-prop_bio*input_igrid$NomActive_area_m2
   #rerun
