@@ -20,7 +20,7 @@ source(file = "dbpm_model_functions.R")
 
 # Select LME and get inputs ready
 
-get_lme_inputs<-function(LMEnumber=14, gridded=F){
+get_lme_inputs<-function(LMEnumber=14, gridded=F,yearly=F){
 
 if (gridded!=T) {
 # read climate forcing inputs from THREDDS
@@ -47,6 +47,14 @@ lme_clim<-left_join(lme_clim,lme_fish,by="Year")
 lme_clim$NomActive_area_m2
 lme_clim$catch_tonnes_area_m2
 
+if (yearly==T) {
+  # replace monthly climate inputs  with annual averages (as per runmodel_yearly)
+  # will be different depending on whether lme_input is gridded or not may wnat to put inside other if statement
+  #
+   } 
+if (yearly!=T) {
+  # could use a smoother to get intrannual variation working better
+}
 #TO DO HERE: need to add a spin-up to these inputs prior to 1841 - 100 yrs at first value
 return (lme_clim)
 }
