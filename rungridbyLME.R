@@ -2,15 +2,16 @@
 
 source("LME_calibration.R")
 
-#TODO selected LME is 14, automate that
-
 # get initial values from LME-scale results
 lme_input_14<-get_lme_inputs(LMEnumber = 14,gridded = F)
-vals <- readRDS("bestvals_LMEs.RDS")
+vals <- readRDS("~/Dropbox/DBPM_ISIMIP_3a/lme_scale_calibration_ISMIP3a/bestvals_LMEs.RDS")
+# run model using time-averaged inputs
 initial_results<-run_model(vals=unlist(vals),input=lme_input_14,withinput = F)
-U.initial<-rowMeans(initial_results$U[,1:12])
-V.initial<-rowMeans(initial_results$V[,1:12])
-W.initial<-mean(initial_results$W[1:12])
+U.initial<-rowMeans(initial_results$U[,240:1440])
+V.initial<-rowMeans(initial_results$V[,240:1440])
+W.initial<-mean(initial_results$W[240:1440])
+# plot to check initial values
+plotsizespectrum(initial_results,params=initial_results$params,itime=240:1440,timeaveraged = TRUE)
 
 # get gridded inputs and run through all grid cells one timestep at a time
 
@@ -151,9 +152,11 @@ gridded_params <- sizeparam (equilibrium = FALSE
                      ,tmax = dim(er_grid[,-1])[2]/12
                      ,tstepspryr  =  12
                      ,search_vol = 0.64
-                     ,fmort.u = f.u
+                    # ,fmort.u = f.u
+                     ,fmort.u = 0
                      ,fminx.u = f.minu
-                     ,fmort.v = f.v
+                    # ,fmort.v = f.v
+                     ,fmort.v = 0
                      ,fminx.v = f.minv
                      ,depth = data.matrix(depth_grid[,-1][,1])
                      ,er = data.matrix(er_grid[,-1])
@@ -167,31 +170,18 @@ gridded_params <- sizeparam (equilibrium = FALSE
 
 
 grid_results<-gridded_sizemodel(gridded_params,ERSEM.det.input=F,U_mat,V_mat,W_mat,temp.effect=T,eps=1e-5,output="aggregated",
-                                use.init = FALSE, burnin.len)
+                                use.init = TRUE, burnin.len)
+
+
+
+out<-getGriddedOutputs(input=lme_inputs_grid,results=grid_results,params=gridded_params)
 
 
 #### CHECK OUTPUTS!!
 
-### this isnt returning the correct dimensions
-getGriddedOutputs<-function(input=lme_inputs_grid,results=grid_results,params=params){
-  # returns all outputs of the model 
-  # saveRDS(result_set,filename=paste("dbpm_calibration_LMEnumber_catchability.rds"))
-    TotalUbiomass <- apply(results$U[,params$ref:params$Nx,]*params$dx*10^params$x[params$ref:params$Nx],c(1,3),sum,na.rm=T)
-    TotalVbiomass <- apply(results$V[,params$ref:params$Nx,]*params$dx*10^params$x[params$ref:params$Nx],c(1,3),sum,na.rm=T)
-    # input[input$t==time[itime]]$W <- results$W[,itime]*min(params$depth,100)
-    #sum catches (currently in grams per m3 per year, across size classes) 
-    #keep as grams per m2, then be sure to convert observed from tonnes per m2 per year to g.^-m2.^-yr (for each month)
-    TotalUcatch <- apply(results$Y.u[,params$ref:params$Nx,]*params$dx,c(1,3),sum,na.rm=T)
-    TotalVcatch <- apply(results$Y.v[,params$ref:params$Nx,]*params$dx,c(1,3),sum,na.rm=T)
-    Totalcatch <- TotalUcatch +   TotalVcatch
-    
-  
-    ## and then multiply outputs by depth to get per m2
-    
-    return(list(TotalUbiomass=TotalUbiomass, TotalVbiomass= TotalVbiomass, TotalUcatch=TotalUcatch,TotalVcatch=TotalVcatch,Totalcatch=Totalcatch))
-  
-    
-    }
-  
+cells<-unique(out$cell)
 
-
+ggplot(filter(out,cell==cells[1]), aes(x=t,y=TotalUbiomass)) + geom_point()
+ggplot(filter(out,cell==cells[1]), aes(x=t,y=TotalVbiomass)) + geom_point()
+ggplot(filter(out,cell==cells[1]), aes(x=t,y=Totalcatch)) + geom_point()
+>>>>>>> af33b53f1c9038e308548f3dcefd4db35ca3ece1
