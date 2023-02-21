@@ -1,14 +1,17 @@
 ##### run model across space and time using gridded inputs for each LME
 
-library(tidyverse)
+source("LME_calibration.R")
 
 # get initial values from LME-scale results
 lme_input_14<-get_lme_inputs(LMEnumber = 14,gridded = F)
 vals <- readRDS("~/Dropbox/DBPM_ISIMIP_3a/lme_scale_calibration_ISMIP3a/bestvals_LMEs.RDS")
+# run model using time-averaged inputs
 initial_results<-run_model(vals=unlist(vals),input=lme_input_14,withinput = F)
-U.initial<-rowMeans(initial_results$U[,1:12])
-V.initial<-rowMeans(initial_results$V[,1:12])
-W.initial<-mean(initial_results$W[1:12])
+U.initial<-rowMeans(initial_results$U[,240:1440])
+V.initial<-rowMeans(initial_results$V[,240:1440])
+W.initial<-mean(initial_results$W[240:1440])
+# plot to check initial values
+plotsizespectrum(initial_results,params=initial_results$params,itime=240:1440,timeaveraged = TRUE)
 
 # get gridded inputs and run through all grid cells one timestep at a time
 lme_inputs_grid<-get_lme_inputs(LMEnumber = 14,gridded = T)[,c("lat","lon", "LME.x", "t","sst","sbt","er","intercept","slope","depth","NomActive_area_m2" )]
@@ -132,9 +135,11 @@ gridded_params <- sizeparam (equilibrium = FALSE
                      ,tmax = dim(er_grid[,-1])[2]/12
                      ,tstepspryr  =  12
                      ,search_vol = 0.64
-                     ,fmort.u = f.u
+                    # ,fmort.u = f.u
+                     ,fmort.u = 0
                      ,fminx.u = f.minu
-                     ,fmort.v = f.v
+                    # ,fmort.v = f.v
+                     ,fmort.v = 0
                      ,fminx.v = f.minv
                      ,depth = data.matrix(depth_grid[,-1][,1])
                      ,er = data.matrix(er_grid[,-1])
@@ -148,9 +153,17 @@ gridded_params <- sizeparam (equilibrium = FALSE
 
 
 grid_results<-gridded_sizemodel(gridded_params,ERSEM.det.input=F,U_mat,V_mat,W_mat,temp.effect=T,eps=1e-5,output="aggregated",
-                                use.init = FALSE, burnin.len)
+                                use.init = TRUE, burnin.len)
 
 
 
 out<-getGriddedOutputs(input=lme_inputs_grid,results=grid_results,params=gridded_params)
+
+
 #### CHECK OUTPUTS!!
+
+cells<-unique(out$cell)
+
+ggplot(filter(out,cell==cells[1]), aes(x=t,y=TotalUbiomass)) + geom_point()
+ggplot(filter(out,cell==cells[1]), aes(x=t,y=TotalVbiomass)) + geom_point()
+ggplot(filter(out,cell==cells[1]), aes(x=t,y=Totalcatch)) + geom_point()
