@@ -433,31 +433,31 @@ gridded_sizemodel<-function(params,ERSEM.det.input=F,U_mat,V_mat,W_mat,temp.effe
       }		
   
       
-      }#end per grid   
+      
+     
+      #output rates of fisheries catches per yr at size
+      Y.u[,Fref.u:Nx,i+1]<-Fvec.u[j,Fref.u:Nx,i]*U[j,Fref.u:Nx,i+1]*10^x[Fref.u:Nx] 
+      #output rates of fisheries catches per yr at size
+      Y.v[,Fref.v:Nx,i+1]<-Fvec.v[j,Fref.v:Nx,i]*V[j,Fref.v:Nx,i+1]*10^x[Fref.v:Nx] 
+    
+      
+      }#end across grid   
         
       
-      # Across all grid cells, increment and redistribute fishing effort input across grid cells for use in the next timestep
+      # increment and redistribute fishing effort input across grid cells for use in the next timestep
       
       if (i < Neq){
-      # # get proportion of total fishable biomass for each grid cell, relative to mean 
-      # #output rates of fisheries catches per yr at size
-      # prop.u<-apply(U[,Fref.u:Nx,i+1]*10^x[Fref.u:Nx]*dx,1,sum)/mean(apply(U[,Fref.u:Nx,i+1]*10^x[Fref.u:Nx]*dx,1,sum))
-      # #output rates of fisheries catches per yr at size
-      # prop.v<-apply(V[,Fref.v:Nx,i+1]*10^x[Fref.v:Nx]*dx,1,sum)/mean(apply(V[,Fref.v:Nx,i+1]*10^x[Fref.v:Nx]*dx,1,sum))
-      # 
+      # get proportion of total fishable biomass for each grid cell
+      #output rates of fisheries catches per yr at size
+      prop.u<-(U[,Fref.u:Nx,i+1]*10^x[Fref.u:Nx])/apply(U[,Fref.u:Nx,i+1]*10^x[Fref.u:Nx]*dx,1,sum)
+      #output rates of fisheries catches per yr at size
+      prop.v<-(V[,Fref.v:Nx,i+1]*10^x[Fref.v:Nx])/apply((V[,Fref.v:Nx,i+1]*10^x[Fref.v:Nx])*dx,1,sum)
+      
       # rescale effort:
       
-      Fvec.u[,Fref.u:Nx,i+1] = Fmort.u*effort[,i+1]
+      Fvec.u[,Fref.u:Nx,i+1] = Fmort.u*(prop.u*effort[,i+1])
       
-      Fvec.v[,Fref.v:Nx,i+1] = Fmort.v*effort[,i+1]
-      
-      
-      #output rates of fisheries catches per yr at size
-      Y.u[,Fref.u:Nx,i+1]<-Fvec.u[,Fref.u:Nx,i+1]*U[,Fref.u:Nx,i+1]*10^x[Fref.u:Nx] 
-      #output rates of fisheries catches per yr at size
-      Y.v[,Fref.v:Nx,i+1]<-Fvec.v[,Fref.v:Nx,i+1]*V[,Fref.v:Nx,i+1]*10^x[Fref.v:Nx] 
-      
-      
+      Fvec.v[,Fref.v:Nx,i+1] = Fmort.v*(prop.v*effort[,i+1])
       }
     
     }#end time iteration
@@ -987,7 +987,7 @@ sizeparam<-function(equilibrium=F, dx=0.1,xmin=-12,xmax=6,xmin.consumer.u=-7,xmi
 
   
   # get effort and rescale 
-  param$effort = effort/max(effort)
+  param$effort = effort
   
   # get effort and rescale so that max is set to 1
   #param$effort = effort/max(effort)

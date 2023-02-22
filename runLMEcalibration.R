@@ -5,14 +5,11 @@
 # saveRDS(LMEs,"bestvals_LMEs.RDS")
 source("LME_calibration.R")
 # faster using pbsapply, in the LHSsearch pbapply has cl=6 which uses cluster to run in parallel, but here it is run sequentially if cl is not specified.
-lmenum=14
-no_iter = 300
+lmenum=66
+no_iter = 500
 no_cores <- parallel::detectCores() - 1
-lmes<-t(pbapply::pbsapply(X=14:lmenum,LHSsearch,iter=no_iter))
-saveRDS(lmes,paste0("Lme14_bestvals_LMEs_iter_",no_iter,".RDS"))
-
-#test for lme14: LHSsearch(X=14:14,iter=100)
-#saveRDS(lmes,paste0("lme14_bestvals_LMEs_iter_",no_iter,".RDS"))
+lmes<-t(pbapply::pbsapply(X=1:lmenum,LHSsearch,iter=no_iter))
+saveRDS(lmes,paste0("bestvals_LMEs_iter_",no_iter,".RDS"))
 
 ############### Make plots
 
