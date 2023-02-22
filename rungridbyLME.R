@@ -4,7 +4,7 @@ source("LME_calibration.R")
 
 # get initial values from LME-scale results
 lme_input_14<-get_lme_inputs(LMEnumber = 14,gridded = F)
-vals <- readRDS("~/Dropbox/DBPM_ISIMIP_3a/lme_scale_calibration_ISMIP3a/bestvals_LMEs.RDS")
+vals <- readRDS("bestvals_LMEs.RDS")
 # run model using time-averaged inputs
 initial_results<-run_model(vals=unlist(vals),input=lme_input_14,withinput = F)
 U.initial<-rowMeans(initial_results$U[,240:1440])
@@ -34,7 +34,7 @@ results<-list(U=U,V=V,Y.u=Y.u,Y.v=Y.v,PM.u=PM.u,PM.v=PM.v,GG.u=GG.u, GG.v=GG.v)
 
 
 ####################### RUN IT
-
+## Not working
 for (itime in 1:length(time)){
   input_igrid<-
     subset(lme_inputs_grid,t==time[itime])[,c("depth", "er","intercept","slope",
@@ -64,10 +64,7 @@ saveRDS(grid_results,"LME_14.rds")
 
 grid_results<-readRDS("LME_14.rds")
 
-
-
-grid_results<-readRDS("LME_14.rds")
-
+#not working
 for (itime in 1:ntime){
   for (igrid in 1:ngrid){
 results$U[igrid,,itime]<-grid_results[[itime]][[igrid]]$U[,2]
@@ -104,7 +101,7 @@ agg_outputs<-function(input=lme_inputs_grid,results=results,params=params){
   
 }
   
-
+# not working
 output<-agg_outputs(input=lme_inputs_grid,results=results)
   
   
@@ -184,4 +181,3 @@ cells<-unique(out$cell)
 ggplot(filter(out,cell==cells[1]), aes(x=t,y=TotalUbiomass)) + geom_point()
 ggplot(filter(out,cell==cells[1]), aes(x=t,y=TotalVbiomass)) + geom_point()
 ggplot(filter(out,cell==cells[1]), aes(x=t,y=Totalcatch)) + geom_point()
->>>>>>> af33b53f1c9038e308548f3dcefd4db35ca3ece1
