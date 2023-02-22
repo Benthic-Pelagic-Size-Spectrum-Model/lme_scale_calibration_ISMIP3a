@@ -184,4 +184,3 @@ cells<-unique(out$cell)
 ggplot(filter(out,cell==cells[1]), aes(x=t,y=TotalUbiomass)) + geom_point()
 ggplot(filter(out,cell==cells[1]), aes(x=t,y=TotalVbiomass)) + geom_point()
 ggplot(filter(out,cell==cells[1]), aes(x=t,y=Totalcatch)) + geom_point()
->>>>>>> af33b53f1c9038e308548f3dcefd4db35ca3ece1
