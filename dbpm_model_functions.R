@@ -478,11 +478,6 @@ gridded_sizemodel<-function(params,ERSEM.det.input=F,U_mat,V_mat,W_mat,temp.effe
 
 
 
-
-
-
-
-
 #### model to run per grid cell or averaged over an area
 
 sizemodel<-function(params,ERSEM.det.input=F,U_mat,V_mat,W_mat,temp.effect=T,eps=1e-5,output="aggregated",

@@ -26,6 +26,27 @@ if (gridded!=T) {
 # read climate forcing inputs from THREDDS
 lme_clim<-read_csv(file="http://portal.sf.utas.edu.au/thredds/fileServer/gem/fishmip/ISIMIP3a/InputData/DBPM_lme_inputs/obsclim/0.25deg/DBPM_LME_climate_inputs_slope.csv")
 lme_clim<-subset(lme_clim, LME %in% LMEnumber)
+
+if (yearly ==T){
+trial<-lme_clim %>% 
+  # mutate(year = as.Date(t, "%Y")) %>%
+  mutate(year = sub("\\-.*", "", t))
+
+trial2<-trial %>% 
+  gather(key, value, -c(LME, t, year)) %>% 
+  group_by(key, year, LME) %>% 
+  summarise(mean = mean(value)) %>% 
+  ungroup() %>% 
+  spread(key, mean)
+
+time<-trial %>% 
+  select(t, year) %>% 
+  distinct()
+
+lme_clim<-trial2 %>% 
+  full_join(time)
+}
+
 }
   
 if (gridded==T) {
@@ -33,7 +54,13 @@ if (gridded==T) {
     #filename =paste("/rd/gem/private/fishmip_inputs/ISIMIP3a/processed_forcings/lme_inputs_gridcell/obsclim/1deg/observed_LME_",LMEnumber,".csv",sep="") 
     filename="observed_LME_14.csv"
     lme_clim<-read_csv(file=filename)
-          }
+   
+    if (yearly ==T){
+    # redo above but this time it's  GRID
+    
+    }
+    
+           }
   
   
 # read climate fishing inputs from THREDDS
@@ -47,14 +74,11 @@ lme_clim<-left_join(lme_clim,lme_fish,by="Year")
 lme_clim$NomActive_area_m2
 lme_clim$catch_tonnes_area_m2
 
-if (yearly==T) {
-  # replace monthly climate inputs  with annual averages (as per runmodel_yearly)
-  # will be different depending on whether lme_input is gridded or not may wnat to put inside other if statement
-  #
-   } 
-if (yearly!=T) {
-  # could use a smoother to get intrannual variation working better
-}
+
+# if (yearly!=T) {
+#   # could use a smoother to get intrannual variation working better
+# }
+
 #TO DO HERE: need to add a spin-up to these inputs prior to 1841 - 100 yrs at first value
 return (lme_clim)
 }
