@@ -249,7 +249,6 @@ gridded_params <- sizeparam (equilibrium = FALSE
                              ,Ngrid=dim(depth_grid)[1])      
 
 # run model  for full time period across all grid cells
-
 grid_results<-gridded_sizemodel(gridded_params,ERSEM.det.input=F,U_mat,V_mat,W_mat,temp.effect=T,eps=1e-5,output="aggregated",
                                 use.init = TRUE, burnin.len)
 

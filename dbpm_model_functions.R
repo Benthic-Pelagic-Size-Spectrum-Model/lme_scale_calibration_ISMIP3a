@@ -142,17 +142,21 @@ gridded_sizemodel<-function(params,ERSEM.det.input=F,U_mat,V_mat,W_mat,temp.effe
     #---------------------------------------------------------------------------------------
     
     # set up with the initial values from param - same for all grid cells
-    U[,1:(ref-1),1]<-U.init[1:(ref-1)]    #(phyto+zoo)plankton size spectrum  
-    U[,ref:120,1]<-U.init[ref:120]           # set initial consumer size spectrum 
-    V[,ref.det:120,1]<-V.init[ref.det:120]  # set initial detritivore spectrum  
-    W[,1]<-W.init             # set initial detritus biomass density (g.m^-3) 
+    for (j in 1:ngrid){
+    U[1:ngrid,1:(ref-1),1]<-U.init[1:(ref-1)]    #(phyto+zoo)plankton size spectrum  
+    U[1:ngrid,ref:120,1]<-U.init[ref:120]           # set initial consumer size spectrum 
+    V[1:ngrid,ref.det:120,1]<-V.init[ref.det:120]  # set initial detritivore spectrum  
+    W[1:ngrid,1]<-W.init             # set initial detritus biomass density (g.m^-3) 
+    }
     
     if(use.init == TRUE){
-      # set up with the initial values from previous run
-      U[,1:(ref-1),1]<-U.init[1:(ref-1)]    #(phyto+zoo)plankton size spectrum  
-      U[,ref:length(x),1]<-U.init[ref:length(x)]           # set initial consumer size spectrum from previous run
-      V[,ref.det:length(x),1]<-V.init[ref.det:length(x)]  # set initial detritivore spectrum from previous run
-      W[,1]<-W.init
+     for (j in 1:ngrid){
+       # set up with the initial values from previous run
+      U[j,1:(ref-1),1]<-U.init[1:(ref-1)]    #(phyto+zoo)plankton size spectrum  
+      U[j,ref:length(x),1]<-U.init[ref:length(x)]           # set initial consumer size spectrum from previous run
+      V[j,ref.det:length(x),1]<-V.init[ref.det:length(x)]  # set initial detritivore spectrum from previous run
+      W[j,1]<-W.init
+     }
     }
     
     #intrinsic natural mortality
