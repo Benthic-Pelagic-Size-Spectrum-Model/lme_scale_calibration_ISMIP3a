@@ -256,14 +256,31 @@ out<-getGriddedOutputs(input=lme_inputs_grid,results=grid_results,params=gridded
 
 #### CHECK OUTPUTS!!
 
+
 cells<-unique(out$cell)
+out$cell<-as.factor(out$cell)
+
 
 # ggplot(filter(out,cell==cells[1]), aes(x=t,y=TotalUbiomass)) + geom_line()
 # ggplot(filter(out,cell==cells[1]), aes(x=t,y=TotalVbiomass)) + geom_line()
 # ggplot(filter(out,cell==cells[1]), aes(x=t,y=Totalcatch)) + geom_line()
 
-p1<-ggplot(out, aes(x=t,y=TotalUbiomass,group=cell)) + geom_line(aes(color=lat))+theme(legend.position = "none") + scale_color_continuous()
-p2<-ggplot(out, aes(x=t,y=TotalVbiomass,group=cell)) + geom_line(aes(color=lat))+theme(legend.position = "none")+ scale_color_continuous()
-p3<-ggplot(out, aes(x=t,y=Totalcatch,group=cell)) + geom_line(aes(color=lat))+theme(legend.position = "right")+ scale_color_continuous()
+p1<-ggplot(out, aes(x=t,y=log10(TotalUbiomass),group=cell)) + geom_line(aes(color=sst))+theme(legend.position = "none") + scale_color_continuous()
+p2<-ggplot(out, aes(x=t,y=log10(TotalVbiomass),group=cell)) + geom_line(aes(color=sst))+theme(legend.position = "none")+ scale_color_continuous()
+p3<-ggplot(out, aes(x=t,y=log10(Totalcatch),group=cell)) + geom_line(aes(color=sst))+theme(legend.position = "right")+ scale_color_continuous()
 
 p1 + p2 + p3
+
+
+# save results
+#saveRDS(grid_results,"grid_results.RDS")
+
+
+# Make plots of:
+
+# spatial maps of results by decade
+# compare time series to total catches
+# re-run at 1/4 degree grid cells
+# run for all LMEs
+# compare with results from DBPM, no fishing
+# check growth rates, P:B ratio
