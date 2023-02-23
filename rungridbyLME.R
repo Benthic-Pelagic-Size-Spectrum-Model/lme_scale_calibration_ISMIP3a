@@ -279,8 +279,7 @@ p1 + p2 + p3
 # Make plots of:
 
 # spatial maps of results by decade
-# compare time series to total catches
-# re-run at 1/4 degree grid cells
+# check growth rates, P:B ratio, size spectra slopes
+# compare time series to total catches at LME scale
 # run for all LMEs
 # compare with results from DBPM, no fishing
-# check growth rates, P:B ratio
