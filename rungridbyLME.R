@@ -27,11 +27,11 @@ ntime<-length(time)
 ngrid<-dim(subset(lme_inputs_grid,t==time[1]))[1]
 params<-initial_results$params
 
-U=V=Y.u=Y.v=GG.u=GG.v=PM.u=PM.v=array(0,c(ngrid,params$Nx,ntime))
-W=array(0,c(ngrid,params$Nx,ntime))
-
-results<-list(U=U,V=V,Y.u=Y.u,Y.v=Y.v,PM.u=PM.u,PM.v=PM.v,GG.u=GG.u, GG.v=GG.v)
-
+# U=V=Y.u=Y.v=GG.u=GG.v=PM.u=PM.v=array(0,c(ngrid,params$Nx,ntime))
+# W=array(0,c(ngrid,params$Nx,ntime))
+# 
+# results<-list(U=U,V=V,Y.u=Y.u,Y.v=Y.v,PM.u=PM.u,PM.v=PM.v,GG.u=GG.u, GG.v=GG.v)
+# 
 
 
 # ####################### RUN IT
@@ -258,6 +258,6 @@ out<-getGriddedOutputs(input=lme_inputs_grid,results=grid_results,params=gridded
 
 cells<-unique(out$cell)
 
-ggplot(filter(out,cell==cells[1]), aes(x=t,y=TotalUbiomass)) + geom_point()
-ggplot(filter(out,cell==cells[1]), aes(x=t,y=TotalVbiomass)) + geom_point()
-ggplot(filter(out,cell==cells[1]), aes(x=t,y=Totalcatch)) + geom_point()
+ggplot(filter(out,cell==cells[1]), aes(x=t,y=TotalUbiomass)) + geom_line()
+ggplot(filter(out,cell==cells[1]), aes(x=t,y=TotalVbiomass)) + geom_line()
+ggplot(filter(out,cell==cells[1]), aes(x=t,y=Totalcatch)) + geom_line()
