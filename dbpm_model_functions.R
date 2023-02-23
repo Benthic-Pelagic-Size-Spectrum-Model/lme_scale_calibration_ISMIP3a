@@ -477,7 +477,7 @@ gridded_sizemodel<-function(params,ERSEM.det.input=F,U_mat,V_mat,W_mat,temp.effe
   # end with(params)
   
   
-}#end size-based model function
+}#end gridded size-based model function
 
 
 

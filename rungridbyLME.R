@@ -216,11 +216,11 @@ f.minv<-as.numeric(vals[4])
 
 # Making values constant through time
 
-er_grid[,3:dim(er_grid)[2]] <- er_grid[,2]
-intercept_grid[,3:dim(intercept_grid)[2]] <- intercept_grid[,2]
-slope_grid[,3:dim(slope_grid)[2]] <- slope_grid[,2]
-sst_grid[,3:dim(sst_grid)[2]] <- sst_grid[,2]
-sbt_grid[,3:dim(sbt_grid)[2]] <- sbt_grid[,2]
+# er_grid[,3:dim(er_grid)[2]] <- er_grid[,2]
+# intercept_grid[,3:dim(intercept_grid)[2]] <- intercept_grid[,2]
+# slope_grid[,3:dim(slope_grid)[2]] <- slope_grid[,2]
+# sst_grid[,3:dim(sst_grid)[2]] <- sst_grid[,2]
+# sbt_grid[,3:dim(sbt_grid)[2]] <- sbt_grid[,2]
 
 # set up params for each month, across grid cells
 gridded_params <- sizeparam (equilibrium = FALSE
@@ -230,11 +230,11 @@ gridded_params <- sizeparam (equilibrium = FALSE
                              ,tmax = dim(er_grid[,-1])[2]/12
                              ,tstepspryr  =  12
                              ,search_vol = 0.64
-                             # ,fmort.u = f.u
-                             ,fmort.u = 0
+                              ,fmort.u = f.u
+                             #,fmort.u = 0
                              ,fminx.u = f.minu
-                             # ,fmort.v = f.v
-                             ,fmort.v = 0
+                              ,fmort.v = f.v
+                             #,fmort.v = 0
                              ,fminx.v = f.minv
                              ,depth = data.matrix(depth_grid[,-1][,1])
                              ,er = data.matrix(er_grid[,-1])
@@ -258,6 +258,12 @@ out<-getGriddedOutputs(input=lme_inputs_grid,results=grid_results,params=gridded
 
 cells<-unique(out$cell)
 
-ggplot(filter(out,cell==cells[1]), aes(x=t,y=TotalUbiomass)) + geom_line()
-ggplot(filter(out,cell==cells[1]), aes(x=t,y=TotalVbiomass)) + geom_line()
-ggplot(filter(out,cell==cells[1]), aes(x=t,y=Totalcatch)) + geom_line()
+# ggplot(filter(out,cell==cells[1]), aes(x=t,y=TotalUbiomass)) + geom_line()
+# ggplot(filter(out,cell==cells[1]), aes(x=t,y=TotalVbiomass)) + geom_line()
+# ggplot(filter(out,cell==cells[1]), aes(x=t,y=Totalcatch)) + geom_line()
+
+p1<-ggplot(out, aes(x=t,y=TotalUbiomass,group=cell)) + geom_line(aes(color=lat))+theme(legend.position = "none") + scale_color_continuous()
+p2<-ggplot(out, aes(x=t,y=TotalVbiomass,group=cell)) + geom_line(aes(color=lat))+theme(legend.position = "none")+ scale_color_continuous()
+p3<-ggplot(out, aes(x=t,y=Totalcatch,group=cell)) + geom_line(aes(color=lat))+theme(legend.position = "right")+ scale_color_continuous()
+
+p1 + p2 + p3
