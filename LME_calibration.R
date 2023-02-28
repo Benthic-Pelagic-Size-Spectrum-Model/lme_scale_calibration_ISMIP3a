@@ -2,7 +2,7 @@
 # This function reads in LME-scale time-series inputs (climate and fishing) pre-processed 
 # as spatially averaged means to estimate catchability (and if needed other model parameters)
 
-rm(list=ls())
+# rm(list=ls())
 
 library(devtools)
 library(tidyverse)
