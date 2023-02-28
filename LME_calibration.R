@@ -2,6 +2,8 @@
 # This function reads in LME-scale time-series inputs (climate and fishing) pre-processed 
 # as spatially averaged means to estimate catchability (and if needed other model parameters)
 
+rm(list=ls())
+
 library(devtools)
 library(tidyverse)
 library(lubridate)
@@ -16,51 +18,180 @@ library(optimParallel)
 # source_url(url = "https://github.com/Benthic-Pelagic-Size-Spectrum-Model/dbpm/blob/master/size-based-models/dynamic_sizebased_model_functions.R")
 source(file = "dbpm_model_functions.R")
 
-
-
 # Select LME and get inputs ready
 
 get_lme_inputs<-function(LMEnumber=14, gridded=F,yearly=F){
 
 if (gridded!=T) {
-# read climate forcing inputs from THREDDS
-lme_clim<-read_csv(file="http://portal.sf.utas.edu.au/thredds/fileServer/gem/fishmip/ISIMIP3a/InputData/DBPM_lme_inputs/obsclim/0.25deg/DBPM_LME_climate_inputs_slope.csv")
-lme_clim<-subset(lme_clim, LME %in% LMEnumber)
 
-if (yearly ==T){
-trial<-lme_clim %>% 
-  # mutate(year = as.Date(t, "%Y")) %>%
-  mutate(year = sub("\\-.*", "", t))
+  # read climate forcing inputs from THREDDS
+  lme_clim<-read_csv(file="http://portal.sf.utas.edu.au/thredds/fileServer/gem/fishmip/ISIMIP3a/InputData/DBPM_lme_inputs/obsclim/0.25deg/DBPM_LME_climate_inputs_slope.csv")
+  lme_clim<-subset(lme_clim, LME %in% LMEnumber)
 
-trial2<-trial %>% 
-  gather(key, value, -c(LME, t, year)) %>% 
-  group_by(key, year, LME) %>% 
-  summarise(mean = mean(value)) %>% 
-  ungroup() %>% 
-  spread(key, mean)
+  if (yearly ==T){
+    
+    # option 1: keep monthly time steps but each month value is the yearly average 
+    
+    lme_clim<-lme_clim %>% 
+      mutate(year = sub("\\-.*", "", t))
+    
+    time<-lme_clim %>% 
+      select(t, year) %>% 
+      distinct()
+    
+    lme_clim<-lme_clim %>%
+      gather(key, value, -c(LME, t, year)) %>% 
+      group_by(key, year, LME) %>% 
+      summarise(mean = mean(value)) %>% 
+      ungroup() %>% 
+      spread(key, mean)
 
-time<-trial %>% 
-  select(t, year) %>% 
-  distinct()
+    lme_clim<-lme_clim %>% 
+      full_join(time) %>% 
+      arrange(t)
+    
+    # comment the below or add a function argument for options if you want option 1 
+    
+    # option 2: do as per global DBPML: 
+    # use yearly average for January each year
+    # extend the time series to weekly inputs
+    # interpolate missing values (from Jan year 1 to jan year 2 etc) using na.omit
+    
+    # for last year you should consider December instead as the run ends in Dec 2010
+    # Because these monthly values are yearly avarage, January == December
 
-lme_clim<-trial2 %>% 
-  full_join(time)
-}
+    lme_clim<-lme_clim %>% # one value each year (yearly average) 
+      mutate(month = month(t)) %>%  # consider only January
+      filter(month %in% c(1)) %>% 
+      select(-month)
+    
+    final_month<-lme_clim$t[nrow(lme_clim)]
+    
+    lme_clim<-lme_clim %>% 
+      mutate(t = as.Date(ifelse(t == final_month, as.Date("2010-12-01"), (t))))
+      
+    # create a weekly time vector 
+    extend<-data.frame(t = seq(lme_clim$t[1], lme_clim$t[nrow(lme_clim)], by="week")) %>% 
+      mutate(LME = LMEnumber, 
+             year = as.character(year(t)), 
+             area_m2 = unique(lme_clim$area_m2), 
+             depth = unique(lme_clim$depth))
+    
+    library(zoo) # na.approx as in dbpm global
+    lme_clim<-lme_clim %>% 
+      select(-t) %>% 
+      full_join(extend) %>% 
+      arrange(t) %>% 
+      mutate(er = na.approx(er), 
+             expcbot = na.approx(expcbot),
+             intercept = na.approx(intercept),
+             lphy = na.approx(lphy),
+             sbt = na.approx(sbt),
+             slope = na.approx(slope),
+             sphy = na.approx(sphy),
+             sst = na.approx(sst))
+  
+  }
 
 }
   
 if (gridded==T) {
+  
     # read climate forcing inputs from gem, here testing on LME14
-    #filename =paste("/rd/gem/private/fishmip_inputs/ISIMIP3a/processed_forcings/lme_inputs_gridcell/obsclim/1deg/observed_LME_",LMEnumber,".csv",sep="") 
+    # trial 
+    # filename =paste("/rd/gem/private/fishmip_inputs/ISIMIP3a/processed_forcings/lme_inputs_gridcell/obsclim/1deg/observed_LME_",LMEnumber,".csv",sep="") 
+    # LMEnumber = 14
     filename="observed_LME_14.csv"
     lme_clim<-read_csv(file=filename)
-   
-    if (yearly ==T){
-    # redo above but this time it's  GRID
     
+    
+    if (yearly ==T){
+
+      # create a key - this needs to be the final lat/lon/t format
+      key<-lme_clim %>% 
+        select(lat,lon, depth, area_m2, t) %>% 
+        distinct()
+      
+      # crate a second key - this is where you store grid-cell specific and not time-variant info
+      key2<-key %>% 
+        select(-t) %>% 
+        distinct()
+      
+      # option 1: keep monthly time steps but each month value is the yearly average 
+      
+      lme_clim<-lme_clim %>% 
+        mutate(year = sub("\\-.*", "", t))
+      
+      time<-lme_clim %>% 
+        select(t, year) %>% 
+        distinct()
+      
+      lme_clim<-lme_clim %>% 
+        gather(key, value, -c(LME, t, year, lat, lon)) %>% 
+        group_by(key, year, LME, lat, lon) %>% 
+        summarise(mean = mean(value)) %>% 
+        ungroup() %>% 
+        spread(key, mean)
+      
+      lme_clim<-lme_clim %>% 
+        full_join(time) %>% 
+        arrange(lat,lon,t) # according to key above 
+      
+      # comment the below or add a function argument for options 
+      # option 2: do as per global DBPML: 
+      # use yearly average for January each year
+      # extend the time series to weekly inputs
+      # interpolate missing values (from Jan year 1 to jan year 2 etc) using na.omit
+      
+      # for last year you should consider December instead as the run ends in Dec 2010
+      # Because these monthly values are yearly average, January == December
+      
+      lme_clim<-lme_clim %>% # one value for Jan each year (yearly average) 
+        mutate(month = month(t)) %>%
+        filter(month %in% c(1)) %>% 
+        select(-month)
+      
+      final_month<-lme_clim$t[nrow(lme_clim)]
+      
+      lme_clim<-lme_clim %>% 
+        mutate(t = as.Date(ifelse(t == final_month, as.Date("2010-12-01"), (t))))
+      
+      # create a third key - with year instead of t  
+      key3<-key %>% 
+        mutate(year = as.character(year(t))) %>% 
+        select(-c(t)) %>%
+        distinct()
+      
+      # create a weekly time vector 
+      extend<-data.frame(t = seq(lme_clim$t[1], lme_clim$t[nrow(lme_clim)], by="week")) %>% 
+        mutate(LME = LMEnumber, 
+               year = as.character(year(t))) %>% 
+        full_join(key3) %>% 
+        arrange(lat,lon, t)
+      
+      library(zoo) # na.approx as in dbpm global
+      lme_clim<-lme_clim %>%
+        select(-t) %>% # Need to delete t here otherwise the join does not work properly
+        full_join(extend) %>% 
+        arrange(lat,lon, t) %>%
+        group_by(lat, lon, LME, area_m2, depth) %>% 
+        summarise(er = na.approx(er), 
+               expcbot = na.approx(expcbot),
+               intercept = na.approx(intercept),
+               lphy = na.approx(lphy),
+               sbt = na.approx(sbt),
+               slope = na.approx(slope),
+               sphy = na.approx(sphy),
+               sst = na.approx(sst)) %>% 
+        ungroup()
+    
+      # add t
+      lme_clim<-lme_clim %>% 
+        cbind(extend$t)
+      
     }
     
-           }
+ }
   
   
 # read climate fishing inputs from THREDDS
