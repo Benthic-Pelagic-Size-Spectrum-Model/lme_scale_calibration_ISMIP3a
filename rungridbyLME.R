@@ -3,7 +3,7 @@
 source("LME_calibration.R")
 
 # get initial values from LME-scale results
-lme_input_14<-get_lme_inputs(LMEnumber = 14,gridded = F)
+lme_input_14<-get_lme_inputs(LMEnumber = 14,gridded = F, yearly = T)
 vals <- readRDS("bestvals_LMEs.RDS")
 # run model using time-averaged inputs
 initial_results<-run_model(vals=vals[14,],input=lme_input_14,withinput = F)
@@ -11,7 +11,9 @@ U.initial<-rowMeans(initial_results$U[,240:1440])
 V.initial<-rowMeans(initial_results$V[,240:1440])
 W.initial<-mean(initial_results$W[240:1440])
 # plot to check initial values
-plotsizespectrum(initial_results,params=initial_results$params,itime=240:1440,timeaveraged = TRUE)
+plotsizespectrum(initial_results,params=initial_results$params,
+                 itime=240:1440,
+                 timeaveraged = TRUE)
 
 # get gridded inputs and run through all grid cells one timestep at a time
 
@@ -229,12 +231,10 @@ gridded_params <- sizeparam (equilibrium = FALSE
                              ,xmin.consumer.v = -3
                              ,tmax = dim(er_grid[,-1])[2]/12
                              ,tstepspryr  =  12
-                             ,search_vol = 0.64
-                              ,fmort.u = f.u
-                             #,fmort.u = 0
+                             ,search_vol = 64 # just for this test instead of .64
+                             ,fmort.u = 0#f.u
                              ,fminx.u = f.minu
-                              ,fmort.v = f.v
-                             #,fmort.v = 0
+                             ,fmort.v = 0#f.v
                              ,fminx.v = f.minv
                              ,depth = data.matrix(depth_grid[,-1][,1])
                              ,er = data.matrix(er_grid[,-1])
@@ -249,8 +249,24 @@ gridded_params <- sizeparam (equilibrium = FALSE
                              ,Ngrid=dim(depth_grid)[1])      
 
 # run model  for full time period across all grid cells
-grid_results<-gridded_sizemodel(gridded_params,ERSEM.det.input=F,U_mat,V_mat,W_mat,temp.effect=T,eps=1e-5,output="aggregated",
-                                use.init = TRUE, burnin.len)
+grid_results<-gridded_sizemodel(gridded_params,
+                                ERSEM.det.input=F,
+                                U_mat,V_mat,
+                                W_mat,
+                                temp.effect=T,
+                                eps=1e-5,
+                                output="aggregated",
+                                use.init = TRUE,
+                                burnin.len)
+U <- grid_results$U
+U[1,,2041]
+sum(is.na(U))
+sum(any(U < 0))
+
+V <- grid_results$V
+V[1,,2041]
+sum(is.na(V))
+sum(any(V < 0))
 
 out<-getGriddedOutputs(input=lme_inputs_grid,results=grid_results,params=gridded_params)
 
@@ -265,9 +281,15 @@ out$cell<-as.factor(out$cell)
 # ggplot(filter(out,cell==cells[1]), aes(x=t,y=TotalVbiomass)) + geom_line()
 # ggplot(filter(out,cell==cells[1]), aes(x=t,y=Totalcatch)) + geom_line()
 
-p1<-ggplot(out, aes(x=t,y=log10(TotalUbiomass),group=cell)) + geom_line(aes(color=sst))+theme(legend.position = "none") + scale_color_continuous()
-p2<-ggplot(out, aes(x=t,y=log10(TotalVbiomass),group=cell)) + geom_line(aes(color=sst))+theme(legend.position = "none")+ scale_color_continuous()
-p3<-ggplot(out, aes(x=t,y=log10(Totalcatch),group=cell)) + geom_line(aes(color=sst))+theme(legend.position = "right")+ scale_color_continuous()
+p1<-ggplot(out, aes(x=t,y=log10(TotalUbiomass),group=cell)) + 
+  geom_line(aes(color=sst))+theme(legend.position = "none") + 
+  scale_color_continuous()
+p2<-ggplot(out, aes(x=t,y=log10(TotalVbiomass),group=cell)) + 
+  geom_line(aes(color=sst))+theme(legend.position = "none")+ 
+  scale_color_continuous()
+p3<-ggplot(out, aes(x=t,y=log10(Totalcatch),group=cell)) + 
+  geom_line(aes(color=sst))+theme(legend.position = "right")+ 
+  scale_color_continuous()
 
 p1 + p2 + p3
 
@@ -277,6 +299,15 @@ p1 + p2 + p3
 
 
 # Make plots of:
+
+# run yearly = T, no fishing
+# maps of total biomasses averaged per decade, use nice map
+# time series of biomasses, one line per grid
+# for U and V
+# size spectrums U + V averaged per decade, all grid cells on one plot
+
+# Compare these plots wiht the 3a tcb netcdf file
+# - extract LME14 from the file and do the same plots as above to compare
 
 # spatial maps of results by decade
 # check growth rates, P:B ratio, size spectra slopes
