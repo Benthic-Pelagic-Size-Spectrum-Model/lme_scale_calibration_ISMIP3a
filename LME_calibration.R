@@ -50,9 +50,7 @@ if (gridded!=T) {
       full_join(time) %>% 
       arrange(t)
     
-    # comment the below or add a function argument for options if you want option 1 
-    
-    # option 2: do as per global DBPML: 
+    # option 2: do as per global DBPML (builts on option 1): 
     # use yearly average for January each year
     # extend the time series to weekly inputs
     # interpolate missing values (from Jan year 1 to jan year 2 etc) using na.omit
@@ -142,8 +140,7 @@ if (gridded==T) {
         full_join(time) %>% 
         arrange(lat,lon,t) # according to key above 
       
-      # comment the below or add a function argument for options 
-      # option 2: do as per global DBPML: 
+      # option 2: do as per global DBPML (builts on option 1): 
       # use yearly average for January each year
       # extend the time series to weekly inputs
       # interpolate missing values (from Jan year 1 to jan year 2 etc) using na.omit
