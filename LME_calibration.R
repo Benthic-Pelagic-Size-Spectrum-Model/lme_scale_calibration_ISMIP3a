@@ -67,9 +67,15 @@ if (gridded!=T) {
     
     final_month<-lme_clim$t[nrow(lme_clim)]
     
-    lme_clim<-lme_clim %>% 
-      mutate(t = as.Date(ifelse(t == final_month, as.Date("2010-12-01"), (t))))
-      
+    # lme_clim<-lme_clim %>% 
+    #   mutate(t = as.Date(ifelse(t == final_month, as.Date("2010-12-01"), t)))
+
+    # if above not working, do this instead:
+    lme_clim<-lme_clim %>%
+      mutate(t = as.character(t),
+             t = ifelse(t == final_month, "2010-12-01", t),
+             t = as.Date(t))
+    
     # create a weekly time vector 
     extend<-data.frame(t = seq(lme_clim$t[1], lme_clim$t[nrow(lme_clim)], by="week")) %>% 
       mutate(LME = LMEnumber, 
@@ -99,11 +105,10 @@ if (gridded==T) {
   
     # read climate forcing inputs from gem, here testing on LME14
     # trial 
-    # filename =paste("/rd/gem/private/fishmip_inputs/ISIMIP3a/processed_forcings/lme_inputs_gridcell/obsclim/1deg/observed_LME_",LMEnumber,".csv",sep="") 
     # LMEnumber = 14
+    # filename =paste("/rd/gem/private/fishmip_inputs/ISIMIP3a/processed_forcings/lme_inputs_gridcell/obsclim/1deg/observed_LME_",LMEnumber,".csv",sep="") 
     filename="observed_LME_14.csv"
     lme_clim<-read_csv(file=filename)
-    
     
     if (yearly ==T){
 
@@ -153,8 +158,12 @@ if (gridded==T) {
       
       final_month<-lme_clim$t[nrow(lme_clim)]
       
-      lme_clim<-lme_clim %>% 
-        mutate(t = as.Date(ifelse(t == final_month, as.Date("2010-12-01"), (t))))
+      lme_clim<-lme_clim %>%
+        mutate(t = as.character(t),
+               t = ifelse(t == final_month, "2010-12-01", t),
+               t = as.Date(t))
+      # check 
+      # lme_clim$t[nrow(lme_clim)]
       
       # create a third key - with year instead of t  
       key3<-key %>% 
