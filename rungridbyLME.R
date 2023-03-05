@@ -18,7 +18,7 @@ plotsizespectrum(initial_results,params=initial_results$params,
 # get gridded inputs and run through all grid cells one timestep at a time
 
 lme_inputs_grid<-
-  get_lme_inputs(LMEnumber = 14,gridded = T)[,c("lat","lon", "LME.x", "t","sst",
+  get_lme_inputs(LMEnumber = 14,gridded = T, yearly = T)[,c("lat","lon", "LME.x", "t","sst",
                                                 "sbt","er","intercept","slope",
                                                 "depth","NomActive_area_m2" )]
 time<-unique(lme_inputs_grid$t)
@@ -231,7 +231,7 @@ gridded_params <- sizeparam (equilibrium = FALSE
                              ,xmin.consumer.v = -3
                              ,tmax = dim(er_grid[,-1])[2]/12
                              ,tstepspryr  =  12
-                             ,search_vol = 64 # just for this test instead of .64
+                             ,search_vol = .64 # just for this test instead of .64
                              ,fmort.u = 0#f.u
                              ,fminx.u = f.minu
                              ,fmort.v = 0#f.v
@@ -258,15 +258,17 @@ grid_results<-gridded_sizemodel(gridded_params,
                                 output="aggregated",
                                 use.init = TRUE,
                                 burnin.len)
-U <- grid_results$U
-U[1,,2041]
-sum(is.na(U))
-sum(any(U < 0))
 
-V <- grid_results$V
-V[1,,2041]
-sum(is.na(V))
-sum(any(V < 0))
+# Checks
+# U <- grid_results$U
+# U[1,,2041]
+# sum(is.na(U))
+# sum(any(U < 0))
+# 
+# V <- grid_results$V
+# V[1,,2041]
+# sum(is.na(V))
+# sum(any(V < 0))
 
 out<-getGriddedOutputs(input=lme_inputs_grid,results=grid_results,params=gridded_params)
 
@@ -297,6 +299,58 @@ p1 + p2 + p3
 # save results
 #saveRDS(grid_results,"grid_results.RDS")
 
+# 1.	Test 1: run yearly = TRUE, no fishing (effort = 0), search volume = 64. 
+# a.	Plot:
+#   i.	maps of biomass for last decade (average across 1961-1970 etc … up to 1991-2010) for U + V, 
+# ii.	time series of biomass 1841-2020 U + V (U consider only size greater than a certain size, 
+# check 3a netcdf code but this should be included into the getGriddedOutputs) – mean across grid cells, 
+# iii.	size spectra U + V average per decade per grid cell and all grid cells on the same plot.  
+# b.	Compare these plots with the 3a tcb netcdf file: 
+#   i.	Extract LME 14 from this file 
+# ii.	Produce plots i-iii  
+
+# setup data
+library(tidyverse)
+library(rnaturalearth)
+library(sf)
+
+biom_df <- out[,c(1,2,4,16,17)]
+biom_df <- biom_df %>% mutate(totalB = TotalVbiomass + TotalUbiomass)
+
+# calculate the mean biomass for each decade
+df_decade_avg <- biom_df %>%
+  mutate(decade = as.integer(substr(t, 1, 3)) * 10) %>% 
+  group_by(decade, lon, lat) %>%  
+  summarize(avg_biomass = mean(totalB))  
+
+# download world map
+world <- ne_download(category = "cultural", 
+                     type = "admin_0_countries", 
+                     scale = "large",
+                     returnclass = "sf")
+
+# plot map facets of average biomass per decade
+ggplot(df_decade_avg)+
+  geom_tile(aes(x = lon, y = lat, fill = avg_biomass)) +
+  geom_sf(data = world) +
+  coord_sf(xlim = c(-68.5,-52.5), ylim = c(-54.5,-34.5), expand = FALSE) +
+  scale_fill_gradient2(low = "white", high = "red", name = "Avg Biomass") +
+  facet_wrap(~decade) +
+  theme(legend.position = "bottom") +
+  ggtitle("Map of average biomass per decade")
+
+# calculate the mean biomass across gridcell
+df_grid_avg <- biom_df %>%
+  group_by(t) %>%  
+  summarize(avg_biomass = mean(totalB))  
+
+# plot of time series of biomass
+
+ggplot(df_grid_avg)+
+  geom_line(aes(x = t, y = avg_biomass)) +
+  ggtitle("Average biomass through time")
+
+# size spectra
 
 # Make plots of:
 
