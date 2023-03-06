@@ -193,7 +193,7 @@ if (gridded==T) {
     
       # add t
       lme_clim<-lme_clim %>% 
-        cbind(extend$t)
+        cbind("t" = extend$t)
       
     }
     
