@@ -256,10 +256,8 @@ out<-getGriddedOutputs(input=lme_inputs_grid,results=grid_results,params=gridded
 
 #### CHECK OUTPUTS!!
 
-
 cells<-unique(out$cell)
 out$cell<-as.factor(out$cell)
-
 
 # ggplot(filter(out,cell==cells[1]), aes(x=t,y=TotalUbiomass)) + geom_line()
 # ggplot(filter(out,cell==cells[1]), aes(x=t,y=TotalVbiomass)) + geom_line()
@@ -276,10 +274,17 @@ p1 + p2 + p3
 #saveRDS(grid_results,"grid_results.RDS")
 
 
-# Make plots of:
+# TO DO: 
+#Make a folder for each LME  output with the output files 
+# and the following figures in PDFs:
 
-# spatial maps of results by decade
-# check growth rates, P:B ratio, size spectra slopes
-# compare time series to total catches at LME scale
-# run for all LMEs
-# compare with results from DBPM, no fishing
+#Test 1- compare with results from DBPM, no fishing (checking code consistency)
+
+#Test 2- model calibration/behaviour
+# 1. Spatial maps of TotalCatch and TotalBiomass (by decade)
+# - use Camis raster code
+# 2. Community size spectra (U & V) - one line per grid cell - final decade?
+# 3. Plots of GG growth rates (see historyMatching.R for example)
+# 4. Compare time series to total catches at LME scale with obs catch
+# 5. Once checked, run for all LMEs
+
