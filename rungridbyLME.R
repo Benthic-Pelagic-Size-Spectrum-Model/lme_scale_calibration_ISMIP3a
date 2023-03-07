@@ -19,8 +19,8 @@ plotsizespectrum(initial_results,params=initial_results$params,
 
 lme_inputs_grid<-
   get_lme_inputs(LMEnumber = 14,gridded = T, yearly = T)[,c("lat","lon", "LME.x", "t","sst",
-                                                "sbt","er","intercept","slope",
-                                                "depth","NomActive_area_m2" )]
+                                                            "sbt","er","intercept","slope",
+                                                            "depth","NomActive_area_m2" )]
 time<-unique(lme_inputs_grid$t)
 grid_results<-vector("list", length(time))
 
@@ -242,7 +242,8 @@ gridded_params <- sizeparam (equilibrium = FALSE
                              ,slope = data.matrix(slope_grid[,-1])
                              ,sst = data.matrix(sst_grid[,-1])
                              ,sft = data.matrix(sbt_grid[,-1])
-                             ,use.init = TRUE,effort = data.matrix(effort_grid[,-1])
+                             ,use.init = TRUE
+                             ,effort = data.matrix(effort_grid[,-1])
                              ,U.initial =U.initial
                              ,V.initial = V.initial
                              ,W.initial = W.initial
@@ -305,6 +306,7 @@ p1 + p2 + p3
 # ii.	time series of biomass 1841-2020 U + V (U consider only size greater than a certain size, 
 # check 3a netcdf code but this should be included into the getGriddedOutputs) – mean across grid cells, 
 # iii.	size spectra U + V average per decade per grid cell and all grid cells on the same plot.  
+# iv. plot growth rate GG.u + GG.v per decade per gridcell
 # b.	Compare these plots with the 3a tcb netcdf file: 
 #   i.	Extract LME 14 from this file 
 # ii.	Produce plots i-iii  
@@ -330,7 +332,7 @@ world <- ne_download(category = "cultural",
                      returnclass = "sf")
 
 # plot map facets of average biomass per decade
-ggplot(df_decade_avg)+
+p1 <- ggplot(df_decade_avg)+
   geom_tile(aes(x = lon, y = lat, fill = avg_biomass)) +
   geom_sf(data = world) +
   coord_sf(xlim = c(-68.5,-52.5), ylim = c(-54.5,-34.5), expand = FALSE) +
@@ -346,7 +348,7 @@ df_grid_avg <- biom_df %>%
 
 # plot of time series of biomass
 
-ggplot(df_grid_avg)+
+p2 <- ggplot(df_grid_avg)+
   geom_line(aes(x = t, y = avg_biomass)) +
   ggtitle("Average biomass through time")
 
