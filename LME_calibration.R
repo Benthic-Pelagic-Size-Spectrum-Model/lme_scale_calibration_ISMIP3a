@@ -75,7 +75,7 @@ if (gridded!=T) {
              t = as.Date(t))
     
     # create a weekly time vector 
-    extend<-data.frame(t = seq(lme_clim$t[1], lme_clim$t[nrow(lme_clim)], by="week")) %>% 
+    extend<-data.frame(t = seq(lme_clim$t[1], lme_clim$t[nrow(lme_clim)], by="month")) %>% 
       mutate(LME = LMEnumber, 
              year = as.character(year(t)), 
              area_m2 = unique(lme_clim$area_m2), 
@@ -169,7 +169,7 @@ if (gridded==T) {
         distinct()
       
       # create a weekly time vector 
-      extend<-data.frame(t = seq(lme_clim$t[1], lme_clim$t[nrow(lme_clim)], by="week")) %>% 
+      extend<-data.frame(t = seq(lme_clim$t[1], lme_clim$t[nrow(lme_clim)], by="month")) %>% 
         mutate(LME = LMEnumber, 
                year = as.character(year(t))) %>% 
         full_join(key3) %>% 
