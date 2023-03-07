@@ -308,6 +308,8 @@ p1 + p2 + p3
 # b.	Compare these plots with the 3a tcb netcdf file: 
 #   i.	Extract LME 14 from this file 
 # ii.	Produce plots i-iii  
+# TODO cami: compare model with empirical catches (see run lme calibration for plotting)
+# use history matching and plotsizespectrum() for help
 
 # setup data
 library(tidyverse)
