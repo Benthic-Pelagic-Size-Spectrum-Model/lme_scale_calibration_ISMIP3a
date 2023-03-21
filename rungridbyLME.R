@@ -117,7 +117,7 @@ grid_results<-gridded_sizemodel(gridded_params,
 # sum(is.na(V))
 # sum(any(V < 0))
 saveRDS(grid_results,"rungridRes/test1_grid.rds")
-
+grid_results <- readRDS("rungridRes/test2_grid.rds")
 out<-getGriddedOutputs(input=lme_inputs_grid,results=grid_results,params=gridded_params)
 # save gridded object instead
 
@@ -127,23 +127,6 @@ out <- readRDS("rungridRes/test2.rds")
 
 cells<-unique(out$cell)
 out$cell<-as.factor(out$cell)
-
-# ggplot(filter(out,cell==cells[1]), aes(x=t,y=TotalUbiomass)) + geom_line()
-# ggplot(filter(out,cell==cells[1]), aes(x=t,y=TotalVbiomass)) + geom_line()
-# ggplot(filter(out,cell==cells[1]), aes(x=t,y=Totalcatch)) + geom_line()
-
-p1<-ggplot(out, aes(x=t,y=log10(TotalUbiomass),group=cell)) + 
-  geom_line(aes(color=sst))+theme(legend.position = "none") + 
-  scale_color_continuous()
-p2<-ggplot(out, aes(x=t,y=log10(TotalVbiomass),group=cell)) + 
-  geom_line(aes(color=sst))+theme(legend.position = "none")+ 
-  scale_color_continuous()
-p3<-ggplot(out, aes(x=t,y=log10(Totalcatch),group=cell)) + 
-  geom_line(aes(color=sst))+theme(legend.position = "right")+ 
-  scale_color_continuous()
-
-p1 + p2 + p3
-
 
 # save results
 #saveRDS(grid_results,"grid_results.RDS")
@@ -166,6 +149,15 @@ library(tidyverse)
 library(rnaturalearth)
 library(sf)
 
+# download world map
+# world <- ne_download(category = "cultural", 
+#                      type = "admin_0_countries", 
+#                      scale = "large",
+#                      returnclass = "sf")
+# 
+# saveRDS(world,"worldMap.rds")
+world <- readRDS("worldMap.rds")
+
 biom_df <- out[,c(1,2,4,16,17)]
 biom_df <- biom_df %>% mutate(totalB = TotalVbiomass + TotalUbiomass)
 
@@ -175,11 +167,7 @@ df_decade_avg <- biom_df %>%
   group_by(decade, lon, lat) %>%  
   summarize(avg_biomass = mean(totalB))  
 
-# download world map
-world <- ne_download(category = "cultural", 
-                     type = "admin_0_countries", 
-                     scale = "large",
-                     returnclass = "sf")
+
 
 # plot map facets of average biomass per decade
 p1 <- ggplot(df_decade_avg)+
@@ -268,6 +256,30 @@ p5 <- ggplot(plot_dat) +
   facet_wrap(~decade) +
   scale_y_continuous(trans = "log10")
 
+# add p6 map of catch using TotalCatch
+
+catch_df <- out[,c(1,2,4,14,15)]
+catch_df <- catch_df %>% mutate(totalB = TotalVcatch + TotalUcatch)
+
+# calculate the mean catch for each decade
+df_decade_avg <- catch_df %>%
+  mutate(decade = as.integer(substr(t, 1, 3)) * 10) %>% 
+  group_by(decade, lon, lat) %>%  
+  summarize(avg_catch = mean(totalB))  
+
+
+
+# plot map facets of average catch per decade
+p6 <- ggplot(df_decade_avg)+
+  geom_tile(aes(x = lon, y = lat, fill = avg_catch)) +
+  geom_sf(data = world) +
+  coord_sf(xlim = c(-68.5,-52.5), ylim = c(-54.5,-34.5), expand = FALSE) +
+  scale_fill_gradient2(low = "white", high = "red", name = "Avg catch") +
+  facet_wrap(~decade) +
+  theme(legend.position = "bottom") +
+  ggtitle("Map of average catch per decade")
+
+
 p <- list(p1,p2,p3,p4,p5)
 # saving
 library(gridExtra)
@@ -279,9 +291,9 @@ p2
 p3
 p4
 p5
+p6
 dev.off()
 
-# add p6 map of catch using TotalCatch
 
 
 # TO DO: 
