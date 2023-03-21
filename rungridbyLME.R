@@ -3,7 +3,7 @@
 source("LME_calibration.R")
 
 # get initial values from LME-scale results
-lme_input_14<-get_lme_inputs(LMEnumber = 14,gridded = F, yearly = T)
+lme_input_14<-get_lme_inputs(LMEnumber = 14,gridded = F, yearly = F)
 vals <- readRDS("bestvals_LMEs.RDS")
 # run model using time-averaged inputs
 initial_results<-run_model(vals=vals[14,],input=lme_input_14,withinput = F)
@@ -15,12 +15,15 @@ plotsizespectrum(initial_results,params=initial_results$params,
                  itime=240:1440,
                  timeaveraged = TRUE)
 
-# get gridded inputs and run through all grid cells one timestep at a time
+# WARNING 
+# test 1 - check no fishing runs, are they matching the netcdf? Yearly = T, f.u = 0 and f.v = o 
+# test 2 - checking the fishing component. yearly = F, f.u, f.v, f.minu, f.minv as per values below.     
 
+# get gridded inputs and run through all grid cells one timestep at a time
 lme_inputs_grid<-
-  get_lme_inputs(LMEnumber = 14,gridded = T, yearly = T)[,c("lat","lon", "LME.x", "t","sst",
-                                                            "sbt","er","intercept","slope",
-                                                            "depth","NomActive_area_m2" )]
+  get_lme_inputs(LMEnumber = 14, gridded = T, yearly = T)[,c("lat","lon", "LME.x", "t","sst",
+                                                             "sbt","er","intercept","slope",
+                                                             "depth","NomActive_area_m2" )]
 time<-unique(lme_inputs_grid$t)
 grid_results<-vector("list", length(time))
 
@@ -28,163 +31,6 @@ grid_results<-vector("list", length(time))
 ntime<-length(time)
 ngrid<-dim(subset(lme_inputs_grid,t==time[1]))[1]
 params<-initial_results$params
-
-# U=V=Y.u=Y.v=GG.u=GG.v=PM.u=PM.v=array(0,c(ngrid,params$Nx,ntime))
-# W=array(0,c(ngrid,params$Nx,ntime))
-# 
-# results<-list(U=U,V=V,Y.u=Y.u,Y.v=Y.v,PM.u=PM.u,PM.v=PM.v,GG.u=GG.u, GG.v=GG.v)
-# 
-
-
-# ####################### RUN IT
-# 
-# for (itime in 1:length(time)){
-#   input_igrid<-
-#     subset(lme_inputs_grid,t==time[itime])[,c("depth", "er","intercept","slope",
-#                                               "sst","sbt","NomActive_area_m2")]
-#   grid_results[[itime]]<-pbapply(X=as.matrix(input_igrid),c(1),run_model_timestep,
-#                                  vals = unlist(vals), U.initial=U.initial, 
-#                                  V.initial=V.initial, W.initial=W.initial)
-#   #spread effort
-#   bio<-rep(0,length=132)
-#   x<-params$x
-#   dx<-params$dx
-#   Nx<-params$Nx
-#   fmin.u<-params$Fref.u
-#   fmin.v<-params$Fref.v
-#   
-#   for (i in 1:132) 
-#     bio[i]<-sum(grid_results[[itime]][[i]]$U[fmin.u:Nx,2]*10^x[fmin.u:Nx]*dx) + 
-#     sum(grid_results[[itime]][[i]]$V[fmin.v:Nx,2]*10^x[fmin.v:Nx]*dx)
-#   
-#   prop_bio<-bio/sum(bio)
-#   input_igrid$NomActive_area_m2<-prop_bio*input_igrid$NomActive_area_m2
-#   #rerun
-#   grid_results[[itime]]<-pbapply(X=as.matrix(input_igrid),c(1),run_model_timestep,vals = unlist(vals), U.initial=U.initial, V.initial=V.initial, W.initial=W.initial)
-# }
-# 
-# saveRDS(grid_results,"LME_14.rds")
-# 
-# grid_results<-readRDS("LME_14.rds")
-# 
-# 
-# 
-# grid_results<-readRDS("LME_14.rds")
-# 
-# for (itime in 1:ntime){
-#   for (igrid in 1:ngrid){
-# results$U[igrid,,itime]<-grid_results[[itime]][[igrid]]$U[,2]
-# results$V[igrid,,itime]<-grid_results[[itime]][[igrid]]$V[,2]
-# results$Y.u[igrid,,itime]<-grid_results[[itime]][[igrid]]$Y.u[,1]
-# results$Y.v[igrid,,itime]<-grid_results[[itime]][[igrid]]$Y.v[,2]
-# results$PM.u[igrid,,itime]<-grid_results[[itime]][[igrid]]$PM.u[,1]
-# results$PM.v[igrid,,itime]<-grid_results[[itime]][[igrid]]$PM.v[,1]
-# results$GG.u[igrid,,itime]<-grid_results[[itime]][[igrid]]$GG.u[,1]
-# results$GG.v[igrid,,itime]<-grid_results[[itime]][[igrid]]$GG.v[,1]
-# results$W[igrid,itime]<-grid_results[[itime]][[igrid]]$W[2]
-# 
-#   }
-# }
-# 
-# 
-# ### get outputs into lat/lon summarise biomass, catches etc.
-# 
-# agg_outputs<-function(input=lme_inputs_grid,results=results,params=params){
-#   # returns all outputs of the model 
-#   # saveRDS(result_set,filename=paste("dbpm_calibration_LMEnumber_catchability.rds"))
-#     for (itime in 1: ntime){
-#     input[input$t==time[itime],]$TotalUbiomass <- apply(results$U[,params$ref:params$Nx,itime]*params$dx*10^params$x[params$ref:params$Nx],1,sum)*min(params$depth,100)
-#     input[input$t==time[itime],]$TotalVbiomass <- apply(results$V[,params$ref:params$Nx,itime]*params$dx*10^params$x[params$ref:params$Nx],1,sum)*min(params$depth,100)
-#    # input[input$t==time[itime]]$W <- results$W[,itime]*min(params$depth,100)
-#   #sum catches (currently in grams per m3 per year, across size classes) 
-#   #keep as grams per m2, then be sure to convert observed from tonnes per m2 per year to g.^-m2.^-yr (for each month)
-#     input[input$t==time[itime]]$TotalUcatch <- apply(results$Y.u[,params$ref:params$Nx,itime]*params$dx,2,sum)*min(params$depth,100)
-#     input[input$t==time[itime]]$TotalVcatch <- apply(results$Y.v[,params$ref:params$Nx,itime]*params$dx,2,sum)*min(params$depth,100)
-#     input[input$t==time[itime]]$Totalcatch <- input$TotalUcatch +   input$TotalVcatch
-#     
-#     return(input)
-#   }
-#   
-# }
-#   
-# 
-# output<-agg_outputs(input=lme_inputs_grid,results=results)
-#   
-#   
-
-# ####################### RUN IT
-# ## Not working
-# for (itime in 1:length(time)){
-#   input_igrid<-
-#     subset(lme_inputs_grid,t==time[itime])[,c("depth", "er","intercept","slope",
-#                                               "sst","sbt","NomActive_area_m2")]
-#   grid_results[[itime]]<-pbapply(X=as.matrix(input_igrid),c(1),run_model_timestep,
-#                                  vals = unlist(vals), U.initial=U.initial, 
-#                                  V.initial=V.initial, W.initial=W.initial)
-#   #spread effort
-#   bio<-rep(0,length=132)
-#   x<-params$x
-#   dx<-params$dx
-#   Nx<-params$Nx
-#   fmin.u<-params$Fref.u
-#   fmin.v<-params$Fref.v
-#   
-#   for (i in 1:132) 
-#     bio[i]<-sum(grid_results[[itime]][[i]]$U[fmin.u:Nx,2]*10^x[fmin.u:Nx]*dx) + 
-#     sum(grid_results[[itime]][[i]]$V[fmin.v:Nx,2]*10^x[fmin.v:Nx]*dx)
-#   
-#   prop_bio<-bio/sum(bio)
-#   input_igrid$NomActive_area_m2<-prop_bio*input_igrid$NomActive_area_m2
-#   #rerun
-#   grid_results[[itime]]<-pbapply(X=as.matrix(input_igrid),c(1),run_model_timestep,vals = unlist(vals), U.initial=U.initial, V.initial=V.initial, W.initial=W.initial)
-# }
-# 
-# saveRDS(grid_results,"LME_14.rds")
-# 
-# grid_results<-readRDS("LME_14.rds")
-# 
-# #not working
-# for (itime in 1:ntime){
-#   for (igrid in 1:ngrid){
-#     results$U[igrid,,itime]<-grid_results[[itime]][[igrid]]$U[,2]
-#     results$V[igrid,,itime]<-grid_results[[itime]][[igrid]]$V[,2]
-#     results$Y.u[igrid,,itime]<-grid_results[[itime]][[igrid]]$Y.u[,1]
-#     results$Y.v[igrid,,itime]<-grid_results[[itime]][[igrid]]$Y.v[,2]
-#     results$PM.u[igrid,,itime]<-grid_results[[itime]][[igrid]]$PM.u[,1]
-#     results$PM.v[igrid,,itime]<-grid_results[[itime]][[igrid]]$PM.v[,1]
-#     results$GG.u[igrid,,itime]<-grid_results[[itime]][[igrid]]$GG.u[,1]
-#     results$GG.v[igrid,,itime]<-grid_results[[itime]][[igrid]]$GG.v[,1]
-#     results$W[igrid,itime]<-grid_results[[itime]][[igrid]]$W[2]
-#     
-#   }
-# }
-# 
-# ### get outputs into lat/lon summarise biomass, catches etc.
-# 
-# agg_outputs<-function(input=lme_inputs_grid,results=results,params=params){
-#   # returns all outputs of the model 
-#   # saveRDS(result_set,filename=paste("dbpm_calibration_LMEnumber_catchability.rds"))
-#   for (itime in 1: ntime){
-#     input[input$t==time[itime],]$TotalUbiomass <- apply(results$U[,params$ref:params$Nx,itime]*params$dx*10^params$x[params$ref:params$Nx],1,sum)*min(params$depth,100)
-#     input[input$t==time[itime],]$TotalVbiomass <- apply(results$V[,params$ref:params$Nx,itime]*params$dx*10^params$x[params$ref:params$Nx],1,sum)*min(params$depth,100)
-#     # input[input$t==time[itime]]$W <- results$W[,itime]*min(params$depth,100)
-#     #sum catches (currently in grams per m3 per year, across size classes) 
-#     #keep as grams per m2, then be sure to convert observed from tonnes per m2 per year to g.^-m2.^-yr (for each month)
-#     input[input$t==time[itime]]$TotalUcatch <- apply(results$Y.u[,params$ref:params$Nx,itime]*params$dx,2,sum)*min(params$depth,100)
-#     input[input$t==time[itime]]$TotalVcatch <- apply(results$Y.v[,params$ref:params$Nx,itime]*params$dx,2,sum)*min(params$depth,100)
-#     input[input$t==time[itime]]$Totalcatch <- input$TotalUcatch +   input$TotalVcatch
-#     
-#     return(input)
-#   }
-#   
-# }
-# 
-# # not working
-# output<-agg_outputs(input=lme_inputs_grid,results=results)
-
-###compare with catch data
-
-### TO DO: test against code without fishing
 
 ###################### TEST GRIDDED MODEL
 
@@ -270,9 +116,13 @@ grid_results<-gridded_sizemodel(gridded_params,
 # V[1,,2041]
 # sum(is.na(V))
 # sum(any(V < 0))
+saveRDS(grid_results,"rungridRes/test1_grid.rds")
 
 out<-getGriddedOutputs(input=lme_inputs_grid,results=grid_results,params=gridded_params)
+# save gridded object instead
 
+saveRDS(out,"rungridRes/test2.rds")
+out <- readRDS("rungridRes/test2.rds")
 #### CHECK OUTPUTS!!
 
 cells<-unique(out$cell)
@@ -353,6 +203,86 @@ p2 <- ggplot(df_grid_avg)+
   ggtitle("Average biomass through time")
 
 # size spectra
+spectra_df <- out[,c(1,2,4,8,9)]
+
+spectra_decade_avg <- spectra_df %>%
+  mutate(decade = as.integer(substr(t, 1, 3)) * 10) %>% 
+  group_by(decade, lon, lat) %>%  
+  summarize(avg_int = mean(intercept), avg_slope = mean(slope)) 
+
+# TODO average per longitude too using $cell
+
+p3 <- ggplot(spectra_decade_avg) +
+  geom_abline(aes(slope = avg_slope, intercept =  avg_int, color = lat)) +
+  facet_wrap(~decade)
+
+# Using grid_results from nom, assuming that arrays dims are gridcell*size*time
+# dim is 132 181 2041
+# time is monthly
+# show sizes only between $ref and #Nx
+
+totBiom <- grid_results$U + grid_results$V
+# averaging per decade. First decade is 108 month then the rest is 120
+decade_start <- c(1,seq(109,2041,by = 120))
+spectra_decade_avg <- array(NA, dim = c(dim(totBiom)[1:2],length(decade_start)),
+                            dimnames = list("gridCell" = 1:dim(totBiom)[1],
+                                            "size" = grid_results$params$x,
+                                            "decade" = seq(1840,2010,by = 10)))
+for(iTime in 1:(length(decade_start)-1)){
+  t_start <- decade_start[iTime]
+  t_end <- decade_start[iTime+1]
+  tempBiom <- totBiom[,,t_start:t_end]
+  avgBiom <- apply(tempBiom,c(1,2),mean)
+  spectra_decade_avg[,,iTime] <- avgBiom
+}
+
+plot_dat <- reshape2::melt(spectra_decade_avg)
+
+p4 <- ggplot(plot_dat) +
+  geom_line(aes(x = size, y = value, color = gridCell)) +
+  facet_wrap(~decade) +
+  scale_y_continuous(trans = "log10")
+
+# growth
+
+totGrowth <- grid_results$GG.u + grid_results$GG.v
+
+# averaging per decade. First decade is 108 month then the rest is 120
+decade_start <- c(1,seq(109,2041,by = 120))
+growth_decade_avg <- array(NA, dim = c(dim(totBiom)[1:2],length(decade_start)),
+                           dimnames = list("gridCell" = 1:dim(totBiom)[1],
+                                           "size" = grid_results$params$x,
+                                           "decade" = seq(1840,2010,by = 10)))
+for(iTime in 1:(length(decade_start)-1)){
+  t_start <- decade_start[iTime]
+  t_end <- decade_start[iTime+1]
+  tempGrowth <- totGrowth[,,t_start:t_end]
+  avgGrowth <- apply(tempGrowth,c(1,2),mean)
+  growth_decade_avg[,,iTime] <- avgGrowth
+}
+
+plot_dat <- reshape2::melt(growth_decade_avg)
+
+p5 <- ggplot(plot_dat) +
+  geom_line(aes(x = size, y = value, color = gridCell)) +
+  facet_wrap(~decade) +
+  scale_y_continuous(trans = "log10")
+
+p <- list(p1,p2,p3,p4,p5)
+# saving
+library(gridExtra)
+
+# Save the plots in a PDF file
+pdf("rungridRes/grid_results_test1.pdf", onefile = T)
+p1
+p2
+p3
+p4
+p5
+dev.off()
+
+# add p6 map of catch using TotalCatch
+
 
 # TO DO: 
 #Make a folder for each LME  output with the output files 
@@ -368,3 +298,4 @@ p2 <- ggplot(df_grid_avg)+
 # 4. Compare time series to total catches at LME scale with obs catch
 # 5. Once checked, run for all LMEs
 
+# TODO make it a function to automatically save a pdf of plots per LME
