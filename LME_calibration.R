@@ -3,7 +3,6 @@
 # as spatially averaged means to estimate catchability (and if needed other model parameters)
 
 # rm(list=ls())
-
 library(devtools)
 library(tidyverse)
 library(lubridate)
@@ -13,6 +12,10 @@ library(lhs)
 library(pbapply)
 library(patchwork)
 library(optimParallel)
+# plots library
+library(rnaturalearth)
+library(sf)
+library(gridExtra)
 
 # source model script form Github - NOT WORKING, using local
 # source_url(url = "https://github.com/Benthic-Pelagic-Size-Spectrum-Model/dbpm/blob/master/size-based-models/dynamic_sizebased_model_functions.R")
