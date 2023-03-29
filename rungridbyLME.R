@@ -3,9 +3,10 @@
 #' @param LMEnumber The LME number you want to run
 #' @param yearly Correspond to the yearly argument in the get_lme_inputs function 
 #' after initialisation. Default is FALSE
-#' @param f.effort Bolean value. If true, fisheries effort will be set using 
+#' @param f.effort Boolean value. If true, fisheries effort will be set using 
 #' bestvals_LME.rds. If false, fisheries effort is set to 0. Default is TRUE.
-#' @param savePlots Bolean value. If true, plots related to the selected LME will
+#' @param search_vol Numeric value for the search volume. Default is .64.
+#' @param savePlots Boolean value. If true, plots related to the selected LME will
 #' be saved in the same folder as the grid output. Default is TRUE.
 #' 
 #' 
@@ -13,6 +14,7 @@
 rungridbyLME <- function(LMEnumber = 14, 
                          yearly = FALSE , 
                          f.effort = TRUE, 
+                         search_vol = .64,
                          savePlots = TRUE){
   # setup
   source("LME_calibration.R")
@@ -104,7 +106,7 @@ rungridbyLME <- function(LMEnumber = 14,
                                ,xmin.consumer.v = -3
                                ,tmax = dim(er_grid[,-1])[2]/12
                                ,tstepspryr  =  12
-                               ,search_vol = .64 # just for this test instead of .64
+                               ,search_vol = search_vol
                                ,fmort.u = f.u
                                ,fminx.u = f.minu
                                ,fmort.v = f.v
@@ -145,12 +147,10 @@ rungridbyLME <- function(LMEnumber = 14,
   # sum(any(V < 0))
   
   saveRDS(grid_results,paste0(LME_path,"/grid_results.rds"))
-  grid_results <- readRDS(paste0(LME_path,"/grid_results.rds"))
+  # grid_results <- readRDS(paste0(LME_path,"/grid_results.rds"))
   out<-getGriddedOutputs(input=lme_inputs_grid,results=grid_results,params=gridded_params)
-  # save gridded object instead
-  
-  # saveRDS(out,"rungridRes/test2.rds")
-  # out <- readRDS("rungridRes/test2.rds")
+  saveRDS(out,paste0(LME_path,"/out_results.rds"))
+  # out <- readRDS(paste0(LME_path,"/out_results.rds"))
   #### CHECK OUTPUTS!!
   
   cells<-unique(out$cell)
@@ -175,7 +175,7 @@ rungridbyLME <- function(LMEnumber = 14,
   ## Maps of biomass averaged across decades for U and V
   biom_df <- out[,c(1,2,4,16,17)]
   biom_df <- biom_df %>% mutate(totalB = TotalVbiomass + TotalUbiomass)
-  
+
   # calculate the mean biomass for each decade
   biom_decade_avg <- biom_df %>%
     mutate(decade = as.integer(substr(t, 1, 3)) * 10) %>% 
@@ -201,7 +201,7 @@ rungridbyLME <- function(LMEnumber = 14,
   
   # facet plot V
   p2 <- ggplot(biom_decade_avg)+
-    geom_tile(aes(x = lon, y = lat, fill = avg_Ubiomass)) +
+    geom_tile(aes(x = lon, y = lat, fill = avg_Vbiomass)) +
     geom_sf(data = world) +
     coord_sf(xlim = lon_ext, ylim = lat_ext, expand = FALSE) +
     scale_fill_gradient2(low = "white", high = "red", name = "Average Biomass in g/m2") +
@@ -244,11 +244,6 @@ rungridbyLME <- function(LMEnumber = 14,
   
   
   # average per longitude
-  spectra_grid_avg <- array(NA, dim = c(length(lat_list),dim(spectra_decade_avg)[2:3]),
-                            dimnames = list("latitude" = names(lat_list),
-                                            "size" = dimnames(spectra_decade_avg)[[2]],
-                                            "decade" = dimnames(spectra_decade_avg)[[3]]))
-  
   biom_df$cell <- paste(biom_df$lat,biom_df$lon)
   cell <- unique(biom_df$cell) # each grid cell is a combo of lat and long
   cell_lat <- substr(cell, 1,5)
@@ -257,6 +252,10 @@ rungridbyLME <- function(LMEnumber = 14,
   for(iCell in unique(cell_lat)) lat_list[[iCell]] <- which(cell_lat == iCell)
   # this vector contains the id of grid cells having the same latitude
   
+  spectra_grid_avg <- array(NA, dim = c(length(lat_list),dim(spectra_decade_avg)[2:3]),
+                            dimnames = list("latitude" = names(lat_list),
+                                            "size" = dimnames(spectra_decade_avg)[[2]],
+                                            "decade" = dimnames(spectra_decade_avg)[[3]]))
   for (iCell in names(lat_list)) {
     tempBiom <- spectra_decade_avg[lat_list[[iCell]],,]
     if(length(dim(tempBiom)) == 3) avgBiom <- apply(tempBiom,c(2,3),mean) # if = 2 means only one lat value
@@ -273,7 +272,8 @@ rungridbyLME <- function(LMEnumber = 14,
     geom_line(aes(x = size, y = value, color = latitude), alpha = .5) +
     facet_wrap(~decade) +
     scale_y_continuous(trans = "log10", name = "Biomass in g") +
-    scale_x_continuous(name = "Size in log10 g")
+    scale_x_continuous(name = "Size in log10 g") +
+    ggtile("Size spectra averaged per decade per longitude (U+V)")
   
   ## plot growth rate GG.u + GG.v per decade per gridcell
   totGrowth <- grid_results$GG.u + grid_results$GG.v
@@ -314,7 +314,8 @@ rungridbyLME <- function(LMEnumber = 14,
     geom_line(aes(x = size, y = value, color = latitude)) +
     facet_wrap(~decade) +
     scale_y_continuous(trans = "log10", name = "Relative growth rate per year") +
-    scale_x_continuous(name = "Size in log10 g")
+    scale_x_continuous(name = "Size in log10 g") +
+    ggtitle("Growth rate averaged per decade per longitude (U+V)")
   
   ## plot total catch U and V from out
   catch_df <- out[,c(1,2,4,14,15)]
@@ -355,13 +356,14 @@ rungridbyLME <- function(LMEnumber = 14,
   # calculate total catch across gridcells
   catch_grid_tot <- catch_df %>%
     group_by(t) %>%  
-    summarize(tot_catch = sum(totalC))  
+    summarize(avg_catch = mean(totalC))  
   # empirical data is in lme_input_init$catch_tonnes_area_m2,it's monthly, convert to yearly
   catch_grid_tot$empirical <- lme_input_init$catch_tonnes_area_m2
   
-  p7 <- ggplot(catch_grid_tot) +
+  p8 <- ggplot(catch_grid_tot) +
     geom_line(aes(x = t, y = tot_catch))+
-    geom_point(aes(x = t, y = empirical))
+    geom_point(aes(x = t, y = empirical)) +
+    ggtitle("Time series of catches versus empirical data (U+V)")
   
   # Save the plots in a PDF file
   if(savePlots){
@@ -378,9 +380,10 @@ rungridbyLME <- function(LMEnumber = 14,
 }
 
 # TO DO: 
-#Make a folder for each LME  output with the output files 
-# and the following figures in PDFs:
+# rungridbyLME(search_vol = 64)
 
+# grid_results <- readRDS("rungridRes/test1_grid.rds")
+# out <- readRDS("rungridRes/test1.rds")
 #Test 1- compare with results from DBPM, no fishing (checking code consistency)
 
 #Test 2- model calibration/behaviour
@@ -390,5 +393,3 @@ rungridbyLME <- function(LMEnumber = 14,
 # 3. Plots of GG growth rates (see historyMatching.R for example)
 # 4. Compare time series to total catches at LME scale with obs catch
 # 5. Once checked, run for all LMEs
-
-# TODO make it a function to automatically save a pdf of plots per LME
