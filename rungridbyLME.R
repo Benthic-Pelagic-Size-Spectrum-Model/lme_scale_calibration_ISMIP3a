@@ -12,7 +12,7 @@
 #' 
 
 rungridbyLME <- function(LMEnumber = 14, 
-                         yearly = FALSE , 
+                         yearly = FALSE, 
                          f.effort = TRUE, 
                          search_vol = .64,
                          savePlots = TRUE){
@@ -56,7 +56,7 @@ rungridbyLME <- function(LMEnumber = 14,
   
   ##### reorganise outputs storage for later
   ntime<-length(time)
-  ngrid<-dim(subset(lme_inputs_grid,t==time[1]))[1]
+  # ngrid<-dim(subset(lme_inputs_grid,t==time[1]))[1]
   params<-initial_results$params
   
   ###################### TEST GRIDDED MODEL

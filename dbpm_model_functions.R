@@ -105,28 +105,28 @@ gridded_sizemodel<-function(params,ERSEM.det.input=F,U_mat,V_mat,W_mat,temp.effe
     q2 = matrix(-q1, length(x), length(y))	
     
     #matrix for recording the two size spectra 
-    V = U = array(0, c(ngrid,length(x), Neq+1))
+    V = U = array(0, c(Ngrid,length(x), Neq+1))
     
     #vector to hold detrtitus biomass density (g.m-2)
-    W = array(0,c(ngrid,Neq+1))
+    W = array(0,c(Ngrid,Neq+1))
     
     #matrix for keeping track of growth and reproduction from ingested food:
-    R.v=R.u=GG.v = GG.u   = array(0, c(ngrid,length(x), Neq+1))
+    R.v=R.u=GG.v = GG.u   = array(0, c(Ngrid,length(x), Neq+1))
     
     #matrix for keeping track of predation mortality
-    PM.v = PM.u   = array(0, c(ngrid,length(x), Neq+1))   
+    PM.v = PM.u   = array(0, c(Ngrid,length(x), Neq+1))   
     
     #matrix for keeping track of catches  
-    Y.v = Y.u  = array(0, c(ngrid,length(x), Neq+1)) 
+    Y.v = Y.u  = array(0, c(Ngrid,length(x), Neq+1)) 
     
     #matrix for keeping track of  total mortality (Z)
-    Z.v = Z.u = array(0, c(ngrid,length(x), Neq+1))
+    Z.v = Z.u = array(0, c(Ngrid,length(x), Neq+1))
     
     #matrix for keeping track of senescence mortality and other (intrinsic) mortality
     SM.v = SM.u   =OM.v = OM.u   = array(0, length(x))
     
     #empty vector to hold fishing mortality rates at each size class at time
-    Fvec.v = Fvec.u = array(0, c(ngrid,length(x), Neq+1))
+    Fvec.v = Fvec.u = array(0, c(Ngrid,length(x), Neq+1))
     
     
     #lookup tables for terms in the integrals which remain constant over time
@@ -142,15 +142,15 @@ gridded_sizemodel<-function(params,ERSEM.det.input=F,U_mat,V_mat,W_mat,temp.effe
     #---------------------------------------------------------------------------------------
     
     # set up with the initial values from param - same for all grid cells
-    for (j in 1:ngrid){
-    U[1:ngrid,1:(ref-1),1]<-U.init[1:(ref-1)]    #(phyto+zoo)plankton size spectrum  
-    U[1:ngrid,ref:120,1]<-U.init[ref:120]           # set initial consumer size spectrum 
-    V[1:ngrid,ref.det:120,1]<-V.init[ref.det:120]  # set initial detritivore spectrum  
-    W[1:ngrid,1]<-W.init             # set initial detritus biomass density (g.m^-3) 
+    for (j in 1:Ngrid){
+    U[1:Ngrid,1:(ref-1),1]<-U.init[1:(ref-1)]    #(phyto+zoo)plankton size spectrum  
+    U[1:Ngrid,ref:120,1]<-U.init[ref:120]           # set initial consumer size spectrum 
+    V[1:Ngrid,ref.det:120,1]<-V.init[ref.det:120]  # set initial detritivore spectrum  
+    W[1:Ngrid,1]<-W.init             # set initial detritus biomass density (g.m^-3) 
     }
     
     if(use.init == TRUE){
-     for (j in 1:ngrid){
+     for (j in 1:Ngrid){
        # set up with the initial values from previous run
       U[j,1:(ref-1),1]<-U.init[1:(ref-1)]    #(phyto+zoo)plankton size spectrum  
       U[j,ref:length(x),1]<-U.init[ref:length(x)]           # set initial consumer size spectrum from previous run
