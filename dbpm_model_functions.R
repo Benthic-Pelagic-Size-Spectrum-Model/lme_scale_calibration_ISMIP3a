@@ -4,7 +4,6 @@ gridded_sizemodel<-function(params,ERSEM.det.input=F,U_mat,V_mat,W_mat,temp.effe
   
   
   with(params, {
-    
     #---------------------------------------------------------------------------------------
     # Model for a dynamical ecosystem comprised of: two functionally distinct size spectra (predators and detritivores), size structured primary producers and an unstructured detritus resource pool. 
     # time implicit upwind difference discretization algorithm (from Ken Andersen)

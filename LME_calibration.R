@@ -25,13 +25,13 @@ source(file = "dbpm_model_functions.R")
 
 get_lme_inputs<-function(LMEnumber=14, gridded=F,yearly=F){
 
-if (gridded!=T) {
+if (!gridded) {
 
   # read climate forcing inputs from THREDDS
   lme_clim<-read_csv(file="http://portal.sf.utas.edu.au/thredds/fileServer/gem/fishmip/ISIMIP3a/InputData/DBPM_lme_inputs/obsclim/0.25deg/DBPM_LME_climate_inputs_slope.csv")
   lme_clim<-subset(lme_clim, LME %in% LMEnumber)
 
-  if (yearly ==T){
+  if (yearly){
     
     # option 1: keep monthly time steps but each month value is the yearly average 
     
@@ -102,16 +102,15 @@ if (gridded!=T) {
 
 }
   
-if (gridded==T) {
+if (gridded) {
   
     # read climate forcing inputs from gem, here testing on LME14
     # trial 
-    # LMEnumber = 14
-    # filename =paste("/rd/gem/private/fishmip_inputs/ISIMIP3a/processed_forcings/lme_inputs_gridcell/obsclim/1deg/observed_LME_",LMEnumber,".csv",sep="") 
-    filename="observed_LME_14.csv"
+    filename =paste("/rd/gem/private/fishmip_inputs/ISIMIP3a/processed_forcings/lme_inputs_gridcell/obsclim/1deg/observed_LME_",LMEnumber,".csv",sep="")
+    # filename="observed_LME_14.csv"
     lme_clim<-read_csv(file=filename)
     
-    if (yearly ==T){
+    if (yearly){
 
       # create a key - this needs to be the final lat/lon/t format
       key<-lme_clim %>% 
@@ -432,7 +431,9 @@ run_model_timestep<-function(input=lme_inputs_igrid, vals = unlist(bestvals_LMEs
 
 
 ### this needs to be faster or maybe just part of outputs of gridded_sizemodel
-getGriddedOutputs<-function(input=lme_inputs_grid,results=grid_results,params=params){
+getGriddedOutputs<-function(input = lme_inputs_grid,
+                            results = grid_results,
+                            params = params){
   # returns all outputs of the model 
   # saveRDS(result_set,filename=paste("dbpm_calibration_LMEnumber_catchability.rds"))
   input$TotalUbiomass <-   input$TotalVbiomass <- input$TotalUcatch <- input$TotalVcatch<- input$Totalcatch <- NA  
@@ -440,8 +441,10 @@ getGriddedOutputs<-function(input=lme_inputs_grid,results=grid_results,params=pa
   depthadj<-ifelse(params$depth>100,100,params$depth)
   for(igrid in 1:length(cells)) {
     
-    input[input$cell==cells[igrid],]$TotalUbiomass <- apply(results$U[igrid,params$ref:params$Nx,2:(params$Neq+1)]*params$dx*10^params$x[params$ref:params$Nx],2,sum,na.rm=T)*depthadj[igrid]
-    input[input$cell==cells[igrid],]$TotalVbiomass <- apply(results$V[igrid,params$ref:params$Nx,2:(params$Neq+1)]*params$dx*10^params$x[params$ref:params$Nx],2,sum,na.rm=T)*depthadj[igrid]
+    input[input$cell==cells[igrid],]$TotalUbiomass <- apply(results$U[igrid,params$ref:params$Nx,2:(params$Neq+1)]*params$dx*10^params$x[params$ref:params$Nx],
+                                                            2,sum,na.rm=T)*depthadj[igrid]
+    input[input$cell==cells[igrid],]$TotalVbiomass <- apply(results$V[igrid,params$ref:params$Nx,2:(params$Neq+1)]*params$dx*10^params$x[params$ref:params$Nx],
+                                                            2,sum,na.rm=T)*depthadj[igrid]
     # input[input$t==time[itime]]$W <- results$W[,itime]*min(params$depth,100)
     #sum catches (currently in grams per m3 per year, across size classes) 
     #keep as grams per m2, then be sure to convert observed from tonnes per m2 per year to g.^-m2.^-yr (for each month)
