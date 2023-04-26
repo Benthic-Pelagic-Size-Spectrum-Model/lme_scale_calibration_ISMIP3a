@@ -35,15 +35,15 @@ rungridbyLME <- function(LMEnumber = 14,
   initial_results<-run_model(vals=vals[LMEnumber,],
                              input=lme_input_init,
                              withinput = F)
+  
   U.initial<-rowMeans(initial_results$U[,240:1440])
   V.initial<-rowMeans(initial_results$V[,240:1440])
   W.initial<-mean(initial_results$W[240:1440])
+  
   # plot to check initial values
   # plotsizespectrum(initial_results,params=initial_results$params,
   #                  itime=240:1440,
   #                  timeaveraged = TRUE)
-  
-  
   
   # get gridded inputs and run through all grid cells one timestep at a time
   lme_inputs_grid<- get_lme_inputs(LMEnumber = LMEnumber, 
@@ -84,9 +84,35 @@ rungridbyLME <- function(LMEnumber = 14,
   effort_grid<-lme_inputs_grid %>%
     pivot_wider(id_cols=cell,names_from = t, values_from = NomActive_area_m2)
   
+  ## Creating a 100 years stable spinup before 1841
+  spinFunc <- function(var_name){
+    dates <- seq(as.Date("1741-01-01"), as.Date("1840-12-01"), by = "month")
+    var_pre <- array(NA, dim = c(dim(var_name)[1],length(dates)),
+                     dimnames = list(dimnames(var_name)[[1]],as.character(dates)))
+    var_pre[, 1:ncol(var_pre)] <- apply(var_name[,-1][,1:12], 1, mean)
+    var_name <- cbind(var_name[,1],var_pre, var_name[,-1])
+  }
+  
+  er_grid <- spinFunc(er_grid)
+  intercept_grid <- spinFunc(intercept_grid)
+  slope_grid <- spinFunc(slope_grid)
+  sst_grid <- spinFunc(sst_grid)
+  sbt_grid <- spinFunc(sbt_grid)
+  effort_grid <- spinFunc(effort_grid)
+  
+  # adjusting cells to be 3240 values per cells (100 more years)(not used but 
+  # could be useful)
+  # cell <- lme_inputs_grid$cell
+  # for(iCell in unique(cell)){
+  #   pos <- which(cell == iCell)
+  #   end <- pos[length(pos)]
+  #   cell <- c(cell[1:end],rep(iCell,1200),cell[(end+1):length(cell)])
+  # }
+  # cell <- cell[1:(length(cell)-2)] #the code above produces a NA with the last cell
+  
   if(f.effort){
     f.u<-as.numeric(vals[1])
-  f.v<-as.numeric(vals[2])
+    f.v<-as.numeric(vals[2])
   } else  f.u <- f.v <- 0
   
   f.minu<-as.numeric(vals[3])
@@ -100,35 +126,36 @@ rungridbyLME <- function(LMEnumber = 14,
   # sbt_grid[,3:dim(sbt_grid)[2]] <- sbt_grid[,2]
   
   # set up params for each month, across grid cells
-  gridded_params <- sizeparam (equilibrium = FALSE
-                               ,dx = 0.1
-                               ,xmin.consumer.u = -3
-                               ,xmin.consumer.v = -3
-                               ,tmax = dim(er_grid[,-1])[2]/12
-                               ,tstepspryr  =  12
-                               ,search_vol = search_vol
-                               ,fmort.u = f.u
-                               ,fminx.u = f.minu
-                               ,fmort.v = f.v
-                               ,fminx.v = f.minv
-                               ,depth = data.matrix(depth_grid[,-1][,1])
-                               ,er = data.matrix(er_grid[,-1])
-                               ,pp = data.matrix(intercept_grid[,-1])
-                               ,slope = data.matrix(slope_grid[,-1])
-                               ,sst = data.matrix(sst_grid[,-1])
-                               ,sft = data.matrix(sbt_grid[,-1])
-                               ,use.init = TRUE
-                               ,effort = data.matrix(effort_grid[,-1])
-                               ,U.initial =U.initial
-                               ,V.initial = V.initial
-                               ,W.initial = W.initial
-                               ,Ngrid=dim(depth_grid)[1])      
+  gridded_params <- sizeparam(equilibrium = FALSE
+                              ,dx = 0.1
+                              ,xmin.consumer.u = -3
+                              ,xmin.consumer.v = -3
+                              ,tmax = dim(er_grid[,-1])[2]/12
+                              ,tstepspryr  =  12
+                              ,search_vol = search_vol
+                              ,fmort.u = f.u
+                              ,fminx.u = f.minu
+                              ,fmort.v = f.v
+                              ,fminx.v = f.minv
+                              ,depth = data.matrix(depth_grid[,-1][,1])
+                              ,er = data.matrix(er_grid[,-1])
+                              ,pp = data.matrix(intercept_grid[,-1])
+                              ,slope = data.matrix(slope_grid[,-1])
+                              ,sst = data.matrix(sst_grid[,-1])
+                              ,sft = data.matrix(sbt_grid[,-1])
+                              ,use.init = TRUE
+                              ,effort = data.matrix(effort_grid[,-1])
+                              ,U.initial = U.initial
+                              ,V.initial = V.initial
+                              ,W.initial = W.initial
+                              ,Ngrid=dim(depth_grid)[1])      
   
   # run model  for full time period across all grid cells
   grid_results<-gridded_sizemodel(gridded_params,
                                   ERSEM.det.input=F,
-                                  U_mat,V_mat,
-                                  W_mat,
+                                  # U_mat,
+                                  # V_mat,
+                                  # W_mat,
                                   temp.effect=T,
                                   eps=1e-5,
                                   output="aggregated",
@@ -148,6 +175,15 @@ rungridbyLME <- function(LMEnumber = 14,
   
   saveRDS(grid_results,paste0(LME_path,"/grid_results.rds"))
   # grid_results <- readRDS(paste0(LME_path,"/grid_results.rds"))
+  
+  #removing the stable spinup section to have matching dimensions with the code
+  grid_results$U <- grid_results$U[,,1201:3241]
+  grid_results$V <- grid_results$V[,,1201:3241]
+  grid_results$Y.u <- grid_results$Y.u[,,1201:3241]
+  grid_results$Y.v <- grid_results$Y.v[,,1201:3241]
+  gridded_params$Neq <- 2040
+  
+  
   out<-getGriddedOutputs(input=lme_inputs_grid,results=grid_results,params=gridded_params)
   saveRDS(out,paste0(LME_path,"/out_results.rds"))
   # out <- readRDS(paste0(LME_path,"/out_results.rds"))
@@ -155,12 +191,6 @@ rungridbyLME <- function(LMEnumber = 14,
   
   cells<-unique(out$cell)
   out$cell<-as.factor(out$cell)
-  
-  # 1.	Test 1: run yearly = TRUE, no fishing (effort = 0), search volume = 64. 
-  # b.	Compare these plots with the 3a tcb netcdf file: 
-  #   i.	Extract LME 14 from this file 
-  # ii.	Produce plots
-  # TODO cami: compare model with empirical catches (see run lme calibration for plotting)
   
   # download world map
   # world <- ne_download(category = "cultural", 
@@ -175,7 +205,7 @@ rungridbyLME <- function(LMEnumber = 14,
   ## Maps of biomass averaged across decades for U and V
   biom_df <- out[,c(1,2,4,16,17)]
   biom_df <- biom_df %>% mutate(totalB = TotalVbiomass + TotalUbiomass)
-
+  
   # calculate the mean biomass for each decade
   biom_decade_avg <- biom_df %>%
     mutate(decade = as.integer(substr(t, 1, 3)) * 10) %>% 
@@ -273,7 +303,7 @@ rungridbyLME <- function(LMEnumber = 14,
     facet_wrap(~decade) +
     scale_y_continuous(trans = "log10", name = "Biomass in g") +
     scale_x_continuous(name = "Size in log10 g") +
-    ggtile("Size spectra averaged per decade per longitude (U+V)")
+    ggtitle("Size spectra averaged per decade per longitude (U+V)")
   
   ## plot growth rate GG.u + GG.v per decade per gridcell
   totGrowth <- grid_results$GG.u + grid_results$GG.v
@@ -354,14 +384,14 @@ rungridbyLME <- function(LMEnumber = 14,
   
   ## plot time series of catches U  + V with empirical data
   # calculate total catch across gridcells
-  catch_grid_tot <- catch_df %>%
+  catch_grid_avg <- catch_df %>%
     group_by(t) %>%  
     summarize(avg_catch = mean(totalC))  
   # empirical data is in lme_input_init$catch_tonnes_area_m2,it's monthly, convert to yearly
-  catch_grid_tot$empirical <- lme_input_init$catch_tonnes_area_m2
+  catch_grid_avg$empirical <- lme_input_init$catch_tonnes_area_m2
   
-  p8 <- ggplot(catch_grid_tot) +
-    geom_line(aes(x = t, y = tot_catch))+
+  p8 <- ggplot(catch_grid_avg) +
+    geom_line(aes(x = t, y = avg_catch))+
     geom_point(aes(x = t, y = empirical)) +
     ggtitle("Time series of catches versus empirical data (U+V)")
   
@@ -375,21 +405,83 @@ rungridbyLME <- function(LMEnumber = 14,
     p5
     p6
     p7
+    p8
     dev.off()
   }
 }
 
-# TO DO: 
-# rungridbyLME(search_vol = 64)
-
-# grid_results <- readRDS("rungridRes/test1_grid.rds")
-# out <- readRDS("rungridRes/test1.rds")
 #Test 1- compare with results from DBPM, no fishing (checking code consistency)
+# 1.	Test 1: run yearly = TRUE, no fishing (effort = 0), search volume = 64. 
+# b.	Compare these plots with the 3a tcb netcdf file: 
+#   i.	Extract LME 14 from this file 
+# ii.	Produce plots
+library(ncdf4)
+tcb <- nc_open("/rd/gem/private/fishmip_outputs/ISIMIP3a/ctrlclim/netcdf/dbpm_ctrlclim_nobasd_1deg_nat_default_tcb_global_monthly_1961_2010.nc")
+lat_mask <- tcb$dim$lat$vals >= min(lat_ext) & tcb$dim$lat$vals <= max(lat_ext)
+lon_mask <- tcb$dim$lon$vals >= min(lon_ext) & tcb$dim$lon$vals <= max(lon_ext)
+time_mask <- tcb$dim$time$vals >= 1841 & tcb$dim$time$vals <= 2010
+
+ncdData <- ncvar_get(tcb, "tcb", 
+                     start = c(which(lon_mask)[1], which(lat_mask)[1], which(time_mask)[1]), 
+                     count = c(sum(lon_mask), sum(lat_mask), sum(time_mask)))
+dimnames(ncdData) <- list(tcb$var$tcb$dim[[1]]$vals[which(lon_mask)],
+                       tcb$var$tcb$dim[[2]]$vals[which(lat_mask)],
+                       tcb$var$tcb$dim[[3]]$vals[which(time_mask)])
+names(dimnames(ncdData)) <- c(tcb$var$tcb$dim[[1]]$name,
+                           tcb$var$tcb$dim[[2]]$name,
+                           tcb$var$tcb$dim[[3]]$name)
+
+tcb_df <- reshape2::melt(ncdData)
+
+tcb_decade_avg <- tcb_df %>%
+  mutate(decade = as.integer(substr(time, 1, 3)) * 10) %>% 
+  group_by(decade, lon, lat) %>%  
+  summarize(avg_biomass = mean(value))
+
+# values from test1
+out <- readRDS("rungridRes/test1.rds")
+biom_df <- out[,c(1,2,4,16,17)]
+biom_df <- biom_df %>% mutate(totalB = TotalVbiomass + TotalUbiomass)
+biom_decade_avg <- biom_df %>%
+  mutate(decade = as.integer(substr(t, 1, 3)) * 10) %>% 
+  group_by(decade, lon, lat) %>%  
+  summarize(avg_biomass = mean(totalB))
+
+# different cells so cannot just substract 
+
+p1 <- ggplot(tcb_decade_avg)+
+  geom_tile(aes(x = lon, y = lat, fill = avg_biomass)) +
+  geom_sf(data = world) +
+  coord_sf(xlim = lon_ext, ylim = lat_ext, expand = FALSE) +
+  scale_fill_gradient2(low = "white", high = "red", name = "Average Biomass in g/m2") +
+  facet_wrap(~decade,ncol = 6) +
+  scale_x_continuous(name = "Longitude", breaks = seq(lon_ext[1],lon_ext[2], by = 6)) +
+  scale_y_continuous(name = "Latitude") +
+  theme(legend.position = "bottom") +
+  ggtitle("tcb netcdf")
+
+p2 <- ggplot(biom_decade_avg)+
+  geom_tile(aes(x = lon, y = lat, fill = avg_biomass)) +
+  geom_sf(data = world) +
+  coord_sf(xlim = lon_ext, ylim = lat_ext, expand = FALSE) +
+  scale_fill_gradient2(low = "white", high = "red", name = "Average Biomass in g/m2") +
+  facet_wrap(~decade,ncol = 6) +
+  scale_x_continuous(name = "Longitude", breaks = seq(lon_ext[1],lon_ext[2], by = 6)) +
+  scale_y_continuous(name = "Latitude") +
+  theme(legend.position = "bottom") +
+  ggtitle("test 1 runGrid")
+
+pdf("test1res.pdf", onefile = T)
+p1
+p2
+dev.off()
 
 #Test 2- model calibration/behaviour
 # 1. Spatial maps of TotalCatch and TotalBiomass (by decade)
-# - use Camis raster code
 # 2. Community size spectra (U & V) - one line per grid cell - final decade?
 # 3. Plots of GG growth rates (see historyMatching.R for example)
 # 4. Compare time series to total catches at LME scale with obs catch
 # 5. Once checked, run for all LMEs
+
+# TODO cami: compare model with empirical catches (see run lme calibration for plotting)
+
