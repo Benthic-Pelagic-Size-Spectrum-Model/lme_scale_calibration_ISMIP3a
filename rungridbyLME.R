@@ -19,7 +19,7 @@ rungridbyLME <- function(LMEnumber = 14,
   # setup
   source("LME_calibration.R")
   
-  LME_path <- paste0("LME_",LMEnumber,"_output")
+  LME_path <- paste0("/rd/gem/private/fishmip_outputs/ISIMIP3a/DBPM/obsclim/LME_",LMEnumber,"_output")
   if(!file.exists(LME_path)) dir.create(LME_path)
   
   ## Tests ----
@@ -415,73 +415,76 @@ rungridbyLME <- function(LMEnumber = 14,
 # b.	Compare these plots with the 3a tcb netcdf file: 
 #   i.	Extract LME 14 from this file 
 # ii.	Produce plots
-library(ncdf4)
-tcb <- nc_open("/rd/gem/private/fishmip_outputs/ISIMIP3a/ctrlclim/netcdf/dbpm_ctrlclim_nobasd_1deg_nat_default_tcb_global_monthly_1961_2010.nc")
-lat_mask <- tcb$dim$lat$vals >= min(lat_ext) & tcb$dim$lat$vals <= max(lat_ext)
-lon_mask <- tcb$dim$lon$vals >= min(lon_ext) & tcb$dim$lon$vals <= max(lon_ext)
-time_mask <- tcb$dim$time$vals >= 1841 & tcb$dim$time$vals <= 2010
+# library(ncdf4)
+# tcb <- nc_open("/rd/gem/private/fishmip_outputs/ISIMIP3a/ctrlclim/netcdf/dbpm_ctrlclim_nobasd_1deg_nat_default_tcb_global_monthly_1961_2010.nc")
+# lat_mask <- tcb$dim$lat$vals >= min(lat_ext) & tcb$dim$lat$vals <= max(lat_ext)
+# lon_mask <- tcb$dim$lon$vals >= min(lon_ext) & tcb$dim$lon$vals <= max(lon_ext)
+# time_mask <- tcb$dim$time$vals >= 1841 & tcb$dim$time$vals <= 2010
+# 
+# ncdData <- ncvar_get(tcb, "tcb", 
+#                      start = c(which(lon_mask)[1], which(lat_mask)[1], which(time_mask)[1]), 
+#                      count = c(sum(lon_mask), sum(lat_mask), sum(time_mask)))
+# dimnames(ncdData) <- list(tcb$var$tcb$dim[[1]]$vals[which(lon_mask)],
+#                        tcb$var$tcb$dim[[2]]$vals[which(lat_mask)],
+#                        tcb$var$tcb$dim[[3]]$vals[which(time_mask)])
+# names(dimnames(ncdData)) <- c(tcb$var$tcb$dim[[1]]$name,
+#                            tcb$var$tcb$dim[[2]]$name,
+#                            tcb$var$tcb$dim[[3]]$name)
+# 
+# tcb_df <- reshape2::melt(ncdData)
+# 
+# tcb_decade_avg <- tcb_df %>%
+#   mutate(decade = as.integer(substr(time, 1, 3)) * 10) %>% 
+#   group_by(decade, lon, lat) %>%  
+#   summarize(avg_biomass = mean(value))
+# 
+# # values from test1
+# out <- readRDS("rungridRes/test1.rds")
+# biom_df <- out[,c(1,2,4,16,17)]
+# biom_df <- biom_df %>% mutate(totalB = TotalVbiomass + TotalUbiomass)
+# biom_decade_avg <- biom_df %>%
+#   mutate(decade = as.integer(substr(t, 1, 3)) * 10) %>% 
+#   group_by(decade, lon, lat) %>%  
+#   summarize(avg_biomass = mean(totalB))
+# 
+# # different cells so cannot just substract 
+# 
+# p1 <- ggplot(tcb_decade_avg)+
+#   geom_tile(aes(x = lon, y = lat, fill = avg_biomass)) +
+#   geom_sf(data = world) +
+#   coord_sf(xlim = lon_ext, ylim = lat_ext, expand = FALSE) +
+#   scale_fill_gradient2(low = "white", high = "red", name = "Average Biomass in g/m2") +
+#   facet_wrap(~decade,ncol = 6) +
+#   scale_x_continuous(name = "Longitude", breaks = seq(lon_ext[1],lon_ext[2], by = 6)) +
+#   scale_y_continuous(name = "Latitude") +
+#   theme(legend.position = "bottom") +
+#   ggtitle("tcb netcdf")
+# 
+# p2 <- ggplot(biom_decade_avg)+
+#   geom_tile(aes(x = lon, y = lat, fill = avg_biomass)) +
+#   geom_sf(data = world) +
+#   coord_sf(xlim = lon_ext, ylim = lat_ext, expand = FALSE) +
+#   scale_fill_gradient2(low = "white", high = "red", name = "Average Biomass in g/m2") +
+#   facet_wrap(~decade,ncol = 6) +
+#   scale_x_continuous(name = "Longitude", breaks = seq(lon_ext[1],lon_ext[2], by = 6)) +
+#   scale_y_continuous(name = "Latitude") +
+#   theme(legend.position = "bottom") +
+#   ggtitle("test 1 runGrid")
+# 
+# pdf("test1res.pdf", onefile = T)
+# p1
+# p2
+# dev.off()
+# 
+# #Test 2- model calibration/behaviour
+# # 1. Spatial maps of TotalCatch and TotalBiomass (by decade)
+# # 2. Community size spectra (U & V) - one line per grid cell - final decade?
+# # 3. Plots of GG growth rates (see historyMatching.R for example)
+# # 4. Compare time series to total catches at LME scale with obs catch
+# # 5. Once checked, run for all LMEs
+# 
+# # TODO cami: compare model with empirical catches (see run lme calibration for plotting)
+# 
 
-ncdData <- ncvar_get(tcb, "tcb", 
-                     start = c(which(lon_mask)[1], which(lat_mask)[1], which(time_mask)[1]), 
-                     count = c(sum(lon_mask), sum(lat_mask), sum(time_mask)))
-dimnames(ncdData) <- list(tcb$var$tcb$dim[[1]]$vals[which(lon_mask)],
-                       tcb$var$tcb$dim[[2]]$vals[which(lat_mask)],
-                       tcb$var$tcb$dim[[3]]$vals[which(time_mask)])
-names(dimnames(ncdData)) <- c(tcb$var$tcb$dim[[1]]$name,
-                           tcb$var$tcb$dim[[2]]$name,
-                           tcb$var$tcb$dim[[3]]$name)
 
-tcb_df <- reshape2::melt(ncdData)
-
-tcb_decade_avg <- tcb_df %>%
-  mutate(decade = as.integer(substr(time, 1, 3)) * 10) %>% 
-  group_by(decade, lon, lat) %>%  
-  summarize(avg_biomass = mean(value))
-
-# values from test1
-out <- readRDS("rungridRes/test1.rds")
-biom_df <- out[,c(1,2,4,16,17)]
-biom_df <- biom_df %>% mutate(totalB = TotalVbiomass + TotalUbiomass)
-biom_decade_avg <- biom_df %>%
-  mutate(decade = as.integer(substr(t, 1, 3)) * 10) %>% 
-  group_by(decade, lon, lat) %>%  
-  summarize(avg_biomass = mean(totalB))
-
-# different cells so cannot just substract 
-
-p1 <- ggplot(tcb_decade_avg)+
-  geom_tile(aes(x = lon, y = lat, fill = avg_biomass)) +
-  geom_sf(data = world) +
-  coord_sf(xlim = lon_ext, ylim = lat_ext, expand = FALSE) +
-  scale_fill_gradient2(low = "white", high = "red", name = "Average Biomass in g/m2") +
-  facet_wrap(~decade,ncol = 6) +
-  scale_x_continuous(name = "Longitude", breaks = seq(lon_ext[1],lon_ext[2], by = 6)) +
-  scale_y_continuous(name = "Latitude") +
-  theme(legend.position = "bottom") +
-  ggtitle("tcb netcdf")
-
-p2 <- ggplot(biom_decade_avg)+
-  geom_tile(aes(x = lon, y = lat, fill = avg_biomass)) +
-  geom_sf(data = world) +
-  coord_sf(xlim = lon_ext, ylim = lat_ext, expand = FALSE) +
-  scale_fill_gradient2(low = "white", high = "red", name = "Average Biomass in g/m2") +
-  facet_wrap(~decade,ncol = 6) +
-  scale_x_continuous(name = "Longitude", breaks = seq(lon_ext[1],lon_ext[2], by = 6)) +
-  scale_y_continuous(name = "Latitude") +
-  theme(legend.position = "bottom") +
-  ggtitle("test 1 runGrid")
-
-pdf("test1res.pdf", onefile = T)
-p1
-p2
-dev.off()
-
-#Test 2- model calibration/behaviour
-# 1. Spatial maps of TotalCatch and TotalBiomass (by decade)
-# 2. Community size spectra (U & V) - one line per grid cell - final decade?
-# 3. Plots of GG growth rates (see historyMatching.R for example)
-# 4. Compare time series to total catches at LME scale with obs catch
-# 5. Once checked, run for all LMEs
-
-# TODO cami: compare model with empirical catches (see run lme calibration for plotting)
-
+rungridbyLME() 
