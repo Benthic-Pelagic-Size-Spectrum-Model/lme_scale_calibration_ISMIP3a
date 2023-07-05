@@ -452,23 +452,23 @@ gridded_sizemodel<-function(params,ERSEM.det.input=F,U_mat,V_mat,W_mat,temp.effe
       if (i < Neq){
       # get proportion of total fishable biomass for each grid cell
       #output rates of fisheries catches per yr at size
-      prop.u<-(U[,Fref.u:Nx,i+1]*10^x[Fref.u:Nx])/apply(U[,Fref.u:Nx,i+1]*10^x[Fref.u:Nx]*dx,1,sum)
-      #output rates of fisheries catches per yr at size
-      prop.v<-(V[,Fref.v:Nx,i+1]*10^x[Fref.v:Nx])/apply((V[,Fref.v:Nx,i+1]*10^x[Fref.v:Nx])*dx,1,sum)
+      prop.b<-(apply(U[,Fref.u:Nx,i]*10^x[Fref.u:Nx]*dx,1,sum) + apply(V[,Fref.v:Nx,i]*10^x[Fref.v:Nx]*dx,1,sum))/sum(apply(U[,Fref.u:Nx,i]*10^x[Fref.u:Nx]*dx,1,sum) + apply(V[,Fref.v:Nx,i]*10^x[Fref.v:Nx]*dx,1,sum))
+      #check sums to 1
+      #sum(prop.b)
+     
+      # redistribute total effort across gridcells according to proportion of biomass in that gridcell
       
-      # rescale effort:
+      effort[,i+1] = gravitymodel(effort[,i+1], prop.b,depth = depth,iter=10000)
       
-      Fvec.u[,Fref.u:Nx,i+1] = Fmort.u*(prop.u*effort[,i+1])
-      
-      Fvec.v[,Fref.v:Nx,i+1] = Fmort.v*(prop.v*effort[,i+1])
-      }
+  
+       }
     
     }#end time iteration
       
       
     
     return(list(U=U[,,],GG.u=GG.u[,,],PM.u=PM.u[,,],V=V[,,],GG.v=GG.v[,,],PM.v=PM.v[,,],Y.u=Y.u[,,],Y.v=Y.v[,,],W=W[,], params=params))
-    
+  
     
     # return(list(U=U[,Neq+1],GG.u=GG.u[,Neq],PM.u=PM.u[,Neq],V=V[,Neq+1],GG.v=GG.v[,Neq],PM.v=PM.v[,Neq],Y=Y[,Neq],W=W[Neq+1], params=params))
     
@@ -761,7 +761,6 @@ sizemodel<-function(params,ERSEM.det.input=F,U_mat,V_mat,W_mat,temp.effect=T,eps
       #total biomass density eaten by pred (g.m-2.yr-1)
       
       eatenbypred<-10^x*f.pel*U[,i] + 10^x*f.ben*U[,i] 
-      
       
       #detritus output (g.m-2.yr-1)
       
@@ -1162,9 +1161,10 @@ GetPPIntSlope<-function(sphy,lphy,mmin=10^-14.25, mmid=10^-10.184,mmax=10^-5.25,
   
   #  if it's depth integrated units are /m^-2 and need to divide my depth if using depth integrated inputs   
   
+  
   sphy= sphy/min(depth,100)
   lphy= lphy/min(depth,100)
-  
+   
   
   #mmin=10^-14.25 gww, approx 0.2 ESD
   #mmid=10^-10.184 gww, approax 5 ESD - division between small and large phytoplankton in GFDL-Topaz
@@ -1197,6 +1197,8 @@ GetPPIntSlope<-function(sphy,lphy,mmin=10^-14.25, mmid=10^-10.184,mmax=10^-5.25,
   if (output =="intercept") return(a)
   
 }
+
+
 
 getExportRatio<-function(sphy,lphy,sst,depth){
   ptotal=sphy+lphy
@@ -1347,4 +1349,58 @@ optimizeYield <- function(params,com,pp=pp, sst=sst, sft=sft, U_mat=U, V_mat=V,s
   
   return(list(result,com))
   
+}
+
+
+# # get proportion of total fishable biomass for each grid cell
+# #output rates of fisheries catches per yr at size
+# prop.b<-(apply(U[,Fref.u:Nx,i]*10^x[Fref.u:Nx]*dx,1,sum) + apply(V[,Fref.v:Nx,i]*10^x[Fref.v:Nx]*dx,1,sum))/sum(apply(U[,Fref.u:Nx,i]*10^x[Fref.u:Nx]*dx,1,sum) + apply(V[,Fref.v:Nx,i]*10^x[Fref.v:Nx]*dx,1,sum))
+# #check sums to 1
+# #sum(prop.b)
+# dim(effort)
+# plot(colSums(effort_grid[,-1]))
+# depth
+
+gravitymodel<-function(effort=effort[,3000],prop.b, depth, iter){
+  
+  # redistribute total effort across gridcells according to proportion of biomass in that gridcell
+  # using graivity model, Walters & Bonfil, 1999, Gelchu & Pauly 2007
+  # ideal free distribution - Blanchard et al 2008
+  # new_effort= prop.b*effort
+
+  eff<-as.vector(effort)
+  d<-unlist(as.vector(depth))
+  
+  for(j in 1:iter) {
+    
+    a<-eff
+    suit = prop.b*(1-d/max(d))*(1-a/0.001)
+    # rescale:
+    rel.suit = suit/sum(suit)
+    neweffort <- eff + rel.suit*eff
+    mult <- sum(eff)/sum(neweffort)
+    eff<-neweffort*mult							#gradient drives individuals to best locations at equilibrium (assumed to reached after 10000 iterations)
+
+  }
+  
+ # plot(prop.b,effort_grid[,3200],cex=(1-d/max(d)))
+ # plot(prop.b,eff,cex=(1-d/max(d)))
+ # 
+ #  rmax<-max(rel.suit)
+ #  r<-ifelse(suit >= rmax,rmax,s1)
+ #  newden<-ifelse(s1 >= rmax,density[iter,] + rmax*density[iter,],0)
+ #  mult <- totalpop[i,n]/sum(newden * area)
+ #  density[iter,]<-newden*mult
+  
+  # make depth dependent as well
+  # d<-unlist(as.vector(depth_grid[,2]))
+  # suit = prop.b*(1-d/max(d))
+  # rescale:
+  # rel.suit = suit/sum(suit)
+  # effort[,i+1] = rel.suit*effort[,i+1]
+  # plot(d,effort[,i+1])
+  # 
+  #for IFD would calculate "rmax" then work out which grid cells are < rmax
+  
+  return(eff)
 }

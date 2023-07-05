@@ -27,8 +27,11 @@ get_lme_inputs<-function(LMEnumber=14, gridded=F,yearly=F){
 
 if (!gridded) {
 
-  # read climate forcing inputs from THREDDS
-  lme_clim<-read_csv(file="http://portal.sf.utas.edu.au/thredds/fileServer/gem/fishmip/ISIMIP3a/InputData/DBPM_lme_inputs/obsclim/0.25deg/DBPM_LME_climate_inputs_slope.csv")
+ # read climate forcing inputs from THREDDS
+ # lme_clim<-read_csv(file="http://portal.sf.utas.edu.au/thredds/fileServer/gem/fishmip/ISIMIP3a/InputData/DBPM_lme_inputs/obsclim/0.25deg/DBPM_LME_climate_inputs_slope.csv")
+  
+  lme_clim<-read_csv(file="/rd/gem/public/fishmip/ISIMIP3a/InputData/DBPM_lme_inputs/obsclim/0.25deg/DBPM_LME_climate_inputs_slope.csv")
+ 
   lme_clim<-subset(lme_clim, LME %in% LMEnumber)
 
   if (yearly){
@@ -106,7 +109,7 @@ if (gridded) {
   
     # read climate forcing inputs from gem, here testing on LME14
     # trial 
-    filename =paste("/rd/gem/private/fishmip_inputs/ISIMIP3a/processed_forcings/lme_inputs_gridcell/obsclim/1deg/observed_LME_",LMEnumber,".csv",sep="")
+    filename =paste("/rd/gem/private/fishmip_inputs/ISIMIP3a/processed_forcings/lme_inputs_gridcell/obsclim/0.25deg/observed_LME_",LMEnumber,".csv",sep="")
     # filename="observed_LME_14.csv"
     lme_clim<-read_csv(file=filename)
     
@@ -203,7 +206,9 @@ if (gridded) {
   
   
 # read climate fishing inputs from THREDDS
-lme_fish<-read_csv(file="http://portal.sf.utas.edu.au/thredds/fileServer/gem/fishmip/ISIMIP3a/InputData/DBPM_lme_inputs/obsclim/0.25deg/DBPM_LME_effort_catch_input.csv")
+#lme_fish<-read_csv(file="http://portal.sf.utas.edu.au/thredds/fileServer/gem/fishmip/ISIMIP3a/InputData/DBPM_lme_inputs/obsclim/0.25deg/DBPM_LME_effort_catch_input.csv")
+lme_fish<-read_csv(file="/rd/gem/public/fishmip/ISIMIP3a/InputData/DBPM_lme_inputs/obsclim/0.25deg/DBPM_LME_effort_catch_input.csv")
+
 lme_fish<-subset(lme_fish, LME %in% LMEnumber)
 
 #create monthly inputs for fishing
@@ -239,7 +244,7 @@ run_model<-function(vals = X,input=lme_input,withinput=T){
                       ,xmin.consumer.v = -3
                       ,tmax = length(input$sst)/12
                       ,tstepspryr  =  12
-                      ,search_vol = 0.64
+                      ,search_vol = 64
                       ,fmort.u = f.u
                       ,fminx.u = f.minu
                       ,fmort.v = f.v
@@ -254,7 +259,7 @@ run_model<-function(vals = X,input=lme_input,withinput=T){
   
   # run model through time
   
-  #TO DO IN SIZEMODEL CODE: make fishing function like one in model template
+  # TO DO IN SIZEMODEL CODE: make fishing function like one in model template
   
   result_set <- sizemodel(params) 
   
@@ -396,7 +401,7 @@ run_model_timestep<-function(input=lme_inputs_igrid, vals = unlist(bestvals_LMEs
                       ,xmin.consumer.v = -3
                       ,tmax = 1/12
                       ,tstepspryr  =  12
-                      ,search_vol = 0.64
+                      ,search_vol = 64*4
                       ,fmort.u = f.u
                       ,fminx.u = f.minu
                       ,fmort.v = f.v

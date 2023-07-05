@@ -14,8 +14,8 @@
 rungridbyLME <- function(LMEnumber = 14, 
                          yearly = FALSE, 
                          f.effort = TRUE, 
-                         search_vol = .64,
-                         savePlots = TRUE){
+                         search_vol = 0.64,
+                         savePlots = F){
   # setup
   source("LME_calibration.R")
   
@@ -187,6 +187,8 @@ rungridbyLME <- function(LMEnumber = 14,
   out<-getGriddedOutputs(input=lme_inputs_grid,results=grid_results,params=gridded_params)
   saveRDS(out,paste0(LME_path,"/out_results.rds"))
   # out <- readRDS(paste0(LME_path,"/out_results.rds"))
+  
+  
   #### CHECK OUTPUTS!!
   
   cells<-unique(out$cell)
@@ -210,8 +212,8 @@ rungridbyLME <- function(LMEnumber = 14,
   biom_decade_avg <- biom_df %>%
     mutate(decade = as.integer(substr(t, 1, 3)) * 10) %>% 
     group_by(decade, lon, lat) %>%  
-    summarize(avg_Ubiomass = mean(TotalUbiomass),
-              avg_Vbiomass = mean(TotalVbiomass))
+    summarize(avg_Ubiomass = mean(TotalUbiomass,na.rm=T),
+              avg_Vbiomass = mean(TotalVbiomass,na.rm=T))
   
   # Axis
   lat_ext <- unique(biom_decade_avg)$lat[c(1,dim(biom_decade_avg)[1])]
@@ -398,23 +400,41 @@ rungridbyLME <- function(LMEnumber = 14,
   # Save the plots in a PDF file
   if(savePlots){
     pdf(paste0(LME_path,"/plots.pdf"), onefile = T)
-    p1
-    p2
-    p3
-    p4
-    p5
-    p6
-    p7
-    p8
+    print(p1)
+    print(p2)
+    print(p3)
+    print(p4)
+    print(p5)
+    print(p6)
+    print(p7)
+    print(p8)
     dev.off()
   }
 }
 
-#Test 1- compare with results from DBPM, no fishing (checking code consistency)
-# 1.	Test 1: run yearly = TRUE, no fishing (effort = 0), search volume = 64. 
-# b.	Compare these plots with the 3a tcb netcdf file: 
-#   i.	Extract LME 14 from this file 
-# ii.	Produce plots
+## TESTS:
+# test run for LME14 AND a different LME
+rungridbyLME()
+
+
+
+# #Test 1- compare with results from DBPM, no fishing (checking code consistency)
+# # 1.	Test 1: run yearly = TRUE, no fishing (effort = 0), search volume = 64. 
+# # b.	Compare these plots with the 3a tcb netcdf file: 
+# #   i.	Extract LME 14 from this file 
+# # ii.	Produce plots
+# 
+# tcb <- nc_open("/rd/gem/private/fishmip_outputs/ISIMIP3a/ctrlclim/netcdf/dbpm_ctrlclim_nobasd_1deg_nat_default_tcb_global_monthly_1961_2010.nc")
+# #tcb <- nc_open("/rd/gem/private/fishmip_outputs/ISIMIP3a/ctrlclim/netcdf/dbpm_ctrlclim_nobasd_1deg_nat_default_tcblog10_global_monthly_1961_2010.nc")
+# 
+# 
+# lat_mask <- tcb$dim$lat$vals >= min(lat_ext) & tcb$dim$lat$vals <= max(lat_ext)
+# lon_mask <- tcb$dim$lon$vals >= min(lon_ext) & tcb$dim$lon$vals <= max(lon_ext)
+# time_mask <- tcb$dim$time$vals >= 1841 & tcb$dim$time$vals <= 2010
+
+
+
+
 # library(ncdf4)
 # tcb <- nc_open("/rd/gem/private/fishmip_outputs/ISIMIP3a/ctrlclim/netcdf/dbpm_ctrlclim_nobasd_1deg_nat_default_tcb_global_monthly_1961_2010.nc")
 # lat_mask <- tcb$dim$lat$vals >= min(lat_ext) & tcb$dim$lat$vals <= max(lat_ext)
