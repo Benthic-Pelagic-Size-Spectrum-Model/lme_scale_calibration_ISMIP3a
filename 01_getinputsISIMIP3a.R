@@ -616,16 +616,6 @@ library(tictoc)
 library(data.table)
 library(parallel)
 
-
-rm(list=ls())
-
-library(raster)
-library(stringr)
-library(tidyverse)
-library(tictoc)
-library(data.table)
-library(parallel)
-
 #### 1. Define main function: for each LME, and each variable, apply the calc_inputs_LME function -----
 
 # 1A. calc_inputs_LME()
@@ -757,7 +747,11 @@ calc_inputs_LME<-function(file_name_obs, file_name_crtl, file_path_crtl, file_pa
 # 1.B calc_inputs_all_LME()
 # see function description above - this is adjusted for gridcell level but names are kept - hence e.g. weighted_mean_obs
 # see LME level 1 for explanation on how this function is applied. 
-source("input_funcs.R")
+
+# NOTE/WARNING - in this repo GetPPIntSlope() is in source("dbpm_model_functions.R"). 
+# this code was taken from the dbpm_isimip_3a repo (original source = dbpm_isimip_3b - I think as things changed...)
+# source("input_funcs.R")
+source("dbpm_model_functions.R")
 
 calc_inputs_all_LME<-function(this_LME){
   
@@ -1008,7 +1002,8 @@ toc() # 6585.733 /60 = 109 min
 
 ### check outputs
 
-# when rinning function above 
+### using code in dbpm_isimip_3a and function to clacualte inputs stored there 
+# when rinning function above - OK
 # LME 14 - output_obs_all_variables_slope (output_obs_all_variables_slope is the same for spin-ip)
 
 # lat   lon LME   t            sst   sbt    er intercept  slope   sphy    lphy depth     area_m2       expcbot
@@ -1020,7 +1015,7 @@ toc() # 6585.733 /60 = 109 min
 # 5 -54.5 -64.5 14    1841-05-01  7.16  7.19 0.195    -1.74  -1.05  0.0566 0.0305   111. 7179721107. 0.0000000181 
 # 6 -54.5 -64.5 14    1841-06-01  6.25  6.27 0.159    -2.42  -1.11  0.0414 0.0124   111. 7179721107. 0.00000000733
 
-# # when loading the printed file 
+# # when loading the printed file - OK
 # check<-read.csv("/rd/gem/private/fishmip_inputs/ISIMIP3a/processed_forcings/lme_inputs_gridcell/obsclim/1deg/observed_LME_14.csv")
 # head(check)
 # lat   lon LME          t      sst      sbt        er  intercept      slope
@@ -1043,6 +1038,48 @@ toc() # 6585.733 /60 = 109 min
 # slope = GetPPIntSlope(sphy,lphy,mmin=10^-14.25,mmid=10^-10.184,mmax=10^-5.25,depth,output="slope"))
 # GetPPIntSlope(0.14509845,0.14296427,mmin=10^-14.25,mmid=10^-10.184,mmax=10^-5.25,111.0009,output="intercept") # -0.7724442
 # GetPPIntSlope(0.14509845,0.14296427,mmin=10^-14.25,mmid=10^-10.184,mmax=10^-5.25,111.0009,output="slope") # -1.001304
+
+# when using code in this repo (copied from dbpm_isimip_3a) 
+# and function to calculate inputs stored HERE - OK values are the same 
+# lat   lon LME   t            sst   sbt    er intercept  slope   sphy    lphy depth     area_m2       expcbot
+# <dbl> <dbl> <chr> <date>     <dbl> <dbl> <dbl>     <dbl>  <dbl>  <dbl>   <dbl> <dbl>       <dbl>         <dbl>
+# 1 -54.5 -64.5 14    1841-01-01  7.95  7.88 0.239    -0.772 -1.00  0.145  0.143    111. 7179721107. 0.000000202  
+# 2 -54.5 -64.5 14    1841-02-01  8.43  8.41 0.245    -0.789 -0.991 0.108  0.120    111. 7179721107. 0.000000154  
+# 3 -54.5 -64.5 14    1841-03-01  8.39  8.38 0.247    -0.862 -0.989 0.0878 0.0994   111. 7179721107. 0.000000106  
+# 4 -54.5 -64.5 14    1841-04-01  7.84  7.86 0.232    -1.16  -1.01  0.0717 0.0650   111. 7179721107. 0.0000000528 
+# 5 -54.5 -64.5 14    1841-05-01  7.16  7.19 0.195    -1.74  -1.05  0.0566 0.0305   111. 7179721107. 0.0000000181 
+# 6 -54.5 -64.5 14    1841-06-01  6.25  6.27 0.159    -2.42  -1.11  0.0414 0.0124   111. 7179721107. 0.00000000733
+
+# check 1960 instead for spin-up time
+
+# printed file using dbpm_isimip_3a
+# head(check %>% filter(t >= "1960-01-01", t < "1970-01-01"))
+# lat   lon LME          t      sst      sbt        er  intercept      slope
+# 1 -54.5 -64.5  14 1960-01-01 8.579283 8.525311 0.2226460 -0.8927402 -1.0135689
+# 2 -54.5 -64.5  14 1960-02-01 8.909275 8.869553 0.2415954 -0.7875424 -0.9901062
+# 3 -54.5 -64.5  14 1960-03-01 8.963905 8.961565 0.2330122 -0.9561290 -0.9991341
+# 4 -54.5 -64.5  14 1960-04-01 8.595880 8.623443 0.2113011 -1.3052466 -1.0259838
+# 5 -54.5 -64.5  14 1960-05-01 7.855768 7.881054 0.1818500 -1.8346303 -1.0653755
+# 6 -54.5 -64.5  14 1960-06-01 7.518065 7.550831 0.1516842 -2.4610482 -1.1082789
+# sphy       lphy    depth    area_m2      expcbot
+# 1 0.14789762 0.12676890 111.0009 7179721107 1.727242e-07
+# 2 0.10694323 0.11966546 111.0009 7179721107 1.590143e-07
+# 3 0.09020357 0.09109531 111.0009 7179721107 1.015521e-07
+# 4 0.07720137 0.05746743 111.0009 7179721107 5.236447e-08
+# 5 0.05905584 0.02809974 111.0009 7179721107 2.056590e-08
+# 6 0.03932662 0.01149323 111.0009 7179721107 7.078745e-09
+
+# values caclaulted using the functions above - OK SAME AGAIN... 
+# output_obs_all_variables_slope %>% filter(t >= "1960-01-01", t < "1970-01-01")
+# lat   lon LME   t            sst   sbt    er interc…¹  slope   sphy    lphy
+# <dbl> <dbl> <chr> <date>     <dbl> <dbl> <dbl>    <dbl>  <dbl>  <dbl>   <dbl>
+# 1 -54.5 -64.5 14    1960-01-01  8.58  8.53 0.223   -0.893 -1.01  0.148  0.127  
+# 2 -54.5 -64.5 14    1960-02-01  8.91  8.87 0.242   -0.788 -0.990 0.107  0.120  
+# 3 -54.5 -64.5 14    1960-03-01  8.96  8.96 0.233   -0.956 -0.999 0.0902 0.0911 
+# 4 -54.5 -64.5 14    1960-04-01  8.60  8.62 0.211   -1.31  -1.03  0.0772 0.0575 
+# 5 -54.5 -64.5 14    1960-05-01  7.86  7.88 0.182   -1.83  -1.07  0.0591 0.0281 
+# 6 -54.5 -64.5 14    1960-06-01  7.52  7.55 0.152   -2.46  -1.11  0.0393 0.0115 
+
 
 ##### END LME grid cell scale -----
 
