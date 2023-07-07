@@ -1161,9 +1161,9 @@ GetPPIntSlope<-function(sphy,lphy,mmin=10^-14.25, mmid=10^-10.184,mmax=10^-5.25,
   
   #  if it's depth integrated units are /m^-2 and need to divide my depth if using depth integrated inputs   
   
-  
-  sphy= sphy/min(depth,100)
-  lphy= lphy/min(depth,100)
+  ## CN in ageement with JB - remove depth integration of inputs  
+  # sphy= sphy/min(depth,100)
+  # lphy= lphy/min(depth,100)
    
   
   #mmin=10^-14.25 gww, approx 0.2 ESD
