@@ -41,10 +41,10 @@ calc_inputs_LME<-function(file_name_obs, file_name_crtl, file_path_crtl, file_pa
   variable<-str_match(file_name_obs, "gfdl-mom6-cobalt2_obsclim_\\s*(.*?)\\s*_15arcmin")[2]
   
   # work on CONTROLCLIM first 
-  lme_crtl<-fread(file.path(file_path_crtl, file_name_crtl))
+  lme_crtl<-read.csv(file.path(file_path_crtl, file_name_crtl))
   
   # then work on OBSERVED 
-  lme<-fread(file.path(file_path_obs, file_name_obs))
+  lme<-read.csv(file.path(file_path_obs, file_name_obs))
   
   # 2 methods tested to calculate weighed mean
   # METHOD 1 based on dplyer and cell area
@@ -635,10 +635,10 @@ calc_inputs_LME<-function(file_name_obs, file_name_crtl, file_path_crtl, file_pa
   # variable<-str_match(file_name_obs, "gfdl-mom6-cobalt2_obsclim_\\s*(.*?)\\s*_15arcmin")[2]
   
   # work on CONTROLCLIM first 
-  lme_crtl<-fread(file.path(file_path_crtl, file_name_crtl))
+  lme_crtl<-read.csv(file.path(file_path_crtl, file_name_crtl))
   
   # then work on OBSERVED 
-  lme<-fread(file.path(file_path_obs, file_name_obs))
+  lme<-read.csv(file.path(file_path_obs, file_name_obs))
   
   # NOTE - through the code "weighed_mean" is only because of code recycling from LME-aggregated level approach above 
   # here we are considering grid cells so there is no averadging and weighting  
@@ -1016,7 +1016,7 @@ toc() # 6585.733 /60 = 109 min
 # 6 -54.5 -64.5 14    1841-06-01  6.25  6.27 0.159    -2.42  -1.11  0.0414 0.0124   111. 7179721107. 0.00000000733
 
 # # when loading the printed file - OK
-# check<-fread("/rd/gem/private/fishmip_inputs/ISIMIP3a/processed_forcings/lme_inputs_gridcell/obsclim/1deg/observed_LME_14.csv")
+# check<-read.csv("/rd/gem/private/fishmip_inputs/ISIMIP3a/processed_forcings/lme_inputs_gridcell/obsclim/1deg/observed_LME_14.csv")
 # head(check)
 # lat   lon LME          t      sst      sbt        er  intercept      slope
 # 1 -54.5 -64.5  14 1841-01-01 7.948583 7.880984 0.2385617 -0.7724442 -1.0013043
