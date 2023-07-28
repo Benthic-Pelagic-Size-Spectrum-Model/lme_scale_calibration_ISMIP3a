@@ -11,11 +11,21 @@
 #' 
 #' 
 
+rm(list=ls())
+
 rungridbyLME <- function(LMEnumber = 14, 
                          yearly = FALSE, 
                          f.effort = TRUE, 
                          search_vol = 0.64,
                          savePlots = F){
+  
+  # # # CN trial 
+  # LMEnumber = 14
+  # yearly = FALSE
+  # f.effort = TRUE
+  # search_vol = 0.64
+  # savePlots = F
+
   # setup
   source("LME_calibration.R")
   
@@ -31,6 +41,8 @@ rungridbyLME <- function(LMEnumber = 14,
   # get initial values from LME-scale results
   lme_input_init <-get_lme_inputs(LMEnumber = LMEnumber, gridded = F, yearly = F)
   vals <- readRDS("bestvals_LMEs.RDS")
+  
+  ## CN WARNING - this gives NAs for all size classes >90 - ask Julia if this is OK 
   # run model using time-averaged inputs
   initial_results<-run_model(vals=vals[LMEnumber,],
                              input=lme_input_init,
@@ -46,6 +58,9 @@ rungridbyLME <- function(LMEnumber = 14,
   #                  timeaveraged = TRUE)
   
   # get gridded inputs and run through all grid cells one timestep at a time
+  
+  ### WARNING - CN error here - CORRECTED due to wrong input resolution in function 
+  
   lme_inputs_grid<- get_lme_inputs(LMEnumber = LMEnumber, 
                                    gridded = T, 
                                    yearly = yearly)[,c("lat","lon", "LME.x", "t","sst",
@@ -193,6 +208,9 @@ rungridbyLME <- function(LMEnumber = 14,
   
   cells<-unique(out$cell)
   out$cell<-as.factor(out$cell)
+  
+  colnames(out)
+  head(out[,c("t","Totalcatch","TotalVcatch","TotalUcatch","TotalVbiomass","TotalUbiomass")])
   
   # download world map
   # world <- ne_download(category = "cultural", 
@@ -399,7 +417,19 @@ rungridbyLME <- function(LMEnumber = 14,
   
   # Save the plots in a PDF file
   if(savePlots){
+    
+    # # CN change 
+    # LME_plot<-list(p1,p2,p3,p4,p5,p6,p7,p8)
+    # # pdf(paste0(LME_path,"/plots.pdf"), height = 8, width = 6)
+    # tic()
+    # pdf("plots.pdf", height = 8, width = 6)
+    # marrangeGrob(grobs = LME_plot, nrow=2, ncol=1)
+    # dev.off()
+    # toc()
+    
     pdf(paste0(LME_path,"/plots.pdf"), onefile = T)
+    # tic()
+    # pdf("plots_old.pdf", height = 8, width = 6)
     print(p1)
     print(p2)
     print(p3)
@@ -409,14 +439,16 @@ rungridbyLME <- function(LMEnumber = 14,
     print(p7)
     print(p8)
     dev.off()
+    # toc()
   }
 }
 
 ## TESTS:
 # test run for LME14 AND a different LME
+library(tictoc)
+tic()
 rungridbyLME()
-
-
+toc() # 43.18363 min for LME 14 
 
 # #Test 1- compare with results from DBPM, no fishing (checking code consistency)
 # # 1.	Test 1: run yearly = TRUE, no fishing (effort = 0), search volume = 64. 
@@ -505,6 +537,3 @@ rungridbyLME()
 # 
 # # TODO cami: compare model with empirical catches (see run lme calibration for plotting)
 # 
-
-
-rungridbyLME() 

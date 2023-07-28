@@ -109,7 +109,8 @@ if (gridded) {
   
     # read climate forcing inputs from gem, here testing on LME14
     # trial 
-    filename =paste("/rd/gem/private/fishmip_inputs/ISIMIP3a/processed_forcings/lme_inputs_gridcell/obsclim/0.25deg/observed_LME_",LMEnumber,".csv",sep="")
+    # CN WARNING the 0.25deg inuts have not been produced yet (27/07/2023) as we were focusing on 1deg first  
+    filename =paste("/rd/gem/private/fishmip_inputs/ISIMIP3a/processed_forcings/lme_inputs_gridcell/obsclim/1deg/observed_LME_",LMEnumber,".csv",sep="")
     # filename="observed_LME_14.csv"
     lme_clim<-read_csv(file=filename)
     
@@ -232,6 +233,12 @@ return (lme_clim)
 # Function to run model
 run_model<-function(vals = X,input=lme_input,withinput=T){
   
+  # # CN trial 
+  # vals = vals[LMEnumber,]
+  # input=lme_input_init
+  # withinput=F
+  
+  
   f.u<-as.numeric(vals[1])
   f.v<-as.numeric(vals[2])
   f.minu<-as.numeric(vals[3])
@@ -257,11 +264,79 @@ run_model<-function(vals = X,input=lme_input,withinput=T){
                       ,sft = input$sbt
                       ,use.init = FALSE,effort = input$NomActive_area_m2)      
   
-  # run model through time
+  # # CN CHECK
+  # params$lat # NA
+  # params$lon # NA
+  # params$depth
+  # params$pp
+  # params$r.plank # also negative values 
+  # params$er
+  # params$sst
+  # params$sft
+  # params$Fmort.u
+  # params$Fmort.v
+  # params$min.fishing.size.u
+  # params$min.fishing.size.v
+  # params$effort
+  # params$pref.ben
+  # params$det.coupling
+  # params$sinking.rate
+  # params$q0
+  # params$sd.q
+  # params$A.u # 64
+  # params$A.v # 6.4
+  # params$alpha.u
+  # params$alpha.v
+  # params$def.high
+  # params$def.low
+  # params$K.u
+  # params$K.v
+  # params$K.d
+  # params$AM.u
+  # params$AM.v
+  # params$handling
+  # params$repro.on
+  # params$c1
+  # params$E
+  # params$Boltzmann
+  # params$mu0
+  # params$xs
+  # params$p.s
+  # params$k.sm
+  # params$dx
+  # params$xmin
+  # params$x1
+  # params$x1.det
+  # params$xmax
+  # params$xmax2
+  # params$x
+  # params$Nx
+  # params$ref
+  # params$ref.det
+  # params$Fref.u
+  # params$Fref.v
+  # params$idx
+  # params$tmax # 170 
+  # params$delta_t
+  # params$Neq # 2040 
+  # params$Ngrid # NA
+  # params$U.init
+  # params$V.init
+  # params$W.init
+  # params$equilibrium
+  # params$result_set
   
+  # run model through time
+
   # TO DO IN SIZEMODEL CODE: make fishing function like one in model template
   
   result_set <- sizemodel(params) 
+  
+  # # CN CHECK 
+  # NAs for size classes >90
+  # dim(result_set$U)
+  # result_set$U[,2040]
+  # result_set$V[,10] # here is when it starts giving NAs
   
   # returns all outputs of the model 
   # saveRDS(result_set,filename=paste("dbpm_calibration_LMEnumber_catchability.rds"))
