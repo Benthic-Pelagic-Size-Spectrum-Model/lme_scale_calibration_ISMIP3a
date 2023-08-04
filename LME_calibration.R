@@ -231,7 +231,7 @@ return (lme_clim)
 
 
 # Function to run model
-run_model<-function(vals = X,input=lme_input,withinput=T){
+run_model<-function(vals = X,input=lme_input,withinput=T, search_vol= search_vol){
   
   # # CN trial 
   # vals = vals[LMEnumber,]
@@ -251,7 +251,7 @@ run_model<-function(vals = X,input=lme_input,withinput=T){
                       ,xmin.consumer.v = -3
                       ,tmax = length(input$sst)/12
                       ,tstepspryr  =  12
-                      ,search_vol = 64
+                      ,search_vol = search_vol
                       ,fmort.u = f.u
                       ,fminx.u = f.minu
                       ,fmort.v = f.v

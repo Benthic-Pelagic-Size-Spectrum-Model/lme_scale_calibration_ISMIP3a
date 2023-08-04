@@ -9,6 +9,11 @@ lmenum=66
 no_iter = 500
 no_cores <- parallel::detectCores() - 1
 lmes<-t(pbapply::pbsapply(X=1:lmenum,LHSsearch,iter=no_iter))
+
+
+# WARNING - not working at the moment... try running model with old best values and then fix this.  
+
+
 saveRDS(lmes,paste0("bestvals_LMEs_iter_",no_iter,".RDS"))
 
 ############### Make plots

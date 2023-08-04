@@ -19,12 +19,12 @@ rungridbyLME <- function(LMEnumber = 14,
                          search_vol = 0.64,
                          savePlots = F){
   
-  # # # CN trial 
+  # # CN trial
   # LMEnumber = 14
   # yearly = FALSE
-  # f.effort = TRUE
+  # f.effort = FALSE
   # search_vol = 0.64
-  # savePlots = F
+  # savePlots = TRUE
 
   # setup
   source("LME_calibration.R")
@@ -42,11 +42,15 @@ rungridbyLME <- function(LMEnumber = 14,
   lme_input_init <-get_lme_inputs(LMEnumber = LMEnumber, gridded = F, yearly = F)
   vals <- readRDS("bestvals_LMEs.RDS")
   
-  ## CN WARNING - this gives NAs for all size classes >90 - ask Julia if this is OK 
+  ## CN WARNING - this gives NAs for all size classes >90 - ask Julia if this is OK
+  ## CN CORRECTION: added a search_vol param in function argument because
+  ## search_vol needs to be consistent with what we are using to run the final 
+  ## model and was not (it was set to 64 inside the run_model() function) 
   # run model using time-averaged inputs
   initial_results<-run_model(vals=vals[LMEnumber,],
                              input=lme_input_init,
-                             withinput = F)
+                             withinput = F, 
+                             search_vol = search_vol)
   
   U.initial<-rowMeans(initial_results$U[,240:1440])
   V.initial<-rowMeans(initial_results$V[,240:1440])
@@ -178,15 +182,18 @@ rungridbyLME <- function(LMEnumber = 14,
                                   burnin.len)
   
   # Checks
-  # U <- grid_results$U
-  # U[1,,2041]
-  # sum(is.na(U))
-  # sum(any(U < 0))
-  # 
-  # V <- grid_results$V
-  # V[1,,2041]
-  # sum(is.na(V))
-  # sum(any(V < 0))
+  U <- grid_results$U
+  U[1,,2041]
+  sum(is.na(U))
+  sum(any(U < 0))
+  dim(U) # this grid cell X size X time 
+  sum(U, na.rm = TRUE)
+  is.na(U[])
+
+  V <- grid_results$V
+  V[1,,2041]
+  sum(is.na(V))
+  sum(any(V < 0))
   
   saveRDS(grid_results,paste0(LME_path,"/grid_results.rds"))
   # grid_results <- readRDS(paste0(LME_path,"/grid_results.rds"))
@@ -447,7 +454,11 @@ rungridbyLME <- function(LMEnumber = 14,
 # test run for LME14 AND a different LME
 library(tictoc)
 tic()
-rungridbyLME()
+rungridbyLME(LMEnumber = 14, 
+             yearly = FALSE, 
+             f.effort = FALSE, 
+             search_vol = 0.64,
+             savePlots = TRUE)
 toc() # 43.18363 min for LME 14 
 
 # #Test 1- compare with results from DBPM, no fishing (checking code consistency)
