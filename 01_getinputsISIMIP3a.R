@@ -400,18 +400,6 @@ for (i in 1:length(this_LME)){
 }
 toc() # 8405.771 - 2.3h
 
-
-
-
-#### ARRIVATA QUI - is the function below reading only LME inputs or is it reading the final product too?
-# DBPM_LME_climate_inputs_slope.csv
-# DBPM_LME_effort_catch_input.csv
-
-
-
-
-
-
 #### 3. read in printed csv file for each LME and merge info into a unique file ----- 
 
 # WARNING not there right now as were printed in DBPM gem48 instance and then only the final product was moved to new folder I think! 
@@ -447,7 +435,8 @@ combined_LME_inputs<-combined_LME_inputs %>%
 
 #### 5. add effort and catches ------
 
-effort<-read_csv("/rd/gem/private/users/yannickr/DKRZ_EffortFiles/effort_histsoc_1841_2010.csv")
+# effort<-read_csv("/rd/gem/private/users/yannickr/DKRZ_EffortFiles/effort_histsoc_1841_2010.csv")
+effort<-read_csv("/rd/gem/private/users/yannickr/DKRZ_EffortFiles/effort_isimip3a_histsoc_1841_2010.csv")
 
 # calculate climate inputs by Year as effort is by Year 
 # no - skip as Julia would like monthly inputs
@@ -481,7 +470,8 @@ DBPM_LME_effort_input<-effort %>%
   mutate(NomActive_area_m2 = NomActive/area_m2)
 
 # do the same with catches 
-catch<-read_csv("/rd/gem/private/users/yannickr/DKRZ_EffortFiles/calibration_catch_histsoc_1850_2004.csv")
+# catch<-read_csv("/rd/gem/private/users/yannickr/DKRZ_EffortFiles/calibration_catch_histsoc_1850_2004.csv")
+catch<-read_csv("/rd/gem/private/users/yannickr/DKRZ_EffortFiles/catch-validation_isimip3a_histsoc_1850_2004.csv")
 
 DBPM_LME_catch_input<-catch %>% 
   mutate(catch_tonnes = Reported+IUU) %>% 
@@ -496,6 +486,11 @@ DBPM_LME_effort_catch_input<-DBPM_LME_effort_input %>%
   full_join(DBPM_LME_catch_input)
 
 head(DBPM_LME_effort_catch_input)
+
+
+# WARNING LME0 to delete as there is no area ... it will be considered later on when climate inputs for this region will alos be considered
+DBPM_LME_effort_catch_input<-DBPM_LME_effort_catch_input %>% 
+  filter(LME != 0)
 
 #### 6. Plot to check ----
 
@@ -515,12 +510,13 @@ my_theme<-theme_bw()+
 
 plot_df<-split(DBPM_LME_effort_catch_input, DBPM_LME_effort_catch_input$LME)
 
+plot_df[[1]] 
 head(plot_df[[2]])
 
 Value = "NomActive"
 toKeep = "1"
 
-plot<-ggplot(data = plot_df[[2]], aes(x = Year, y = NomActive)) +
+plot<-ggplot(data = plot_df[[1]], aes(x = Year, y = NomActive)) +
   ggtitle(paste("LME", toKeep, sep = " "))+
   annotate("rect",xmin=1841, xmax=1960, ymin=0, ymax=Inf, fill = "#b2e2e2", alpha = 0.4)+ # spin-up edf8fb
   annotate("rect",xmin=1961, xmax=2010, ymin=0, ymax=Inf, fill = "#238b45", alpha = 0.4)+ # projection 66c2a4
@@ -528,14 +524,18 @@ plot<-ggplot(data = plot_df[[2]], aes(x = Year, y = NomActive)) +
   geom_line() +
   my_theme
 
-pdf("Output/plot1.pdf")
+pdf("Output/Effort_LME1_check.pdf")
 plot
 dev.off()
 
 #### 7. go to step 2 - batch create inputs.R ----
 # in batch create input, the code uses getgridin_ISIMIP3b to calculate intercept and slope 
 # the below are the steps you need from that function (checked with Julia - line 14 to 22)
-source("input_funcs.R")
+
+# NOTE/WARNING - in this repo GetPPIntSlope() is in source("dbpm_model_functions.R"). 
+# this code was taken from the dbpm_isimip_3a repo (original source = dbpm_isimip_3b - I think as things changed...)
+# source("input_funcs.R")
+source("dbpm_model_functions.R")
 
 # name columns as in code
 # head(DBPM_LME_climate_inputs)
@@ -545,42 +545,50 @@ DBPM_LME_climate_inputs_renamed<-DBPM_LME_climate_inputs %>%
 
 DBPM_LME_climate_inputs_renamed<-DBPM_LME_climate_inputs_renamed[,c("LME", "t", "lphy", "sphy", "sbt", "sst", "depth", "area_m2", "expcbot")]
 
-
-
-
-
-
 ### WARNING - change the below with summarise() and test the difference - same problem as per gridded inputs?  
+head(DBPM_LME_climate_inputs_renamed)
 
-
-
-
-
-# dplyr method
 DBPM_LME_climate_inputs_slope<-DBPM_LME_climate_inputs_renamed %>%
-  mutate(er = getExportRatio(sphy,lphy,sst,depth),
-         er = ifelse(er<0,0, ifelse(er>1,1,er)),
-         intercept = GetPPIntSlope(sphy,lphy,mmin=10^-14.25,mmid=10^-10.184,mmax=10^-5.25,depth,output="intercept"),
-         slope = GetPPIntSlope(sphy,lphy,mmin=10^-14.25,mmid=10^-10.184,mmax=10^-5.25,depth,output="slope")) %>% 
+  group_by(LME,t,lphy,sphy,sbt,sst,depth,area_m2,expcbot) %>% 
+  summarise(er = getExportRatio(sphy,lphy,sst,depth),
+            er = ifelse(er<0,0, ifelse(er>1,1,er)),
+            intercept = GetPPIntSlope(sphy,lphy,mmin=10^-14.25,mmid=10^-10.184,mmax=10^-5.25,depth,output="intercept"),
+            slope = GetPPIntSlope(sphy,lphy,mmin=10^-14.25,mmid=10^-10.184,mmax=10^-5.25,depth,output="slope")) %>% 
+  ungroup() %>% 
   relocate("LME","t","sst","sbt","er","intercept","slope", "sphy", "lphy", "depth", "area_m2","expcbot")
 
 head(DBPM_LME_climate_inputs_slope)
 
-# # tests 
+# # previous method - SAME outputs but for gridded data this was working erroneously... 
+# trial<-DBPM_LME_climate_inputs_renamed %>%
+#   mutate(er = getExportRatio(sphy,lphy,sst,depth),
+#          er = ifelse(er<0,0, ifelse(er>1,1,er)),
+#          intercept = GetPPIntSlope(sphy,lphy,mmin=10^-14.25,mmid=10^-10.184,mmax=10^-5.25,depth,output="intercept"),
+#          slope = GetPPIntSlope(sphy,lphy,mmin=10^-14.25,mmid=10^-10.184,mmax=10^-5.25,depth,output="slope")) %>% 
+#   relocate("LME","t","sst","sbt","er","intercept","slope", "sphy", "lphy", "depth", "area_m2","expcbot")
+# 
+# head(trial)
+
+# # tests
 # getExportRatio<-function(sphy,lphy,sst,depth){
-#   # trial 
+#   
+#   # trial # LME 10
 #   sphy = 0.05354391
 #   lphy = 0.006422868
 #   sst = 23.153202
 #   depth = 4123.2588
-#     
-#   
+# 
 #   ptotal=sphy+lphy
 #   plarge <- lphy/ptotal
 #   psmall <- sphy/ptotal
 #   er <- (exp(-0.032*sst)*((0.14*psmall)+(0.74*(plarge)))+(0.0228*(plarge)*(depth*0.004)))/(1+(depth*0.004))
 #   return(er)
 # }
+# 
+# # trial # LME 10
+# GetPPIntSlope(sphy= 0.05354391,lphy = 0.006422868,mmin=10^-14.25,mmid=10^-10.184,mmax=10^-5.25,depth = 4123.2588,output="intercept")
+# GetPPIntSlope(sphy= 0.05354391,lphy = 0.006422868,mmin=10^-14.25,mmid=10^-10.184,mmax=10^-5.25,depth = 4123.2588,output="slope")
+# 
 
 # mapply method bease on gridcell inputs and matrix format
 # # example mapply
