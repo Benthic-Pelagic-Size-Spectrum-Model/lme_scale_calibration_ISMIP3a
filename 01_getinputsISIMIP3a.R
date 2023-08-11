@@ -349,7 +349,7 @@ calc_inputs_LME<-function(file_name_obs, file_name_crtl, file_path_crtl, file_pa
 calc_inputs_all_LME<-function(this_LME){
   
   # # trial 
-  # this_LME = 1
+  # this_LME = 2
 
   file_path_obs<-"/rd/gem/private/fishmip_inputs/ISIMIP3a/lme_inputs/obsclim/0.25deg"
   file_path_crtl<-"/rd/gem/private/fishmip_inputs/ISIMIP3a/lme_inputs/ctrlclim/0.25deg"
@@ -378,7 +378,7 @@ calc_inputs_all_LME<-function(this_LME){
   output_obs_all_variables<-Reduce(merge,output_obs)
   output_crtl_all_variables<-Reduce(merge,output_crtl)
   
-  # write output files - temporary path - need to save on gem48!
+  # write output files - temporary path - need to save on gem48! DONE
   # this_destination_path_obs <- paste0("/data/home/camillan/dbpm/Output/", "observed_LME_", this_LME, ".csv")
   # this_destination_path_ctrl <- paste0("/data/home/camillan/dbpm/Output/", "control_LME_", this_LME, ".csv")
   this_destination_path_obs <- paste0("/rd/gem/private/fishmip_inputs/ISIMIP3a/processed_forcings/lme_inputs/obsclim/0.25deg/", "observed_LME_", this_LME, ".csv")
@@ -400,9 +400,22 @@ for (i in 1:length(this_LME)){
 }
 toc() # 8405.771 - 2.3h
 
+
+
+
+#### ARRIVATA QUI - is the function below reading only LME inputs or is it reading the final product too?
+# DBPM_LME_climate_inputs_slope.csv
+# DBPM_LME_effort_catch_input.csv
+
+
+
+
+
+
 #### 3. read in printed csv file for each LME and merge info into a unique file ----- 
 
-# WARNING not there right now as were printed in DBPM gem48 instance nad then only the final product was moved to new folder I think! 
+# WARNING not there right now as were printed in DBPM gem48 instance and then only the final product was moved to new folder I think! 
+# DONE - now re-run adn printed in re/gem
 newly_written_files_observed <- list.files("/rd/gem/private/fishmip_inputs/ISIMIP3a/processed_forcings/lme_inputs/obsclim/0.25deg", pattern = "observed", full.names = TRUE)
 
 # pick one randomly and check 
@@ -531,6 +544,17 @@ DBPM_LME_climate_inputs_renamed<-DBPM_LME_climate_inputs %>%
   rename(t = Date, depth = deptho_m, sbt = tob_degC, sst = tos_degC, expcbot = `expc-bot_mol_m-2_s-1`)
 
 DBPM_LME_climate_inputs_renamed<-DBPM_LME_climate_inputs_renamed[,c("LME", "t", "lphy", "sphy", "sbt", "sst", "depth", "area_m2", "expcbot")]
+
+
+
+
+
+
+### WARNING - change the below with summarise() and test the difference - same problem as per gridded inputs?  
+
+
+
+
 
 # dplyr method
 DBPM_LME_climate_inputs_slope<-DBPM_LME_climate_inputs_renamed %>%
