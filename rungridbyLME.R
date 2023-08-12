@@ -40,6 +40,8 @@ rungridbyLME <- function(LMEnumber = 14,
   
   # get initial values from LME-scale results
   lme_input_init <-get_lme_inputs(LMEnumber = LMEnumber, gridded = F, yearly = F)
+  
+  ### WARNING - update with latest dataset!
   vals <- readRDS("bestvals_LMEs.RDS")
   
   ## CN WARNING - this gives NAs for all size classes >90 - ask Julia if this is OK
@@ -50,7 +52,7 @@ rungridbyLME <- function(LMEnumber = 14,
   initial_results<-run_model(vals=vals[LMEnumber,],
                              input=lme_input_init,
                              withinput = F, 
-                             search_vol = search_vol)
+                             search_vol = 0.64)
   
   U.initial<-rowMeans(initial_results$U[,240:1440])
   V.initial<-rowMeans(initial_results$V[,240:1440])
@@ -64,6 +66,10 @@ rungridbyLME <- function(LMEnumber = 14,
   # get gridded inputs and run through all grid cells one timestep at a time
   
   ### WARNING - CN error here - CORRECTED due to wrong input resolution in function 
+  
+  ### WARNING LME.x and LME.y to correct (not sure where it comes from - e.g. merge or full_join)
+  ### corrected for gridded = F, now need to correct for gridded = T (or check that it is all good with this option too)
+  # also need to check yearly = TRUE or comment it to avoid use
   
   lme_inputs_grid<- get_lme_inputs(LMEnumber = LMEnumber, 
                                    gridded = T, 
@@ -151,7 +157,7 @@ rungridbyLME <- function(LMEnumber = 14,
                               ,xmin.consumer.v = -3
                               ,tmax = dim(er_grid[,-1])[2]/12
                               ,tstepspryr  =  12
-                              ,search_vol = search_vol
+                              ,search_vol = 0.64
                               ,fmort.u = f.u
                               ,fminx.u = f.minu
                               ,fmort.v = f.v
@@ -286,6 +292,9 @@ rungridbyLME <- function(LMEnumber = 14,
   
   totBiom <- grid_results$U + grid_results$V
   # averaging per decade. First decade is 108 month then the rest is 120
+  ### CN WARNING should this be 2040 now that we saved up to 2040? BELOW TOO
+  
+  
   decade_start <- c(1,seq(109,2041,by = 120))
   spectra_decade_avg <- array(NA, dim = c(dim(totBiom)[1:2],length(decade_start)),
                               dimnames = list("gridCell" = 1:dim(totBiom)[1],
@@ -435,8 +444,6 @@ rungridbyLME <- function(LMEnumber = 14,
     # toc()
     
     pdf(paste0(LME_path,"/plots.pdf"), onefile = T)
-    # tic()
-    # pdf("plots_old.pdf", height = 8, width = 6)
     print(p1)
     print(p2)
     print(p3)
@@ -446,7 +453,6 @@ rungridbyLME <- function(LMEnumber = 14,
     print(p7)
     print(p8)
     dev.off()
-    # toc()
   }
 }
 
