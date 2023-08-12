@@ -30,6 +30,11 @@ if (!gridded) {
  # read climate forcing inputs from THREDDS
  # lme_clim<-read_csv(file="http://portal.sf.utas.edu.au/thredds/fileServer/gem/fishmip/ISIMIP3a/InputData/DBPM_lme_inputs/obsclim/0.25deg/DBPM_LME_climate_inputs_slope.csv")
   
+  # # trial 
+  # LMEnumber = 1
+  # gridded = F
+  # yearly = F
+  
   lme_clim<-read_csv(file="/rd/gem/public/fishmip/ISIMIP3a/InputData/DBPM_lme_inputs/obsclim/0.25deg/DBPM_LME_climate_inputs_slope.csv")
  
   lme_clim<-subset(lme_clim, LME %in% LMEnumber)
@@ -214,10 +219,18 @@ lme_fish<-subset(lme_fish, LME %in% LMEnumber)
 
 #create monthly inputs for fishing
 lme_clim$Year<-year(lme_clim$t)
-lme_clim<-left_join(lme_clim,lme_fish,by="Year")
+lme_clim<-left_join(lme_clim,lme_fish,by=c ("Year", "LME", "area_m2"))
 # convert fishing effort and catch per yr (divide values by 12)
-lme_clim$NomActive_area_m2
-lme_clim$catch_tonnes_area_m2
+
+##### WARNING not sure this is OK Check With Julia.
+# Catch and effort are yearly values and here repeated for each months. Climate inputs are monthly values.
+# So need to /12 both catch and effort inputs
+# also here done considering aggregated inputs and runs (gridded = F, Yearly = F) so
+# need to consider the other options too
+lme_clim$NomActive<-lme_clim$NomActive/12
+lme_clim$NomActive_area_m2<-lme_clim$NomActive_area_m2/12
+lme_clim$catch_tonnes<-lme_clim$catch_tonnes/12
+lme_clim$catch_tonnes_area_m2<-lme_clim$catch_tonnes_area_m2/12
 
 
 # if (yearly!=T) {
@@ -231,11 +244,11 @@ return (lme_clim)
 
 
 # Function to run model
-run_model<-function(vals = X,input=lme_input,withinput=T, search_vol= search_vol){
+run_model<-function(vals = X,input=lme_input,withinput=T){
   
   # # CN trial 
-  # vals = vals[LMEnumber,]
-  # input=lme_input_init
+  # vals = unlist(bestvals[i,c(1:4)])
+  # input=lme_input
   # withinput=F
   
   
@@ -251,7 +264,7 @@ run_model<-function(vals = X,input=lme_input,withinput=T, search_vol= search_vol
                       ,xmin.consumer.v = -3
                       ,tmax = length(input$sst)/12
                       ,tstepspryr  =  12
-                      ,search_vol = search_vol
+                      ,search_vol = 0.64
                       ,fmort.u = f.u
                       ,fminx.u = f.minu
                       ,fmort.v = f.v
@@ -263,7 +276,7 @@ run_model<-function(vals = X,input=lme_input,withinput=T, search_vol= search_vol
                       ,sst = input$sst
                       ,sft = input$sbt
                       ,use.init = FALSE,effort = input$NomActive_area_m2)      
-  
+     
   # # CN CHECK
   # params$lat # NA
   # params$lon # NA
@@ -342,15 +355,18 @@ run_model<-function(vals = X,input=lme_input,withinput=T, search_vol= search_vol
   # saveRDS(result_set,filename=paste("dbpm_calibration_LMEnumber_catchability.rds"))
   
   if (withinput==T){
-  input$TotalUbiomass <- apply(result_set$U[params$ref:params$Nx,]*params$dx*10^params$x[params$ref:params$Nx],2,sum)*min(params$depth,100)
-  input$TotalVbiomass <- apply(result_set$V[params$ref.det:params$Nx,]*params$dx*10^params$x[params$ref.det:params$Nx],2,sum)*min(params$depth,100)
-  input$TotalW <- result_set$W[]*min(params$depth,100)
+  
+  # JB:  changed inputs to  m2 so no need to divide by depth here
+  # also added 1:params$Neq to same 2040 time steps instead of 2041
+  input$TotalUbiomass <- apply(result_set$U[params$ref:params$Nx,1:params$Neq]*params$dx*10^params$x[params$ref:params$Nx],2,sum)#*min(params$depth,100)
+  input$TotalVbiomass <- apply(result_set$V[params$ref.det:params$Nx,1:params$Neq]*params$dx*10^params$x[params$ref.det:params$Nx],2,sum)#*min(params$depth,100)
+  input$TotalW <- result_set$W[1:params$Neq]#*min(params$depth,100)
   
   #sum catches (currently in grams per m3 per year, across size classes) 
   # keep as grams per m2, then be sure to convert observed from tonnes per m2 per year to g.^-m2.^-yr (for each month)
   
-  input$TotalUcatch <- apply(result_set$Y.u[,]*params$dx,2,sum)*min(params$depth,100)
-  input$TotalVcatch <- apply(result_set$Y.v[,]*params$dx,2,sum)*min(params$depth,100)
+  input$TotalUcatch <- apply(result_set$Y.u[,1:params$Neq]*params$dx,2,sum)#*min(params$depth,100)
+  input$TotalVcatch <- apply(result_set$Y.v[,1:params$Neq]*params$dx,2,sum)#*min(params$depth,100)
   input$Totalcatch <- input$TotalUcatch +   input$TotalVcatch
   
   return(input)
@@ -369,10 +385,14 @@ getError <-function(vals = X,input=lme_input){
 result<-run_model(vals, input)
 
 ## aggregate by year (mean to conserve units)
-out <- result %>% group_by(Year) %>% filter(Year > "1949") %>% summarise(TotalCatchPerYr=mean(Totalcatch),ObsCatchPerYr=mean(catch_tonnes_area_m2,na.rm=T))
+out <- result %>% 
+  group_by(Year) %>% 
+  filter(Year > "1949") %>% 
+  summarise(TotalCatchPerYr=mean(Totalcatch),
+            ObsCatchPerYr=mean(catch_tonnes_area_m2,na.rm=T))
 
 ## convert units
-
+# CN from tonnes to g
 out$ObsCatchPerYr<-out$ObsCatchPerYr*1e6
 
 ## calculate and output error, convert observed from tonnes to grams (per m2 per yr)
@@ -391,11 +411,15 @@ return(rmse)
 
 LHSsearch<-function(X=LME,iter=1) {
 
+  # # trial 
+  # X = 1
+  # iter = 100
+  
   LMEnum=X
   set.seed(1234)
   # num "individual runs"
   num_iter=iter
-  sim <- data.frame(randomLHS(num_iter, 4))
+  sim <- data.frame(randomLHS(num_iter,4))
   # rows are iterations, columns are specific parameters
   colnames(sim)<-c("f.u","f.v","f.minu","f.minv")
   # adjust range of mi size params, others go form 0-1
@@ -476,7 +500,7 @@ run_model_timestep<-function(input=lme_inputs_igrid, vals = unlist(bestvals_LMEs
                       ,xmin.consumer.v = -3
                       ,tmax = 1/12
                       ,tstepspryr  =  12
-                      ,search_vol = 64*4
+                      ,search_vol = 0.64
                       ,fmort.u = f.u
                       ,fminx.u = f.minu
                       ,fmort.v = f.v
@@ -518,18 +542,21 @@ getGriddedOutputs<-function(input = lme_inputs_grid,
   # saveRDS(result_set,filename=paste("dbpm_calibration_LMEnumber_catchability.rds"))
   input$TotalUbiomass <-   input$TotalVbiomass <- input$TotalUcatch <- input$TotalVcatch<- input$Totalcatch <- NA  
   cells<-unique(input$cell)
-  depthadj<-ifelse(params$depth>100,100,params$depth)
+  
+  # remove depth adjustment as run inn /m2 now
+  # depthadj<-ifelse(params$depth>100,100,params$depth)
+  
   for(igrid in 1:length(cells)) {
     
     input[input$cell==cells[igrid],]$TotalUbiomass <- apply(results$U[igrid,params$ref:params$Nx,2:(params$Neq+1)]*params$dx*10^params$x[params$ref:params$Nx],
-                                                            2,sum,na.rm=T)*depthadj[igrid]
+                                                            2,sum,na.rm=T)#*depthadj[igrid]
     input[input$cell==cells[igrid],]$TotalVbiomass <- apply(results$V[igrid,params$ref:params$Nx,2:(params$Neq+1)]*params$dx*10^params$x[params$ref:params$Nx],
-                                                            2,sum,na.rm=T)*depthadj[igrid]
+                                                            2,sum,na.rm=T)#*depthadj[igrid]
     # input[input$t==time[itime]]$W <- results$W[,itime]*min(params$depth,100)
     #sum catches (currently in grams per m3 per year, across size classes) 
     #keep as grams per m2, then be sure to convert observed from tonnes per m2 per year to g.^-m2.^-yr (for each month)
-    input[input$cell==cells[igrid],]$TotalUcatch <- apply(results$Y.u[igrid,params$ref:params$Nx,2:(params$Neq+1)]*params$dx,2,sum,na.rm=T)*depthadj[igrid]
-    input[input$cell==cells[igrid],]$TotalVcatch <- apply(results$Y.v[igrid,params$ref:params$Nx,2:(params$Neq+1)]*params$dx,2,sum,na.rm=T)*depthadj[igrid]
+    input[input$cell==cells[igrid],]$TotalUcatch <- apply(results$Y.u[igrid,params$ref:params$Nx,2:(params$Neq+1)]*params$dx,2,sum,na.rm=T)#*depthadj[igrid]
+    input[input$cell==cells[igrid],]$TotalVcatch <- apply(results$Y.v[igrid,params$ref:params$Nx,2:(params$Neq+1)]*params$dx,2,sum,na.rm=T)#*depthadj[igrid]
     input[input$cell==cells[igrid],]$Totalcatch <- input[input$cell==cells[igrid],]$TotalUcatch +   input[input$cell==cells[igrid],]$TotalVcatch
   }
   
