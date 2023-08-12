@@ -435,8 +435,28 @@ combined_LME_inputs<-combined_LME_inputs %>%
 
 #### 5. add effort and catches ------
 
-# effort<-read_csv("/rd/gem/private/users/yannickr/DKRZ_EffortFiles/effort_histsoc_1841_2010.csv")
+# effort_old<-read_csv("/rd/gem/private/users/yannickr/DKRZ_EffortFiles/effort_histsoc_1841_2010_revised.csv") # also tried _adminCountry - all the same
 effort<-read_csv("/rd/gem/private/users/yannickr/DKRZ_EffortFiles/effort_isimip3a_histsoc_1841_2010.csv")
+
+# ### check LME 1 
+# effort_old<-effort_old %>% 
+#   filter(LME == 1) %>% 
+#   group_by(LME, Year) %>% 
+#   summarise(tot = sum(NomActive)) %>% 
+#   mutate(type = "old")
+# 
+# effort_new<-effort %>% 
+#   filter(LME == 1) %>% 
+#   group_by(LME, Year) %>% 
+#   summarise(tot = sum(NomActive)) %>% 
+#   mutate(type = "new")
+# 
+# all<-effort_old %>% 
+#   full_join(effort_new)
+# 
+# ggplot(all,aes(x = Year, y = tot, group = type, color = type))+
+#   geom_line()+
+#   facet_wrap(~type)
 
 # calculate climate inputs by Year as effort is by Year 
 # no - skip as Julia would like monthly inputs
@@ -626,6 +646,7 @@ head(DBPM_LME_climate_inputs_slope)
 
 #### 8. Save results ---- 
 
+# fwrite(x = DBPM_LME_climate_inputs_slope, file.path("/rd/gem/private/fishmip_inputs/ISIMIP3a/processed_forcings/lme_inputs/obsclim/0.25deg/", "DBPM_LME_climate_inputs_slope_depthIntegrated.csv")) # when depth integration in GetPPIntSlope() is on
 fwrite(x = DBPM_LME_climate_inputs_slope, file.path("/rd/gem/private/fishmip_inputs/ISIMIP3a/processed_forcings/lme_inputs/obsclim/0.25deg/", "DBPM_LME_climate_inputs_slope.csv"))
 fwrite(x = DBPM_LME_effort_catch_input, file.path("/rd/gem/private/fishmip_inputs/ISIMIP3a/processed_forcings/lme_inputs/obsclim/0.25deg/", "DBPM_LME_effort_catch_input.csv"))
 
