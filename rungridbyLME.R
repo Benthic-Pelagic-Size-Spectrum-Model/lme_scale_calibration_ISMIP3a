@@ -16,14 +16,14 @@ rm(list=ls())
 rungridbyLME <- function(LMEnumber = 14, 
                          yearly = FALSE, 
                          f.effort = TRUE, 
-                         search_vol = 0.64,
+                         # search_vol = 0.64,
                          savePlots = F){
   
   # # CN trial
-  # LMEnumber = 14
+  # LMEnumber = 1
   # yearly = FALSE
   # f.effort = FALSE
-  # search_vol = 0.64
+  # # search_vol = 0.64
   # savePlots = TRUE
 
   # setup
@@ -41,8 +41,9 @@ rungridbyLME <- function(LMEnumber = 14,
   # get initial values from LME-scale results
   lme_input_init <-get_lme_inputs(LMEnumber = LMEnumber, gridded = F, yearly = F)
   
-  ### WARNING - update with latest dataset!
-  vals <- readRDS("bestvals_LMEs.RDS")
+  ### WARNING - update with latest bestvalue dataset!
+  # vals <- readRDS("bestvals_LMEs.RDS")
+  vals <- readRDS("Output/bestvals_LMEs_iter_10.RDS")
   
   ## CN WARNING - this gives NAs for all size classes >90 - ask Julia if this is OK
   ## CN CORRECTION: added a search_vol param in function argument because
@@ -51,8 +52,7 @@ rungridbyLME <- function(LMEnumber = 14,
   # run model using time-averaged inputs
   initial_results<-run_model(vals=vals[LMEnumber,],
                              input=lme_input_init,
-                             withinput = F, 
-                             search_vol = 0.64)
+                             withinput = F)
   
   U.initial<-rowMeans(initial_results$U[,240:1440])
   V.initial<-rowMeans(initial_results$V[,240:1440])
@@ -66,18 +66,57 @@ rungridbyLME <- function(LMEnumber = 14,
   # get gridded inputs and run through all grid cells one timestep at a time
   
   ### WARNING - CN error here - CORRECTED due to wrong input resolution in function 
-  
-  ### WARNING LME.x and LME.y to correct (not sure where it comes from - e.g. merge or full_join)
-  ### corrected for gridded = F, now need to correct for gridded = T (or check that it is all good with this option too)
-  # also need to check yearly = TRUE or comment it to avoid use
-  
+  ### WARNING LME.x and LME.y to correct - CORRECTED
+  ### corrected for gridded = F, now need to correct for gridded = T - CHECKED 
+  # also need to check yearly = TRUE or comment it to avoid use - thus far not used. 
   lme_inputs_grid<- get_lme_inputs(LMEnumber = LMEnumber, 
                                    gridded = T, 
-                                   yearly = yearly)[,c("lat","lon", "LME.x", "t","sst",
+                                   yearly = yearly)[,c("lat","lon", "LME", "t","sst",
                                                        "sbt","er","intercept","slope",
                                                        "depth","NomActive_area_m2" )]
+
   time<-unique(lme_inputs_grid$t)
   grid_results<-vector("list", length(time))
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  # #### WARNING - more chcks here, er in particular
+  # # CN: check that aggregated inputs match gridded inputs - similar...
+  # # in one I calculated values using weihgted inputs across grid cells, in the other I caclaulted values for each grid cell
+  # unique(lme_input_init$Year)
+  # a<-lme_input_init %>%
+  #   group_by(Year) %>%
+  #   summarise(sst = mean(sst), 
+  #             sbt = mean(sbt), 
+  #             er = mean(er),
+  #             intercept = mean(intercept),
+  #             slope = mean(slope), 
+  #             depth = mean(depth), 
+  #             NomActive_area_m2 = mean(NomActive_area_m2, na.rm = T)) %>%
+  #   filter(Year >= 1950)
+  # 
+  # ## WARNING!!!!  - er is double here! NEED TO CHECK - checked and not sure why.... 
+  # b<-lme_inputs_grid %>%
+  #   mutate(Year = year(t)) %>%
+  #   group_by(Year) %>%
+  #   summarise(sst = mean(sst), 
+  #             sbt = mean(sbt), 
+  #             er = mean(er),
+  #             intercept = mean(intercept),
+  #             slope = mean(slope), 
+  #             depth = mean(depth), 
+  #             NomActive_area_m2 = mean(NomActive_area_m2, na.rm = T)) %>%
+  #   filter(Year >= 1950)
+  # 
   
   ##### reorganise outputs storage for later
   ntime<-length(time)
@@ -150,6 +189,9 @@ rungridbyLME <- function(LMEnumber = 14,
   # sst_grid[,3:dim(sst_grid)[2]] <- sst_grid[,2]
   # sbt_grid[,3:dim(sbt_grid)[2]] <- sbt_grid[,2]
   
+  ## WARNING search_vol to adjust according to runLMEcalibration
+  # now using 0.064 as in runLMEcalibration (LME_calibration.R/run_model())
+  
   # set up params for each month, across grid cells
   gridded_params <- sizeparam(equilibrium = FALSE
                               ,dx = 0.1
@@ -157,7 +199,7 @@ rungridbyLME <- function(LMEnumber = 14,
                               ,xmin.consumer.v = -3
                               ,tmax = dim(er_grid[,-1])[2]/12
                               ,tstepspryr  =  12
-                              ,search_vol = 0.64
+                              ,search_vol = 0.064
                               ,fmort.u = f.u
                               ,fminx.u = f.minu
                               ,fmort.v = f.v
@@ -187,19 +229,20 @@ rungridbyLME <- function(LMEnumber = 14,
                                   use.init = TRUE,
                                   burnin.len)
   
-  # Checks
-  U <- grid_results$U
-  U[1,,2041]
-  sum(is.na(U))
-  sum(any(U < 0))
-  dim(U) # this grid cell X size X time 
-  sum(U, na.rm = TRUE)
-  is.na(U[])
-
-  V <- grid_results$V
-  V[1,,2041]
-  sum(is.na(V))
-  sum(any(V < 0))
+  # # Checks
+  # U <- grid_results$U
+  # dim(U)
+  # U[1,,2040]
+  # sum(is.na(U))
+  # sum(any(U < 0))
+  # dim(U) # this grid cell X size X time 
+  # sum(U, na.rm = TRUE)
+  # is.na(U[])
+  # 
+  # V <- grid_results$V
+  # V[1,,2041]
+  # sum(is.na(V))
+  # sum(any(V < 0))
   
   saveRDS(grid_results,paste0(LME_path,"/grid_results.rds"))
   # grid_results <- readRDS(paste0(LME_path,"/grid_results.rds"))
@@ -212,11 +255,20 @@ rungridbyLME <- function(LMEnumber = 14,
   gridded_params$Neq <- 2040
   
   
+  
+  
+  
+  
+  
+  
+
+  
+  ### WARNING need to check depth integration and Neq - do they match what used for inputs and for runLMEcalibration? 
   out<-getGriddedOutputs(input=lme_inputs_grid,results=grid_results,params=gridded_params)
   saveRDS(out,paste0(LME_path,"/out_results.rds"))
   # out <- readRDS(paste0(LME_path,"/out_results.rds"))
   
-  
+  ## WARNING - Save results here and move plots to another function?? 
   #### CHECK OUTPUTS!!
   
   cells<-unique(out$cell)
@@ -292,6 +344,14 @@ rungridbyLME <- function(LMEnumber = 14,
   
   totBiom <- grid_results$U + grid_results$V
   # averaging per decade. First decade is 108 month then the rest is 120
+  
+  
+  
+  
+  
+  
+  
+  
   ### CN WARNING should this be 2040 now that we saved up to 2040? BELOW TOO
   
   
@@ -443,7 +503,9 @@ rungridbyLME <- function(LMEnumber = 14,
     # dev.off()
     # toc()
     
-    pdf(paste0(LME_path,"/plots.pdf"), onefile = T)
+    name = ifelse(f.effort == FALSE, "/plots_no_fishing.pdf", "/plots_fishing.pdf")
+    
+    pdf(paste0(LME_path, name ), onefile = T)
     print(p1)
     print(p2)
     print(p3)
@@ -460,12 +522,23 @@ rungridbyLME <- function(LMEnumber = 14,
 # test run for LME14 AND a different LME
 library(tictoc)
 tic()
-rungridbyLME(LMEnumber = 14, 
-             yearly = FALSE, 
-             f.effort = FALSE, 
-             search_vol = 0.64,
+rungridbyLME(LMEnumber = 1, 
+             yearly = FALSE, # for get_lme_inputs()
+             f.effort = FALSE, # for rungridbyLME()
+             # search_vol = 0.64,# for sizeparam() but indicated as value there now - can change. 
              savePlots = TRUE)
 toc() # 43.18363 min for LME 14 
+
+tic()
+rungridbyLME(LMEnumber = 1, 
+             yearly = FALSE, # for get_lme_inputs()
+             f.effort = TRUE, # for rungridbyLME()
+             # search_vol = 0.64,# for sizeparam() but indicated as value there now - can change. 
+             savePlots = TRUE)
+toc() # 43.18363 min for LME 14 
+
+
+
 
 # #Test 1- compare with results from DBPM, no fishing (checking code consistency)
 # # 1.	Test 1: run yearly = TRUE, no fishing (effort = 0), search volume = 64. 

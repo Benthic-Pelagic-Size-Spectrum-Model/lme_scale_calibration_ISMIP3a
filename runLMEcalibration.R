@@ -5,28 +5,53 @@
 # saveRDS(LMEs,"bestvals_LMEs.RDS")
 source("LME_calibration.R")
 # faster using pbsapply, in the LHSsearch pbapply has cl=6 which uses cluster to run in parallel, but here it is run sequentially if cl is not specified.
-lmenum=1 #66
-no_iter = 100 # 100 
+lmenum= 66
+no_iter = 10 # 100 
 no_cores <- parallel::detectCores() - 1
-lmes<-t(pbapply::pbsapply(X=1:lmenum,LHSsearch,iter=no_iter))
+lmes<-t(pbapply::pbsapply(X=1:lmenum,LHSsearch,iter=no_iter)) 
 saveRDS(lmes,paste0("Output/bestvals_LMEs_iter_",no_iter,".RDS"))
+
+# WARNINGs: 
+# 1. no good match between observed and modelled catches with these inputs 
+# tried changing the units of catches and effort but not much changes -> effort/12, ctahes/12 as per monthly climate inputs  
+
+# 2. some LME (e.g. LME 4) do not run because the model called by LHSsearch does not produce catches 
+# in run_model() I tried: 
+# remove effort -> input$NomActive_area_m2<-0 # still no biomass 
+# also increase search_vol to 6.4 # even worst 
+# increase to 64 # even worst 
+# decrease to 0.064 # now you have biomass!
+# add effort back in # now you also have catches but these are very low... 
+
+# 3. catches are always too small compared to observed data - F.mort estimated in LHSsearch can only go to 1, 
+# so increase effort in get_lme_inputs() by 
+# 100 - small improvement 
+# 1000 - small improvement 
+# 10000 - Now pretty good and same as CalibrationPlot.pdf for LME 1 
+# OR 
+# should you run the model with an initial/calibrated effort value, than use relative changes?  
+
+# now try all LMEs with these parameters: 
+# effort/12 then effort *10000
+# search_vol = 0.064 
+# OK bestvals for all LMEs! 
+
+# now try increasing search_vol again to 0.64 
 
 ############### Make plots
 
 #### Check other model performance indicators using the above estimates
 bestvals<-data.frame(readRDS(paste0("Output/bestvals_LMEs_iter_",no_iter,".RDS")))
 
-### WARNING for some LME the above did not work... e.g. LME 4. 
-
 # add column for correlation:
 bestvals$cor<-rep(0,lmenum)
 
-# pdf(paste0("CalibrationPlots_iter_",no_iter,".pdf"),height = 6, width = 8)
+pdf(paste0("Output/CalibrationPlots_iter_",no_iter,".pdf"),height = 6, width = 8)
 
 for (i in 1:66){
   
   # trial 
-  i = 1
+  # i = 4
   
   lme_input<-get_lme_inputs(LMEnumber=i, gridded=F,yearly=F)
   
@@ -41,6 +66,7 @@ for (i in 1:66){
   # convert units
   # CN from tonnes to g
   out$ObsCatchPerYr<-out$ObsCatchPerYr*1e6
+  # out$ObsCatchPerYr<-out$ObsCatchPerYr/200
   
   ### CHECK OPTIONS: 
   
@@ -116,7 +142,6 @@ for (i in 1:66){
 }
 
 dev.off()
-
 saveRDS(bestvals,paste0("Output/bestvals_LMEs_cor_",no_iter,".RDS"))
 
 #### TO DO: Check other model performance indicators using the above estimates

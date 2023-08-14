@@ -25,6 +25,11 @@ source(file = "dbpm_model_functions.R")
 
 get_lme_inputs<-function(LMEnumber=14, gridded=F,yearly=F){
 
+  # # trial
+  # LMEnumber=1
+  # gridded=T
+  # yearly=F
+  
 if (!gridded) {
 
  # read climate forcing inputs from THREDDS
@@ -118,6 +123,11 @@ if (gridded) {
     filename =paste("/rd/gem/private/fishmip_inputs/ISIMIP3a/processed_forcings/lme_inputs_gridcell/obsclim/1deg/observed_LME_",LMEnumber,".csv",sep="")
     # filename="observed_LME_14.csv"
     lme_clim<-read_csv(file=filename)
+
+    # multiple grids mean multiple area_m2 ... 
+    unique(lme_clim$area_m2)
+    # and multiple depths
+    unique(lme_clim$depth)
     
     if (yearly){
 
@@ -210,35 +220,59 @@ if (gridded) {
     
  }
   
+  # read climate fishing inputs from THREDDS
+  #lme_fish<-read_csv(file="http://portal.sf.utas.edu.au/thredds/fileServer/gem/fishmip/ISIMIP3a/InputData/DBPM_lme_inputs/obsclim/0.25deg/DBPM_LME_effort_catch_input.csv")
+  lme_fish<-read_csv(file="/rd/gem/public/fishmip/ISIMIP3a/InputData/DBPM_lme_inputs/obsclim/0.25deg/DBPM_LME_effort_catch_input.csv")
+  lme_fish<-subset(lme_fish, LME %in% LMEnumber)
+
+  # CN remove raw effort and catches as these are at the whole LME level (sum) hence not meaningful 
+  lme_fish<-lme_fish %>% 
+    select(-c(NomActive, catch_tonnes))
   
-# read climate fishing inputs from THREDDS
-#lme_fish<-read_csv(file="http://portal.sf.utas.edu.au/thredds/fileServer/gem/fishmip/ISIMIP3a/InputData/DBPM_lme_inputs/obsclim/0.25deg/DBPM_LME_effort_catch_input.csv")
-lme_fish<-read_csv(file="/rd/gem/public/fishmip/ISIMIP3a/InputData/DBPM_lme_inputs/obsclim/0.25deg/DBPM_LME_effort_catch_input.csv")
+  #create monthly inputs for fishing
+  lme_clim$Year<-year(lme_clim$t)
 
-lme_fish<-subset(lme_fish, LME %in% LMEnumber)
+  if(gridded == FALSE){
+    # here we don't have multiple grids - so only 1 (weighted.mean) depth and 1 (weighted.mean) area 
+    # which should be the same for lme_clim and lme_fish - NEED TO CHECK 
+    lme_clim<-lme_clim %>% 
+      left_join(lme_fish, by=c ("Year", "LME", "area_m2"))
+    }else if(gridded == TRUE){
+    # here we have multiple grids - so multiple depth and area
+    # need to remove area and depth before merging
+    # NomActive_area_m2 and catch_tonnes_area_m2 are already /m2 and hence work at the grid cell level too
+    lme_fish<-lme_fish %>% 
+      select(-c(area_m2, deptho_m)) %>% 
+      unique()
+    lme_clim<-lme_clim %>% 
+      left_join(lme_fish,by=c ("Year", "LME")) 
+    
+  }
+    
+  # convert fishing effort and catch per yr (divide values by 12)
 
-#create monthly inputs for fishing
-lme_clim$Year<-year(lme_clim$t)
-lme_clim<-left_join(lme_clim,lme_fish,by=c ("Year", "LME", "area_m2"))
-# convert fishing effort and catch per yr (divide values by 12)
+  # ##### WARNING not sure this is OK Check With Julia.
+  # # Catch and effort are yearly values and here repeated for each months. Climate inputs are monthly values.
+  # # So need to /12 both catch and effort inputs
+  # # also here done considering aggregated inputs and runs (gridded = F, Yearly = F) so
+  # # need to consider the other options too
+  # lme_clim$NomActive<-lme_clim$NomActive/12
+  lme_clim$NomActive_area_m2<-lme_clim$NomActive_area_m2/12
+  # lme_clim$catch_tonnes<-lme_clim$catch_tonnes/12
+  lme_clim$catch_tonnes_area_m2<-lme_clim$catch_tonnes_area_m2/12
 
-##### WARNING not sure this is OK Check With Julia.
-# Catch and effort are yearly values and here repeated for each months. Climate inputs are monthly values.
-# So need to /12 both catch and effort inputs
-# also here done considering aggregated inputs and runs (gridded = F, Yearly = F) so
-# need to consider the other options too
-lme_clim$NomActive<-lme_clim$NomActive/12
-lme_clim$NomActive_area_m2<-lme_clim$NomActive_area_m2/12
-lme_clim$catch_tonnes<-lme_clim$catch_tonnes/12
-lme_clim$catch_tonnes_area_m2<-lme_clim$catch_tonnes_area_m2/12
+  # try increasing effort as catches are too low!
+  # lme_clim$NomActive<-lme_clim$NomActive*10000
+  lme_clim$NomActive_area_m2<-lme_clim$NomActive_area_m2*10000
+  
+  # mean(lme_clim$NomActive_area_m2, na.rm = T)
+  
+  # if (yearly!=T) {
+  #   # could use a smoother to get intrannual variation working better
+  # }
 
-
-# if (yearly!=T) {
-#   # could use a smoother to get intrannual variation working better
-# }
-
-#TO DO HERE: need to add a spin-up to these inputs prior to 1841 - 100 yrs at first value
-return (lme_clim)
+  #TO DO HERE: need to add a spin-up to these inputs prior to 1841 - 100 yrs at first value
+  return (lme_clim)
 }
 
 
@@ -246,11 +280,10 @@ return (lme_clim)
 # Function to run model
 run_model<-function(vals = X,input=lme_input,withinput=T){
   
-  # # CN trial 
-  # vals = unlist(bestvals[i,c(1:4)])
+  # # CN trial
+  # vals = sim
   # input=lme_input
-  # withinput=F
-  
+  # withinput=T
   
   f.u<-as.numeric(vals[1])
   f.v<-as.numeric(vals[2])
@@ -264,7 +297,7 @@ run_model<-function(vals = X,input=lme_input,withinput=T){
                       ,xmin.consumer.v = -3
                       ,tmax = length(input$sst)/12
                       ,tstepspryr  =  12
-                      ,search_vol = 0.64
+                      ,search_vol = 0.064
                       ,fmort.u = f.u
                       ,fminx.u = f.minu
                       ,fmort.v = f.v
@@ -275,69 +308,8 @@ run_model<-function(vals = X,input=lme_input,withinput=T){
                       ,slope = input$slope
                       ,sst = input$sst
                       ,sft = input$sbt
-                      ,use.init = FALSE,effort = input$NomActive_area_m2)      
-     
-  # # CN CHECK
-  # params$lat # NA
-  # params$lon # NA
-  # params$depth
-  # params$pp
-  # params$r.plank # also negative values 
-  # params$er
-  # params$sst
-  # params$sft
-  # params$Fmort.u
-  # params$Fmort.v
-  # params$min.fishing.size.u
-  # params$min.fishing.size.v
-  # params$effort
-  # params$pref.ben
-  # params$det.coupling
-  # params$sinking.rate
-  # params$q0
-  # params$sd.q
-  # params$A.u # 64
-  # params$A.v # 6.4
-  # params$alpha.u
-  # params$alpha.v
-  # params$def.high
-  # params$def.low
-  # params$K.u
-  # params$K.v
-  # params$K.d
-  # params$AM.u
-  # params$AM.v
-  # params$handling
-  # params$repro.on
-  # params$c1
-  # params$E
-  # params$Boltzmann
-  # params$mu0
-  # params$xs
-  # params$p.s
-  # params$k.sm
-  # params$dx
-  # params$xmin
-  # params$x1
-  # params$x1.det
-  # params$xmax
-  # params$xmax2
-  # params$x
-  # params$Nx
-  # params$ref
-  # params$ref.det
-  # params$Fref.u
-  # params$Fref.v
-  # params$idx
-  # params$tmax # 170 
-  # params$delta_t
-  # params$Neq # 2040 
-  # params$Ngrid # NA
-  # params$U.init
-  # params$V.init
-  # params$W.init
-  # params$equilibrium
-  # params$result_set
+                      ,use.init = FALSE
+                      ,effort = input$NomActive_area_m2)      
   
   # run model through time
 
@@ -359,6 +331,8 @@ run_model<-function(vals = X,input=lme_input,withinput=T){
   # JB:  changed inputs to  m2 so no need to divide by depth here
   # also added 1:params$Neq to same 2040 time steps instead of 2041
   input$TotalUbiomass <- apply(result_set$U[params$ref:params$Nx,1:params$Neq]*params$dx*10^params$x[params$ref:params$Nx],2,sum)#*min(params$depth,100)
+  input$TotalUbiomass 
+  
   input$TotalVbiomass <- apply(result_set$V[params$ref.det:params$Nx,1:params$Neq]*params$dx*10^params$x[params$ref.det:params$Nx],2,sum)#*min(params$depth,100)
   input$TotalW <- result_set$W[1:params$Neq]#*min(params$depth,100)
   
@@ -382,25 +356,29 @@ run_model<-function(vals = X,input=lme_input,withinput=T){
 # # Error function
 getError <-function(vals = X,input=lme_input){
 
-result<-run_model(vals, input)
+  # # trial 
+  # vals = sim
+  # input=lme_input
+  
+  result<-run_model(vals, input)
 
-## aggregate by year (mean to conserve units)
-out <- result %>% 
-  group_by(Year) %>% 
-  filter(Year > "1949") %>% 
-  summarise(TotalCatchPerYr=mean(Totalcatch),
-            ObsCatchPerYr=mean(catch_tonnes_area_m2,na.rm=T))
+  ## aggregate by year (mean to conserve units)
+  out <- result %>% 
+    group_by(Year) %>% 
+    filter(Year > "1949") %>% 
+    summarise(TotalCatchPerYr=mean(Totalcatch),
+              ObsCatchPerYr=mean(catch_tonnes_area_m2,na.rm=T))
 
-## convert units
-# CN from tonnes to g
-out$ObsCatchPerYr<-out$ObsCatchPerYr*1e6
+  ## convert units
+  # CN from tonnes to g
+  out$ObsCatchPerYr<-out$ObsCatchPerYr*1e6
 
-## calculate and output error, convert observed from tonnes to grams (per m2 per yr)
-out$squared_error <- (out$ObsCatchPerYr- out$TotalCatchPerYr)^2
+  ## calculate and output error, convert observed from tonnes to grams (per m2 per yr)
+  out$squared_error <- (out$ObsCatchPerYr- out$TotalCatchPerYr)^2
 
-rmse<-sqrt(sum(out$squared_error,na.rm=T)/sum(!is.na(out$squared_error)))
+  rmse<-sqrt(sum(out$squared_error,na.rm=T)/sum(!is.na(out$squared_error)))
 
-return(rmse)
+  return(rmse)
 
 }
 
@@ -411,9 +389,9 @@ return(rmse)
 
 LHSsearch<-function(X=LME,iter=1) {
 
-  # # trial 
-  # X = 1
-  # iter = 100
+  # # trial
+  # X = 4
+  # iter = 10
   
   LMEnum=X
   set.seed(1234)
@@ -430,18 +408,18 @@ LHSsearch<-function(X=LME,iter=1) {
   
   
    
-# cl <- makeCluster(6)
-# #setDefaultCluster(cl = cl)
-# clusterExport(cl, varlist = c("LMEnum","lme_input","sim","iter"),envir=environment())
-# clusterEvalQ(cl, {
-#   source("LME_calibration.R")
-#    })
-# 
+  # cl <- makeCluster(6)
+  # #setDefaultCluster(cl = cl)
+  # clusterExport(cl, varlist = c("LMEnum","lme_input","sim","iter"),envir=environment())
+  # clusterEvalQ(cl, {
+  #   source("LME_calibration.R")
+  #    })
+  # 
 
-# in pbapply setting cl = 6 calls mcapply to set up cluster (so dont need above stuff)
-sim$rmse<-pbapply(sim,1, getError, input=lme_input,cl=6)
+  # in pbapply setting cl = 6 calls mcapply to set up cluster (so dont need above stuff)
+  sim$rmse<-pbapply(sim,1, getError, input=lme_input,cl=6)
   
-#stopCluster(cl)
+  #stopCluster(cl)
 
   #X<-readRDS(file = "lhs_res_LME42_b.RDS")
   # check this time param set with lowest error
