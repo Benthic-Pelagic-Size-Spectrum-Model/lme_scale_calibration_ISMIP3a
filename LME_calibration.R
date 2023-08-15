@@ -26,10 +26,10 @@ source(file = "dbpm_model_functions.R")
 get_lme_inputs<-function(LMEnumber=14, gridded=F,yearly=F){
 
   # # trial
-  # LMEnumber=1
+  # LMEnumber=14
   # gridded=T
   # yearly=F
-  
+
 if (!gridded) {
 
  # read climate forcing inputs from THREDDS
@@ -252,18 +252,18 @@ if (gridded) {
   # convert fishing effort and catch per yr (divide values by 12)
 
   # ##### WARNING not sure this is OK Check With Julia.
-  # # Catch and effort are yearly values and here repeated for each months. Climate inputs are monthly values.
-  # # So need to /12 both catch and effort inputs
+  # # Catch and effort are yearly values and here repeated for each months. 
+  # # Climate inputs are gm2 values (no time dimension, so??) repeated each month.
   # # also here done considering aggregated inputs and runs (gridded = F, Yearly = F) so
   # # need to consider the other options too
   # lme_clim$NomActive<-lme_clim$NomActive/12
-  lme_clim$NomActive_area_m2<-lme_clim$NomActive_area_m2/12
+  # lme_clim$NomActive_area_m2<-lme_clim$NomActive_area_m2/12
   # lme_clim$catch_tonnes<-lme_clim$catch_tonnes/12
-  lme_clim$catch_tonnes_area_m2<-lme_clim$catch_tonnes_area_m2/12
+  # lme_clim$catch_tonnes_area_m2<-lme_clim$catch_tonnes_area_m2/12
 
   # try increasing effort as catches are too low!
-  # lme_clim$NomActive<-lme_clim$NomActive*10000
-  lme_clim$NomActive_area_m2<-lme_clim$NomActive_area_m2*10000
+  # lme_clim$NomActive<-lme_clim$NomActive*1000
+  lme_clim$NomActive_area_m2<-lme_clim$NomActive_area_m2*1000
   
   # mean(lme_clim$NomActive_area_m2, na.rm = T)
   
@@ -390,7 +390,7 @@ getError <-function(vals = X,input=lme_input){
 LHSsearch<-function(X=LME,iter=1) {
 
   # # trial
-  # X = 4
+  # X = 14
   # iter = 10
   
   LMEnum=X
@@ -406,7 +406,10 @@ LHSsearch<-function(X=LME,iter=1) {
   
   lme_input<-get_lme_inputs(LMEnumber=LMEnum)
   
-  
+  # # check averadge and gridded inputs are the same in terms of effort 
+  # lme_input[,c(2,15,16)]
+  # lme_input_gridded<-get_lme_inputs(LMEnumber=LMEnum, gridded=T)
+  # lme_input_gridded[,c(4,16,17)]
    
   # cl <- makeCluster(6)
   # #setDefaultCluster(cl = cl)

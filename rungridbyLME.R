@@ -19,12 +19,12 @@ rungridbyLME <- function(LMEnumber = 14,
                          # search_vol = 0.64,
                          savePlots = F){
   
-  # # CN trial
-  # LMEnumber = 1
-  # yearly = FALSE
-  # f.effort = FALSE
-  # # search_vol = 0.64
-  # savePlots = TRUE
+  # CN trial
+  LMEnumber = 14
+  yearly = FALSE
+  f.effort = TRUE
+  # search_vol = 0.64
+  savePlots = TRUE
 
   # setup
   source("LME_calibration.R")
@@ -148,6 +148,11 @@ rungridbyLME <- function(LMEnumber = 14,
   effort_grid<-lme_inputs_grid %>%
     pivot_wider(id_cols=cell,names_from = t, values_from = NomActive_area_m2)
   
+  # # check effort # very low 
+  # effort_grid[1:10, 1:10]
+  
+  
+  
   ## Creating a 100 years stable spinup before 1841
   spinFunc <- function(var_name){
     dates <- seq(as.Date("1741-01-01"), as.Date("1840-12-01"), by = "month")
@@ -175,12 +180,16 @@ rungridbyLME <- function(LMEnumber = 14,
   # cell <- cell[1:(length(cell)-2)] #the code above produces a NA with the last cell
   
   if(f.effort){
-    f.u<-as.numeric(vals[1])
-    f.v<-as.numeric(vals[2])
+    # CN correct 
+    f.u<-as.numeric(vals[LMEnumber,1])
+    f.v<-as.numeric(vals[LMEnumber,2])
+    # f.u<-as.numeric(vals[1])
+    # f.v<-as.numeric(vals[2])
   } else  f.u <- f.v <- 0
   
-  f.minu<-as.numeric(vals[3])
-  f.minv<-as.numeric(vals[4])
+  # CN corrected by adding LMEnumber 
+  f.minu<-as.numeric(vals[LMEnumber,3])
+  f.minv<-as.numeric(vals[LMEnumber,4])
   
   # Making values constant through time
   # er_grid[,3:dim(er_grid)[2]] <- er_grid[,2]
@@ -505,7 +514,7 @@ rungridbyLME <- function(LMEnumber = 14,
     
     name = ifelse(f.effort == FALSE, "/plots_no_fishing.pdf", "/plots_fishing.pdf")
     
-    pdf(paste0(LME_path, name ), onefile = T)
+    pdf(paste0(LME_path, name), height = 8, width = 6, onefile = T)
     print(p1)
     print(p2)
     print(p3)
@@ -515,6 +524,21 @@ rungridbyLME <- function(LMEnumber = 14,
     print(p7)
     print(p8)
     dev.off()
+    
+    # print also in local for fast checking 
+    name = ifelse(f.effort == FALSE, "_no_fishing.pdf", "_fishing.pdf")
+    pdf(paste0("Output/LME_",LMEnumber, name), height = 8, width = 6, onefile = T)
+    print(p1)
+    print(p2)
+    print(p3)
+    print(p4)
+    print(p5)
+    print(p6)
+    print(p7)
+    print(p8)
+    dev.off()
+    
+    
   }
 }
 
@@ -522,7 +546,7 @@ rungridbyLME <- function(LMEnumber = 14,
 # test run for LME14 AND a different LME
 library(tictoc)
 tic()
-rungridbyLME(LMEnumber = 1, 
+rungridbyLME(LMEnumber = 14, 
              yearly = FALSE, # for get_lme_inputs()
              f.effort = FALSE, # for rungridbyLME()
              # search_vol = 0.64,# for sizeparam() but indicated as value there now - can change. 
@@ -530,7 +554,7 @@ rungridbyLME(LMEnumber = 1,
 toc() # 43.18363 min for LME 14 
 
 tic()
-rungridbyLME(LMEnumber = 1, 
+rungridbyLME(LMEnumber = 14, 
              yearly = FALSE, # for get_lme_inputs()
              f.effort = TRUE, # for rungridbyLME()
              # search_vol = 0.64,# for sizeparam() but indicated as value there now - can change. 
