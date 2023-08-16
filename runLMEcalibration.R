@@ -4,44 +4,63 @@
 # for (i in 1:lmenum) LMEs[i,c(2:6)]<-LHSsearch(LMEs[i,1],iter=100)
 # saveRDS(LMEs,"bestvals_LMEs.RDS")
 source("LME_calibration.R")
+library(tictoc)
 # faster using pbsapply, in the LHSsearch pbapply has cl=6 which uses cluster to run in parallel, but here it is run sequentially if cl is not specified.
-lmenum= 66
-no_iter = 10 # 100 
+lmenum= 10 #66 # CHECK FIRST 10 
+no_iter = 10 
 no_cores <- parallel::detectCores() - 1
+tic()
 lmes<-t(pbapply::pbsapply(X=1:lmenum,LHSsearch,iter=no_iter)) 
+toc()
 saveRDS(lmes,paste0("Output/bestvals_LMEs_iter_",no_iter,".RDS"))
 
 # WARNINGs: 
-# 1. no good match between observed and modelled catches with these inputs 
-# tried changing the units of catches and effort but not much changes -> effort/12, ctahes/12 as per monthly climate inputs  
 
-# 2. some LME (e.g. LME 4) do not run because the model called by LHSsearch does not produce catches 
+# 2. some LME (e.g. LME 4) do not run because the model called by LHSsearch does not produce biomass 
 # in run_model() I tried: 
 # remove effort -> input$NomActive_area_m2<-0 # still no biomass 
 # also increase search_vol to 6.4 # even worst 
 # increase to 64 # even worst 
-# decrease to 0.064 # now you have biomass!
-# add effort back in # now you also have catches but these are very low... 
+# decrease to 0.064 # now we have biomass!
+# add effort back in # now we also have catches but these are very low... 
 
 # 3. catches are always too small compared to observed data - F.mort estimated in LHSsearch can only go to 1, 
 # so increase effort in get_lme_inputs() by 
 # 100 - small improvement 
-# 1000 - small improvement 
-# 10000 - Now pretty good and same as CalibrationPlot.pdf for LME 1 
-# OR 
-# should you run the model with an initial/calibrated effort value, than use relative changes?  
-
+# 1000 - Now pretty good and same as CalibrationPlot.pdf for LME 1 
 # now try all LMEs with these parameters: 
 # effort/12 then effort *10000
 # search_vol = 0.064 
-# OK bestvals for all LMEs! 
+# OK bestvals for all LMEs but approach not meaningful  
 
-# now try increasing search_vol again to 0.64 
+# SO
+# use relative effort (effort_m2/max(effort_m2) which will have higher values than effort_m2, with the highest been 1)  
+# relative effort for each LME - not working as well as the above. 
+# Catches are much lower than observed but for LME 39 which shows opposite pattern
+# doing this also means that effort is equal across LMEs (from 1 to close to 0 in each LME)
+# relative effort across LMEs - same as above   
+
+# now try increasing search_vol again to 0.64
+# relative effort for each LME - not working as well as the above
+# relative effort across LMEs - working well (best option) but LME 4 and others not working again. 
 
 ############### Make plots
 
 #### Check other model performance indicators using the above estimates
 bestvals<-data.frame(readRDS(paste0("Output/bestvals_LMEs_iter_",no_iter,".RDS")))
+
+### has the function above worked for all LMEs?
+# class(bestvals)
+# dim(bestvals)
+# str(bestvals)
+
+# bestvals$LME = rownames(bestvals)
+# strange format - not working: 
+# x <- subset(bestvals, !complete.cases(bestvals))
+
+
+
+
 
 # add column for correlation:
 bestvals$cor<-rep(0,lmenum)
@@ -50,8 +69,10 @@ pdf(paste0("Output/CalibrationPlots_iter_",no_iter,".pdf"),height = 6, width = 8
 
 for (i in 1:66){
   
-  # trial 
-  # i = 4
+  # # trial 
+  # i = 1
+
+  if(length(unlist(bestvals[i,c(1:4)]))>0){ # run only if the function above produced bestvalues
   
   lme_input<-get_lme_inputs(LMEnumber=i, gridded=F,yearly=F)
   
@@ -66,7 +87,6 @@ for (i in 1:66){
   # convert units
   # CN from tonnes to g
   out$ObsCatchPerYr<-out$ObsCatchPerYr*1e6
-  # out$ObsCatchPerYr<-out$ObsCatchPerYr/200
   
   ### CHECK OPTIONS: 
   
@@ -117,6 +137,7 @@ for (i in 1:66){
     labs(x = 'Year',
          y = 'Grams per m2 per year') 
   
+  p1
   
   modelled <- ggplot() +
     geom_line(data = out, aes(x = Year, y = TotalCatchPerYr)) +
@@ -138,11 +159,11 @@ for (i in 1:66){
   p3<-p1+p2
   
   print(p3)
-  
-}
+  } # end of if(unlist ...)
+   }
 
-dev.off()
-saveRDS(bestvals,paste0("Output/bestvals_LMEs_cor_",no_iter,".RDS"))
+# dev.off()
+# saveRDS(bestvals,paste0("Output/bestvals_LMEs_cor_",no_iter,".RDS"))
 
 #### TO DO: Check other model performance indicators using the above estimates
 

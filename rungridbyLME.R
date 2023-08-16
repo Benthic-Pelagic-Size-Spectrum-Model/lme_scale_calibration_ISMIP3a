@@ -19,12 +19,12 @@ rungridbyLME <- function(LMEnumber = 14,
                          # search_vol = 0.64,
                          savePlots = F){
   
-  # CN trial
-  LMEnumber = 14
-  yearly = FALSE
-  f.effort = TRUE
-  # search_vol = 0.64
-  savePlots = TRUE
+  # # CN trial
+  # LMEnumber = 14
+  # yearly = FALSE
+  # f.effort = TRUE
+  # # search_vol = 0.64
+  # savePlots = TRUE
 
   # setup
   source("LME_calibration.R")
@@ -73,7 +73,7 @@ rungridbyLME <- function(LMEnumber = 14,
                                    gridded = T, 
                                    yearly = yearly)[,c("lat","lon", "LME", "t","sst",
                                                        "sbt","er","intercept","slope",
-                                                       "depth","NomActive_area_m2" )]
+                                                       "depth","NomActive_area_m2_relative" )]
 
   time<-unique(lme_inputs_grid$t)
   grid_results<-vector("list", length(time))
@@ -145,8 +145,9 @@ rungridbyLME <- function(LMEnumber = 14,
   sbt_grid<-lme_inputs_grid %>%
     pivot_wider(id_cols=cell,names_from = t, values_from = sbt)
   
+  ## NOTE - here is where you change fishing effort 
   effort_grid<-lme_inputs_grid %>%
-    pivot_wider(id_cols=cell,names_from = t, values_from = NomActive_area_m2)
+    pivot_wider(id_cols=cell,names_from = t, values_from = NomActive_area_m2_relative)
   
   # # check effort # very low 
   # effort_grid[1:10, 1:10]

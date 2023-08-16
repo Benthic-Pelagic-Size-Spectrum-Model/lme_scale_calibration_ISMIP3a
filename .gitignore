@@ -6,3 +6,5 @@ LME_14.rds
 observed_LME_14.csv
 .Rapp.history
 grid_results.RDS
+*.pdf
+*.RDS

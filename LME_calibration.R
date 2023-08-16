@@ -26,8 +26,8 @@ source(file = "dbpm_model_functions.R")
 get_lme_inputs<-function(LMEnumber=14, gridded=F,yearly=F){
 
   # # trial
-  # LMEnumber=14
-  # gridded=T
+  # LMEnumber=1
+  # gridded=F
   # yearly=F
 
 if (!gridded) {
@@ -223,11 +223,19 @@ if (gridded) {
   # read climate fishing inputs from THREDDS
   #lme_fish<-read_csv(file="http://portal.sf.utas.edu.au/thredds/fileServer/gem/fishmip/ISIMIP3a/InputData/DBPM_lme_inputs/obsclim/0.25deg/DBPM_LME_effort_catch_input.csv")
   lme_fish<-read_csv(file="/rd/gem/public/fishmip/ISIMIP3a/InputData/DBPM_lme_inputs/obsclim/0.25deg/DBPM_LME_effort_catch_input.csv")
+  
+  # check dataset to se if you can calcualte relative effort here or need to do in 01_getgriddedinputs.R
+  # head(lme_fish)
+  
+  # use relative effort - across all LMEs 
+  lme_fish$NomActive_area_m2_relative<-lme_fish$NomActive_area_m2/max(lme_fish$NomActive_area_m2)
+  
+  # subset data 
   lme_fish<-subset(lme_fish, LME %in% LMEnumber)
-
-  # CN remove raw effort and catches as these are at the whole LME level (sum) hence not meaningful 
-  lme_fish<-lme_fish %>% 
-    select(-c(NomActive, catch_tonnes))
+  
+  # # or use relative effort - for each LME independently 
+  # lme_fish$NomActive_relative<-lme_fish$NomActive/max(lme_fish$NomActive) # same as below
+  # lme_fish$NomActive_area_m2_relative<-lme_fish$NomActive_area_m2/max(lme_fish$NomActive_area_m2)
   
   #create monthly inputs for fishing
   lme_clim$Year<-year(lme_clim$t)
@@ -249,6 +257,7 @@ if (gridded) {
     
   }
     
+  # View(lme_clim)
   # convert fishing effort and catch per yr (divide values by 12)
 
   # ##### WARNING not sure this is OK Check With Julia.
@@ -261,11 +270,10 @@ if (gridded) {
   # lme_clim$catch_tonnes<-lme_clim$catch_tonnes/12
   # lme_clim$catch_tonnes_area_m2<-lme_clim$catch_tonnes_area_m2/12
 
-  # try increasing effort as catches are too low!
+  # try increasing effort as catches are too low - this works. 
   # lme_clim$NomActive<-lme_clim$NomActive*1000
-  lme_clim$NomActive_area_m2<-lme_clim$NomActive_area_m2*1000
   
-  # mean(lme_clim$NomActive_area_m2, na.rm = T)
+  # select(lme_clim, c(t, NomActive, NomActive_area_m2, NomActive_relative, NomActive_area_m2_relative))
   
   # if (yearly!=T) {
   #   # could use a smoother to get intrannual variation working better
@@ -297,7 +305,7 @@ run_model<-function(vals = X,input=lme_input,withinput=T){
                       ,xmin.consumer.v = -3
                       ,tmax = length(input$sst)/12
                       ,tstepspryr  =  12
-                      ,search_vol = 0.064
+                      ,search_vol = 0.64
                       ,fmort.u = f.u
                       ,fminx.u = f.minu
                       ,fmort.v = f.v
@@ -309,7 +317,7 @@ run_model<-function(vals = X,input=lme_input,withinput=T){
                       ,sst = input$sst
                       ,sft = input$sbt
                       ,use.init = FALSE
-                      ,effort = input$NomActive_area_m2)      
+                      ,effort = input$NomActive_area_m2_relative)      
   
   # run model through time
 
@@ -390,7 +398,7 @@ getError <-function(vals = X,input=lme_input){
 LHSsearch<-function(X=LME,iter=1) {
 
   # # trial
-  # X = 14
+  # X = 1
   # iter = 10
   
   LMEnum=X
