@@ -47,20 +47,8 @@ saveRDS(lmes,paste0("Output/bestvals_LMEs_iter_",no_iter,".RDS"))
 ############### Make plots
 
 #### Check other model performance indicators using the above estimates
-bestvals<-data.frame(readRDS(paste0("Output/bestvals_LMEs_iter_",no_iter,".RDS")))
-
-### has the function above worked for all LMEs?
-# class(bestvals)
-# dim(bestvals)
-# str(bestvals)
-
-# bestvals$LME = rownames(bestvals)
-# strange format - not working: 
-# x <- subset(bestvals, !complete.cases(bestvals))
-
-
-
-
+bestvals<-data.frame(readRDS("bestvals_LMEs.RDS")) # these bestvalues don't give the CalibrationPlot 
+# bestvals<-data.frame(readRDS(paste0("Output/bestvals_LMEs_iter_",no_iter,".RDS")))
 
 # add column for correlation:
 bestvals$cor<-rep(0,lmenum)
@@ -70,8 +58,9 @@ pdf(paste0("Output/CalibrationPlots_iter_",no_iter,".pdf"),height = 6, width = 8
 for (i in 1:66){
   
   # # trial 
-  # i = 1
+  # i = 4
 
+  ### has the function above worked for all LMEs?
   if(length(unlist(bestvals[i,c(1:4)]))>0){ # run only if the function above produced bestvalues
   
   lme_input<-get_lme_inputs(LMEnumber=i, gridded=F,yearly=F)
@@ -162,7 +151,7 @@ for (i in 1:66){
   } # end of if(unlist ...)
    }
 
-# dev.off()
+dev.off()
 # saveRDS(bestvals,paste0("Output/bestvals_LMEs_cor_",no_iter,".RDS"))
 
 #### TO DO: Check other model performance indicators using the above estimates
