@@ -228,14 +228,14 @@ if (gridded) {
   # head(lme_fish)
   
   # use relative effort - across all LMEs 
-  lme_fish$NomActive_area_m2_relative<-lme_fish$NomActive_area_m2/max(lme_fish$NomActive_area_m2)
+  #lme_fish$NomActive_area_m2_relative<-lme_fish$NomActive_area_m2/max(lme_fish$NomActive_area_m2)
   
   # subset data 
   lme_fish<-subset(lme_fish, LME %in% LMEnumber)
   
   # # or use relative effort - for each LME independently 
-  # lme_fish$NomActive_relative<-lme_fish$NomActive/max(lme_fish$NomActive) # same as below
-  # lme_fish$NomActive_area_m2_relative<-lme_fish$NomActive_area_m2/max(lme_fish$NomActive_area_m2)
+  lme_fish$NomActive_relative<-lme_fish$NomActive/max(lme_fish$NomActive) # same as below
+  lme_fish$NomActive_area_m2_relative<-lme_fish$NomActive_area_m2/max(lme_fish$NomActive_area_m2)
   
   #create monthly inputs for fishing
   lme_clim$Year<-year(lme_clim$t)

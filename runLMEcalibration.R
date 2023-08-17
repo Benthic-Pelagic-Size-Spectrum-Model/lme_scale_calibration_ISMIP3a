@@ -6,8 +6,8 @@
 source("LME_calibration.R")
 library(tictoc)
 # faster using pbsapply, in the LHSsearch pbapply has cl=6 which uses cluster to run in parallel, but here it is run sequentially if cl is not specified.
-lmenum= 10 #66 # CHECK FIRST 10 
-no_iter = 10 
+lmenum= 66 # CHECK FIRST 10 
+no_iter = 1000 
 no_cores <- parallel::detectCores() - 1
 tic()
 lmes<-t(pbapply::pbsapply(X=1:lmenum,LHSsearch,iter=no_iter)) 
@@ -47,8 +47,8 @@ saveRDS(lmes,paste0("Output/bestvals_LMEs_iter_",no_iter,".RDS"))
 ############### Make plots
 
 #### Check other model performance indicators using the above estimates
-bestvals<-data.frame(readRDS("bestvals_LMEs.RDS")) # these bestvalues don't give the CalibrationPlot 
-# bestvals<-data.frame(readRDS(paste0("Output/bestvals_LMEs_iter_",no_iter,".RDS")))
+#bestvals<-data.frame(readRDS("bestvals_LMEs.RDS")) # these bestvalues don't give the CalibrationPlot 
+bestvals<-data.frame(readRDS(paste0("Output/bestvals_LMEs_iter_",no_iter,".RDS")))
 
 # add column for correlation:
 bestvals$cor<-rep(0,lmenum)
