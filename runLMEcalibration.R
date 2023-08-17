@@ -6,8 +6,8 @@
 source("LME_calibration.R")
 library(tictoc)
 # faster using pbsapply, in the LHSsearch pbapply has cl=6 which uses cluster to run in parallel, but here it is run sequentially if cl is not specified.
-lmenum= 66 # CHECK FIRST 10 
-no_iter = 1000 
+lmenum= 1# 66 # CHECK FIRST 10 
+no_iter = 10#1000 
 no_cores <- parallel::detectCores() - 1
 tic()
 lmes<-t(pbapply::pbsapply(X=1:lmenum,LHSsearch,iter=no_iter)) 
@@ -58,14 +58,15 @@ pdf(paste0("Output/CalibrationPlots_iter_",no_iter,".pdf"),height = 6, width = 8
 for (i in 1:66){
   
   # # trial 
-  # i = 4
+  # i = 1
 
   ### has the function above worked for all LMEs?
   if(length(unlist(bestvals[i,c(1:4)]))>0){ # run only if the function above produced bestvalues
   
   lme_input<-get_lme_inputs(LMEnumber=i, gridded=F,yearly=F)
   
-  out<-run_model(vals = unlist(bestvals[i,c(1:4)]),input=lme_input,withinput=T)
+  # try with highest possible values of Fmort to see if catch are in line with observed
+  out<-run_model(vals = c(0.1,0.5,1,1),input=lme_input,withinput=T) # vals = unlist(bestvals[i,c(1:4)])
   
   ### CN this is copy-paste from getError(): 
   ## aggregate by year (mean to conserve units)

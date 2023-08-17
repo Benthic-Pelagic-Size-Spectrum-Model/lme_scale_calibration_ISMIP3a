@@ -19,12 +19,12 @@ rungridbyLME <- function(LMEnumber = 14,
                          # search_vol = 0.64,
                          savePlots = F){
   
-  # # CN trial
-  # LMEnumber = 14
-  # yearly = FALSE
-  # f.effort = TRUE
-  # # search_vol = 0.64
-  # savePlots = TRUE
+  # CN trial
+  LMEnumber = 1
+  yearly = FALSE
+  f.effort = TRUE
+  # search_vol = 0.64
+  savePlots = TRUE
 
   # setup
   source("LME_calibration.R")
@@ -50,7 +50,7 @@ rungridbyLME <- function(LMEnumber = 14,
   ## search_vol needs to be consistent with what we are using to run the final 
   ## model and was not (it was set to 64 inside the run_model() function) 
   # run model using time-averaged inputs
-  initial_results<-run_model(vals=vals[LMEnumber,],
+  initial_results<-run_model(vals=c(0.1,0.5,1,1), # vals[LMEnumber,], # WARNING - check: replace with fake best values that work
                              input=lme_input_init,
                              withinput = F)
   
@@ -181,16 +181,20 @@ rungridbyLME <- function(LMEnumber = 14,
   # cell <- cell[1:(length(cell)-2)] #the code above produces a NA with the last cell
   
   if(f.effort){
-    # CN correct 
-    f.u<-as.numeric(vals[LMEnumber,1])
-    f.v<-as.numeric(vals[LMEnumber,2])
-    # f.u<-as.numeric(vals[1])
-    # f.v<-as.numeric(vals[2])
+    f.u <- 0.1 # WARNING - check: replace with fake best values that work 
+    f.v <- 0.5
+    # # CN correct 
+    # f.u<-as.numeric(vals[LMEnumber,1])
+    # f.v<-as.numeric(vals[LMEnumber,2])
+    # # f.u<-as.numeric(vals[1])
+    # # f.v<-as.numeric(vals[2])
   } else  f.u <- f.v <- 0
   
   # CN corrected by adding LMEnumber 
-  f.minu<-as.numeric(vals[LMEnumber,3])
-  f.minv<-as.numeric(vals[LMEnumber,4])
+  f.minu <- 1 # WARNING - check: replace with fake best values that work 
+  f.minv <- 1
+  # f.minu<-as.numeric(vals[LMEnumber,3])
+  # f.minv<-as.numeric(vals[LMEnumber,4])
   
   # Making values constant through time
   # er_grid[,3:dim(er_grid)[2]] <- er_grid[,2]
@@ -209,7 +213,7 @@ rungridbyLME <- function(LMEnumber = 14,
                               ,xmin.consumer.v = -3
                               ,tmax = dim(er_grid[,-1])[2]/12
                               ,tstepspryr  =  12
-                              ,search_vol = 0.064
+                              ,search_vol = 0.64
                               ,fmort.u = f.u
                               ,fminx.u = f.minu
                               ,fmort.v = f.v
@@ -226,6 +230,9 @@ rungridbyLME <- function(LMEnumber = 14,
                               ,V.initial = V.initial
                               ,W.initial = W.initial
                               ,Ngrid=dim(depth_grid)[1])      
+  
+  # dim(effort_grid)
+  # effort_grid[1:10, 1:10] # OK ther is effort 
   
   # run model  for full time period across all grid cells
   grid_results<-gridded_sizemodel(gridded_params,
@@ -254,7 +261,13 @@ rungridbyLME <- function(LMEnumber = 14,
   # sum(is.na(V))
   # sum(any(V < 0))
   
-  saveRDS(grid_results,paste0(LME_path,"/grid_results.rds"))
+  ### check effort as output 
+  grid_results$effort
+  
+  
+  
+  ## WARNING commented as long running time - remember to uncomment for final model runs 
+  # saveRDS(grid_results,paste0(LME_path,"/grid_results.rds"))
   # grid_results <- readRDS(paste0(LME_path,"/grid_results.rds"))
   
   #removing the stable spinup section to have matching dimensions with the code
@@ -265,8 +278,9 @@ rungridbyLME <- function(LMEnumber = 14,
   gridded_params$Neq <- 2040
   
   
-  
-  
+  # no catches at all... 
+  sum(grid_results$Y.u)
+  sum(grid_results$Y.v)
   
   
   
@@ -275,7 +289,10 @@ rungridbyLME <- function(LMEnumber = 14,
   
   ### WARNING need to check depth integration and Neq - do they match what used for inputs and for runLMEcalibration? 
   out<-getGriddedOutputs(input=lme_inputs_grid,results=grid_results,params=gridded_params)
-  saveRDS(out,paste0(LME_path,"/out_results.rds"))
+  
+  # # Warning - again commented as takes long but remember to uncomment when running the final model 
+  # saveRDS(out,paste0(LME_path,"/out_results.rds"))
+  
   # out <- readRDS(paste0(LME_path,"/out_results.rds"))
   
   ## WARNING - Save results here and move plots to another function?? 
@@ -491,14 +508,26 @@ rungridbyLME <- function(LMEnumber = 14,
   ## plot time series of catches U  + V with empirical data
   # calculate total catch across gridcells
   catch_grid_avg <- catch_df %>%
-    group_by(t) %>%  
-    summarize(avg_catch = mean(totalC))  
+    mutate(Year = year(t)) %>% 
+    filter(Year >=1950) %>% 
+    group_by(Year) %>%  
+    summarize(avg_catch = mean(totalC)) #WARNING weighted.mean here would be better 
   # empirical data is in lme_input_init$catch_tonnes_area_m2,it's monthly, convert to yearly
-  catch_grid_avg$empirical <- lme_input_init$catch_tonnes_area_m2
+  
+  catch_empirical<-lme_input_init %>% 
+    mutate(Year = year(t)) %>% 
+    group_by(Year) %>%  
+    filter(Year >=1950) %>% 
+    summarize(empirical = mean(catch_tonnes_area_m2)) 
+  
+  catch_grid_avg<-catch_grid_avg %>% 
+    full_join(catch_empirical)
+  
+  sum(catch_grid_avg$avg_catch, na.rm = T) # no catches at all.... 
   
   p8 <- ggplot(catch_grid_avg) +
-    geom_line(aes(x = t, y = avg_catch))+
-    geom_point(aes(x = t, y = empirical)) +
+    geom_line(aes(x = Year, y = avg_catch))+
+    geom_point(aes(x = Year, y = empirical)) +
     ggtitle("Time series of catches versus empirical data (U+V)")
   
   # Save the plots in a PDF file
