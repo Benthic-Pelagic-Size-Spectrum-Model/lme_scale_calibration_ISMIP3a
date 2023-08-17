@@ -2,6 +2,15 @@
 gridded_sizemodel<-function(params,ERSEM.det.input=F,U_mat,V_mat,W_mat,temp.effect=T,eps=1e-5,output="aggregated",
                     use.init = FALSE, burnin.len){
   
+  # # trial 
+  # params = gridded_params
+  # ERSEM.det.input=F
+  # temp.effect=T
+  # eps=1e-5
+  # output="aggregated"
+  # use.init = TRUE
+  # # burnin.len
+  
   
   with(params, {
     #---------------------------------------------------------------------------------------
@@ -18,6 +27,63 @@ gridded_sizemodel<-function(params,ERSEM.det.input=F,U_mat,V_mat,W_mat,temp.effe
     # Code modified to include temperature scaling on senescence and detrital flux. RFH 18/06/2020
     # ---------------------------------------------------------------------------------------
     # Input parameters to vary:
+    
+    # # trial 
+    # pp = params$pp 
+    # r.plank = params$r.plank
+    # sst = params$sst  
+    # sft = params$sft	
+    # sinking.rate = params$sinking.rate  
+    # x = params$x
+    # Ngrid = params$Ngrid
+    # Neq= params$Neq
+    # q0 = params$q0
+    # alpha.u = params$alpha.u
+    # sd.q = params$sd.q
+    # U.init = params$U.init 
+    # V.init = params$V.init
+    # ref = params$ref
+    # ref.det = params$ref.det
+    # W.init = params$W.init
+    # mu0 = params$mu0
+    # k.sm = params$k.sm
+    # p.s =params$p.s 
+    # xs = params$xs
+    # Fmort.u = params$Fmort.u
+    # effort = params$effort
+    # Fmort.v = params$Fmort.v
+    # Nx = params$Nx
+    # Fref.v = params$Fref.v
+    # Fref.u = params$Fref.u
+    # c1 = params$c1
+    # E = params$E
+    # Boltzmann = params$Boltzmann
+    # A.u = params$A.u
+    # A.v = params$A.v
+    # alpha.u = params$alpha.u
+    # alpha.v = params$alpha.v
+    # pref.pel = params$pref.pel
+    # pref.ben = params$pref.ben
+    # dx = params$dx
+    # handling = params$handling
+    # repro.on = params$repro.on
+    # def.high = params$def.high
+    # K.u = params$K.u
+    # K.v = params$K.v
+    # AM.u = params$AM.u
+    # AM.v = params$AM.v
+    # def.low = params$def.low
+    # def.high = params$def.high
+    # depth = params$depth
+    # K.d = params$K.d
+    # K.u = params$K.u
+    # K.v = params$K.v
+    # K.sm =params$k.sm
+    # det.coupling = params$det.coupling
+    # delta_t = params$delta_t
+    # idx = params$idx
+    
+    
     
     
     ui0 <- 10^pp          # gridded time series of intercept of plankton size spectrum (estimated from GCM, biogeophysical model output or satellite data).		
@@ -95,6 +161,7 @@ gridded_sizemodel<-function(params,ERSEM.det.input=F,U_mat,V_mat,W_mat,temp.effe
     #---------------------------------------------------------------------------------------
     
     #q1 is a square matrix holding the log(predatorsize/preysize) for all combinations of sizes
+    
     y = x
     
     q1  = matrix(NA, length(x), length(y))
@@ -180,7 +247,6 @@ gridded_sizemodel<-function(params,ERSEM.det.input=F,U_mat,V_mat,W_mat,temp.effe
     #output fisheries catches per yr at size
     Y.v[,Fref.v:Nx,1]<-Fvec.v[,Fref.v:Nx,1]*V[,Fref.v:Nx,1]*10^x[Fref.v:Nx] 
     
-    
     #iteration over time, N [days]
     
     pb = txtProgressBar(min = 0, max = Neq, initial = 1, style = 3) # Initial progress bar
@@ -188,7 +254,7 @@ gridded_sizemodel<-function(params,ERSEM.det.input=F,U_mat,V_mat,W_mat,temp.effe
     for (i in 1:(Neq)) {
       
       for (j in 1:(Ngrid)) {
-      
+        
         setTxtProgressBar(pb, i) # Update progress bar
       
       # if(W[i]=="NaN"|W[i]<0)
@@ -361,8 +427,6 @@ gridded_sizemodel<-function(params,ERSEM.det.input=F,U_mat,V_mat,W_mat,temp.effe
       
       # Matrix setup for implict differencing 
       Ai.u<-Bi.u<-Si.u<-array(0, c(length(x), 1))   
-      
-      
       Ai.u[idx]<-(1/log(10))*-GG.u[j,idx-1,i]*delta_t/dx
       Bi.u[idx]<-1+(1/log(10))*GG.u[j,idx,i]*delta_t/dx +Z.u[j,idx,i]*delta_t
       Si.u[idx]<-U[j,idx,i]
@@ -466,8 +530,8 @@ gridded_sizemodel<-function(params,ERSEM.det.input=F,U_mat,V_mat,W_mat,temp.effe
     }#end time iteration
       
       
-    
-    return(list(U=U[,,],GG.u=GG.u[,,],PM.u=PM.u[,,],V=V[,,],GG.v=GG.v[,,],PM.v=PM.v[,,],Y.u=Y.u[,,],Y.v=Y.v[,,],W=W[,], params=params))
+    ### CN added effort 
+    return(list(U=U[,,],GG.u=GG.u[,,],PM.u=PM.u[,,],V=V[,,],GG.v=GG.v[,,],PM.v=PM.v[,,],Y.u=Y.u[,,],Y.v=Y.v[,,],W=W[,], params=params, effort = effort))
   
     
     # return(list(U=U[,Neq+1],GG.u=GG.u[,Neq],PM.u=PM.u[,Neq],V=V[,Neq+1],GG.v=GG.v[,Neq],PM.v=PM.v[,Neq],Y=Y[,Neq],W=W[Neq+1], params=params))
@@ -1375,6 +1439,8 @@ gravitymodel<-function(effort=effort[,3000],prop.b, depth, iter){
     
     a<-eff
     suit = prop.b*(1-d/max(d))*(1-a/0.001)
+    # # CN option 2 from below 
+    # suit = prop.b*(1-d/max(d))
     # rescale:
     rel.suit = suit/sum(suit)
     neweffort <- eff + rel.suit*eff
