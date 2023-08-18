@@ -411,7 +411,7 @@ LHSsearch<-function(X=LME,iter=1) {
   # adjust range of mi size params, others go form 0-1
   sim[,"f.minu"]<- sim[,"f.minu"]*2
   sim[,"f.minv"]<- sim[,"f.minv"]*2
-  sim[,"search.vol"]<- sim[,"search.vol"] + 0.001
+  sim[,"search.vol"]<- 0.064
   
   lme_input<-get_lme_inputs(LMEnumber=LMEnum)
   

@@ -12,7 +12,11 @@ no_cores <- parallel::detectCores() - 1
 tic()
 lmes<-t(pbapply::pbsapply(X=1:lmenum,LHSsearch,iter=no_iter)) 
 toc()
-saveRDS(lmes,paste0("Output/bestvals_LMEs_searchvol_iter_",no_iter,".RDS"))
+saveRDS(lmes,paste0("Output/bestvals_LMEs_searchvol_064_iter_",no_iter,".RDS"))
+
+vals<-bestvals[1,1:5]
+input<-lme_input<-get_lme_inputs(LMEnumber=1)
+vals_opt<-optimParallel::optimParallel(vals,getError,input)
 
 # WARNINGs: 
 
