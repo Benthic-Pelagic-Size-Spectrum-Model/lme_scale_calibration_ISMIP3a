@@ -6,8 +6,8 @@
 source("LME_calibration.R")
 library(tictoc)
 # faster using pbsapply, in the LHSsearch pbapply has cl=6 which uses cluster to run in parallel, but here it is run sequentially if cl is not specified.
-lmenum= 1# 66 # CHECK FIRST 10 
-no_iter = 10#1000 
+lmenum= 66 # CHECK FIRST 10 
+no_iter = 1000 
 no_cores <- parallel::detectCores() - 1
 tic()
 lmes<-t(pbapply::pbsapply(X=1:lmenum,LHSsearch,iter=no_iter)) 
