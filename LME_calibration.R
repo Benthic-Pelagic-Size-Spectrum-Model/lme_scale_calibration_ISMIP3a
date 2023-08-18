@@ -405,12 +405,13 @@ LHSsearch<-function(X=LME,iter=1) {
   set.seed(1234)
   # num "individual runs"
   num_iter=iter
-  sim <- data.frame(randomLHS(num_iter,4))
+  sim <- data.frame(randomLHS(num_iter,5))
   # rows are iterations, columns are specific parameters
-  colnames(sim)<-c("f.u","f.v","f.minu","f.minv")
+  colnames(sim)<-c("f.u","f.v","f.minu","f.minv","search.vol")
   # adjust range of mi size params, others go form 0-1
   sim[,"f.minu"]<- sim[,"f.minu"]*2
   sim[,"f.minv"]<- sim[,"f.minv"]*2
+  sim[,"search.vol"]<- sim[,"search.vol"] + 0.001
   
   lme_input<-get_lme_inputs(LMEnumber=LMEnum)
   
@@ -436,7 +437,7 @@ LHSsearch<-function(X=LME,iter=1) {
   # check this time param set with lowest error
   findmin<-which(sim$rmse==min(sim$rmse))
   bestvals<- sim[findmin,]
-  print(bestvals[c(1:5)])
+  print(bestvals[c(1:6)])
   # 
   # # check run
   # out<-run_model(bestvals[c(1:4)],input=lme_input)

@@ -12,7 +12,7 @@ no_cores <- parallel::detectCores() - 1
 tic()
 lmes<-t(pbapply::pbsapply(X=1:lmenum,LHSsearch,iter=no_iter)) 
 toc()
-saveRDS(lmes,paste0("Output/bestvals_LMEs_iter_",no_iter,".RDS"))
+saveRDS(lmes,paste0("Output/bestvals_LMEs_searchvol_iter_",no_iter,".RDS"))
 
 # WARNINGs: 
 
@@ -48,7 +48,7 @@ saveRDS(lmes,paste0("Output/bestvals_LMEs_iter_",no_iter,".RDS"))
 
 #### Check other model performance indicators using the above estimates
 #bestvals<-data.frame(readRDS("bestvals_LMEs.RDS")) # these bestvalues don't give the CalibrationPlot 
-bestvals<-data.frame(readRDS(paste0("Output/bestvals_LMEs_iter_",no_iter,".RDS")))
+bestvals<-data.frame(readRDS(paste0("Output/bestvals_LMEs_searchvol_iter_",no_iter,".RDS")))
 
 # add column for correlation:
 bestvals$cor<-rep(0,lmenum)
@@ -61,7 +61,7 @@ for (i in 1:66){
   # i = 1
 
   ### has the function above worked for all LMEs?
-  if(length(unlist(bestvals[i,c(1:4)]))>0){ # run only if the function above produced bestvalues
+  if(length(unlist(bestvals[i,c(1:5)]))>0){ # run only if the function above produced bestvalues
   
   lme_input<-get_lme_inputs(LMEnumber=i, gridded=F,yearly=F)
   
