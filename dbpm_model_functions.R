@@ -239,8 +239,8 @@ gridded_sizemodel<-function(params,ERSEM.det.input=F,U_mat,V_mat,W_mat,temp.effe
     #Fvec[Fref:Nx] = 0.09*(x[Fref:Nx]/ log10(exp(1)) ) + 0.04 # from Benoit & Rochet 2004 
     
     # here Fmort.u and Fmort.u= fixed catchability term for U and V to be estimated along with Fref.v and Fref.u
-    Fvec.u[,Fref.u:Nx,1] = Fmort.u*effort[1]
-    Fvec.v[,Fref.v:Nx,1] = Fmort.v*effort[1]
+    Fvec.u[,Fref.u:Nx,1] = Fmort.u*effort[,1]
+    Fvec.v[,Fref.v:Nx,1] = Fmort.v*effort[,1]
     
     #output fisheries catches per yr at size
     Y.u[,Fref.u:Nx,1]<-Fvec.u[,Fref.u:Nx,1]*U[,Fref.u:Nx,1]*10^x[Fref.u:Nx] 
@@ -531,7 +531,7 @@ gridded_sizemodel<-function(params,ERSEM.det.input=F,U_mat,V_mat,W_mat,temp.effe
       
       
     ### CN added effort 
-    return(list(U=U[,,],GG.u=GG.u[,,],PM.u=PM.u[,,],V=V[,,],GG.v=GG.v[,,],PM.v=PM.v[,,],Y.u=Y.u[,,],Y.v=Y.v[,,],W=W[,], params=params, effort = effort))
+    return(list(U=U[,,],GG.u=GG.u[,,],PM.u=PM.u[,,],V=V[,,],GG.v=GG.v[,,],PM.v=PM.v[,,],Y.u=Y.u[,,],Y.v=Y.v[,,],W=W[,], params=params, effort = effort[,]))
   
     
     # return(list(U=U[,Neq+1],GG.u=GG.u[,Neq],PM.u=PM.u[,Neq],V=V[,Neq+1],GG.v=GG.v[,Neq],PM.v=PM.v[,Neq],Y=Y[,Neq],W=W[Neq+1], params=params))
