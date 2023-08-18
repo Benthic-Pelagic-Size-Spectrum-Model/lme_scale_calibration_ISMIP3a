@@ -1441,6 +1441,8 @@ gravitymodel<-function(effort=effort[,3000],prop.b, depth, iter){
     suit = prop.b*(1-d/max(d))*(1-a/0.001)
     # # CN option 2 from below 
     # suit = prop.b*(1-d/max(d))
+    # # CN option 3 from below 
+    # suit = prop.b
     # rescale:
     rel.suit = suit/sum(suit)
     neweffort <- eff + rel.suit*eff
