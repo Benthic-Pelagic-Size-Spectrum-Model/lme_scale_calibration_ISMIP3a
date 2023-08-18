@@ -305,7 +305,7 @@ run_model<-function(vals = X,input=lme_input,withinput=T){
                       ,xmin.consumer.v = -3
                       ,tmax = length(input$sst)/12
                       ,tstepspryr  =  12
-                      ,search_vol = 0.64
+                      ,search_vol = vals[5]
                       ,fmort.u = f.u
                       ,fminx.u = f.minu
                       ,fmort.v = f.v
