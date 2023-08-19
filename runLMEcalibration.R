@@ -14,9 +14,10 @@ lmes<-t(pbapply::pbsapply(X=1:lmenum,LHSsearch,iter=no_iter))
 toc()
 saveRDS(lmes,paste0("Output/bestvals_LMEs_searchvol_064_iter_",no_iter,".RDS"))
 
-vals<-bestvals[1,1:5]
-input<-lme_input<-get_lme_inputs(LMEnumber=1)
-vals_opt<-optimParallel::optimParallel(vals,getError,input)
+# test optim to further refine bestvals (not used)
+# vals<-bestvals[1,1:5]
+# input<-lme_input<-get_lme_inputs(LMEnumber=1)
+# vals_opt<-optimParallel::optimParallel(vals,getError,input)
 
 # WARNINGs: 
 
@@ -52,7 +53,7 @@ vals_opt<-optimParallel::optimParallel(vals,getError,input)
 
 #### Check other model performance indicators using the above estimates
 #bestvals<-data.frame(readRDS("bestvals_LMEs.RDS")) # these bestvalues don't give the CalibrationPlot 
-bestvals<-data.frame(readRDS(paste0("Output/bestvals_LMEs_searchvol_iter_",no_iter,".RDS")))
+bestvals<-data.frame(readRDS(paste0("Output/bestvals_LMEs_searchvol_064_iter_",no_iter,".RDS")))
 
 # add column for correlation:
 bestvals$cor<-rep(0,lmenum)
@@ -70,7 +71,7 @@ for (i in 1:66){
   lme_input<-get_lme_inputs(LMEnumber=i, gridded=F,yearly=F)
   
   # try with highest possible values of Fmort to see if catch are in line with observed
-  out<-run_model(vals = c(0.1,0.5,1,1),input=lme_input,withinput=T) # vals = unlist(bestvals[i,c(1:4)])
+  out<-run_model(vals = unlist(bestvals[i,1:5]),input=lme_input,withinput=T) # vals = unlist(bestvals[i,c(1:4)])
   
   ### CN this is copy-paste from getError(): 
   ## aggregate by year (mean to conserve units)
