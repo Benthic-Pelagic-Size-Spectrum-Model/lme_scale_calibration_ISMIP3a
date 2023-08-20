@@ -362,11 +362,13 @@ run_model<-function(vals = X,input=lme_input,withinput=T){
 
 
 # # Error function
-getError <-function(vals = X,input=lme_input){
+getError <-function(vals = X,input=lme_input,lme=NULL){
 
   # # trial 
   # vals = sim
   # input=lme_input
+  
+  if(!is.NULL(lme)) input<-get_lme_inputs(LMEnumber=lme)
   
   result<-run_model(vals, input)
 
@@ -559,5 +561,38 @@ getGriddedOutputs<-function(input = lme_inputs_grid,
   
 }
   
+### fastOptim to set up and run optimisations in parallel
+
+fastOptim <- function(lme, vary,
+                      errorFun, spareCores = 1,
+                      libraries = c("optimParallel"))
+{
+  # set up workers
+  noCores <- parallel::detectCores() - spareCores # keep some spare core
+  if(noCores < 1) stop("You should allow at least one core for this operation.")
+  cl <- parallel::makeCluster(noCores, setup_timeout = 0.5)
+  parallel::setDefaultCluster(cl = cl)
+  parallel::clusterExport(cl, varlist = c("cl","libraries"),envir=environment())
+  parallel::clusterEvalQ(cl, {
+    for (item in 1:length(libraries)) {
+      library(libraries[item],character.only = T)
+    }
+  })
+  
+  
+  optim_result <- optimParallel::optimParallel(par = vary,
+                                               fn = errorFun,
+                                               params = params,
+                                               method   ="L-BFGS-B",
+                                               lower= 0,
+                                               upper= 2,
+                                               parallel=list(loginfo=TRUE, forward=TRUE))
+  parallel::stopCluster(cl)
+  
+  return(optim_result)
+}
+
+
+
 
 

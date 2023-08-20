@@ -19,6 +19,10 @@ saveRDS(lmes,paste0("Output/bestvals_LMEs_searchvol_iter_",no_iter,".RDS"))
 # input<-lme_input<-get_lme_inputs(LMEnumber=1)
 # vals_opt<-optimParallel::optimParallel(vals,getError,input)
 
+fastOptim(lme=1 vary=vals) 
+
+
+
 # WARNINGs: 
 
 # 2. some LME (e.g. LME 4) do not run because the model called by LHSsearch does not produce biomass 
