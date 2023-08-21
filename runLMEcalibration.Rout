@@ -45,7 +45,7 @@ The following object is masked from ‘package:dplyr’:
 > library(tictoc)
 > # faster using pbsapply, in the LHSsearch pbapply has cl=6 which uses cluster to run in parallel, but here it is run sequentially if cl is not specified.
 > lmenum= 66 # CHECK FIRST 10 
-> no_iter = 10000 
+> no_iter = 1000 
 > no_cores <- parallel::detectCores() - 1
 > tic()
 > lmes<-t(pbapply::pbsapply(X=1:lmenum,LHSsearch,iter=no_iter)) 
@@ -64,8 +64,8 @@ dbl (8): Year, LME, NomActive, area_m2, deptho_m, NomActive_area_m2, catch_t...
 
 ℹ Use `spec()` to retrieve the full column specification for this data.
 ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
-           f.u       f.v    f.minu   f.minv search.vol      rmse
-5173 0.3949788 0.4325949 0.3000242 0.765673   0.237605 0.2845874
+          f.u       f.v    f.minu   f.minv search.vol      rmse
+349 0.2795234 0.1568729 0.1357192 1.803212  0.2370563 0.2907813
 Rows: 134640 Columns: 12
 ── Column specification ────────────────────────────────────────────────────────
 Delimiter: ","
@@ -81,25 +81,8 @@ dbl (8): Year, LME, NomActive, area_m2, deptho_m, NomActive_area_m2, catch_t...
 
 ℹ Use `spec()` to retrieve the full column specification for this data.
 ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
-           f.u       f.v    f.minu    f.minv search.vol     rmse
-4978 0.5187524 0.7467284 0.1311885 0.4792855  0.2677707 0.276333
-Rows: 134640 Columns: 12
-── Column specification ────────────────────────────────────────────────────────
-Delimiter: ","
-dbl  (11): LME, sst, sbt, er, intercept, slope, sphy, lphy, depth, area_m2, ...
-date  (1): t
-
-ℹ Use `spec()` to retrieve the full column specification for this data.
-ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
-Rows: 11220 Columns: 8
-── Column specification ────────────────────────────────────────────────────────
-Delimiter: ","
-dbl (8): Year, LME, NomActive, area_m2, deptho_m, NomActive_area_m2, catch_t...
-
-ℹ Use `spec()` to retrieve the full column specification for this data.
-ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
-[1] f.u        f.v        f.minu     f.minv     search.vol rmse      
-<0 rows> (or 0-length row.names)
+          f.u       f.v    f.minu   f.minv search.vol      rmse
+375 0.6154135 0.1292642 0.5752153 1.295499  0.3008554 0.2845659
 Rows: 134640 Columns: 12
 ── Column specification ────────────────────────────────────────────────────────
 Delimiter: ","
@@ -149,8 +132,8 @@ dbl (8): Year, LME, NomActive, area_m2, deptho_m, NomActive_area_m2, catch_t...
 
 ℹ Use `spec()` to retrieve the full column specification for this data.
 ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
-           f.u      f.v     f.minu    f.minv search.vol      rmse
-2452 0.6003998 0.999757 0.08044102 0.0892834  0.5128511 0.4097448
+[1] f.u        f.v        f.minu     f.minv     search.vol rmse      
+<0 rows> (or 0-length row.names)
 Rows: 134640 Columns: 12
 ── Column specification ────────────────────────────────────────────────────────
 Delimiter: ","
@@ -166,8 +149,8 @@ dbl (8): Year, LME, NomActive, area_m2, deptho_m, NomActive_area_m2, catch_t...
 
 ℹ Use `spec()` to retrieve the full column specification for this data.
 ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
-           f.u       f.v    f.minu    f.minv search.vol     rmse
-4424 0.9929268 0.8353312 0.6260538 0.1389154  0.3682718 1.531378
+          f.u       f.v     f.minu    f.minv search.vol      rmse
+525 0.7331326 0.9266981 0.06378277 0.1265758  0.5174379 0.4181795
 Rows: 134640 Columns: 12
 ── Column specification ────────────────────────────────────────────────────────
 Delimiter: ","
@@ -183,8 +166,8 @@ dbl (8): Year, LME, NomActive, area_m2, deptho_m, NomActive_area_m2, catch_t...
 
 ℹ Use `spec()` to retrieve the full column specification for this data.
 ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
-           f.u        f.v   f.minu   f.minv search.vol      rmse
-7351 0.9923728 0.04710023 0.248031 1.194515  0.2962015 0.7689511
+          f.u       f.v   f.minu   f.minv search.vol     rmse
+442 0.7161763 0.1013104 0.406931 1.636161  0.3760357 1.576354
 Rows: 134640 Columns: 12
 ── Column specification ────────────────────────────────────────────────────────
 Delimiter: ","
@@ -200,8 +183,8 @@ dbl (8): Year, LME, NomActive, area_m2, deptho_m, NomActive_area_m2, catch_t...
 
 ℹ Use `spec()` to retrieve the full column specification for this data.
 ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
-           f.u        f.v    f.minu   f.minv search.vol      rmse
-6241 0.1919174 0.09975021 0.3165245 1.352306   0.289339 0.3516895
+          f.u      f.v     f.minu   f.minv search.vol     rmse
+555 0.8465735 0.311842 0.05630438 1.697283  0.2948211 0.776439
 Rows: 134640 Columns: 12
 ── Column specification ────────────────────────────────────────────────────────
 Delimiter: ","
@@ -217,8 +200,25 @@ dbl (8): Year, LME, NomActive, area_m2, deptho_m, NomActive_area_m2, catch_t...
 
 ℹ Use `spec()` to retrieve the full column specification for this data.
 ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
-           f.u       f.v   f.minu   f.minv search.vol       rmse
-8040 0.5168537 0.9257881 1.923517 0.117979 0.02350903 0.02500273
+          f.u       f.v    f.minu   f.minv search.vol      rmse
+349 0.2795234 0.1568729 0.1357192 1.803212  0.2370563 0.3571083
+Rows: 134640 Columns: 12
+── Column specification ────────────────────────────────────────────────────────
+Delimiter: ","
+dbl  (11): LME, sst, sbt, er, intercept, slope, sphy, lphy, depth, area_m2, ...
+date  (1): t
+
+ℹ Use `spec()` to retrieve the full column specification for this data.
+ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
+Rows: 11220 Columns: 8
+── Column specification ────────────────────────────────────────────────────────
+Delimiter: ","
+dbl (8): Year, LME, NomActive, area_m2, deptho_m, NomActive_area_m2, catch_t...
+
+ℹ Use `spec()` to retrieve the full column specification for this data.
+ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
+          f.u       f.v     f.minu    f.minv search.vol       rmse
+525 0.7331326 0.9266981 0.06378277 0.1265758  0.5174379 0.03252615
 Rows: 134640 Columns: 12
 ── Column specification ────────────────────────────────────────────────────────
 Delimiter: ","

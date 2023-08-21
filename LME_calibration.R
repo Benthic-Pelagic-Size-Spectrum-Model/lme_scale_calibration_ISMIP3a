@@ -368,7 +368,7 @@ getError <-function(vals = X,input=lme_input,lme=NULL){
   # vals = sim
   # input=lme_input
   
-  if(!is.NULL(lme)) input<-get_lme_inputs(LMEnumber=lme)
+  if(!is.null(lme)) input<-get_lme_inputs(LMEnumber=lme)
   
   result<-run_model(vals, input)
 
@@ -397,7 +397,7 @@ getError <-function(vals = X,input=lme_input,lme=NULL){
 
 # now could try again with lhs instead of the regular grid of parameters
 
-LHSsearch<-function(X=LME,iter=1) {
+LHSsearch<-function(X=LME,iter=1,search_vol=NULL) {
 
   # # trial
   # X = 1
@@ -413,8 +413,8 @@ LHSsearch<-function(X=LME,iter=1) {
   # adjust range of mi size params, others go form 0-1
   sim[,"f.minu"]<- sim[,"f.minu"]*2
   sim[,"f.minv"]<- sim[,"f.minv"]*2
-  #sim[,"search.vol"]<- sim[,"search.vol"]*2
   
+  if (!is.null(search_vol)) sim[,"search.vol"]<- search_vol
   # use below to select a constant value for search.vol
   # sim[,"search.vol"]<- 0.2
   
@@ -563,33 +563,37 @@ getGriddedOutputs<-function(input = lme_inputs_grid,
   
 ### fastOptim to set up and run optimisations in parallel
 
-fastOptim <- function(lme, vary,
-                      errorFun, spareCores = 1,
+fastOptim <- function(lme,vary,
+                      errorFun=getError, spareCores = 1,
                       libraries = c("optimParallel"))
 {
+  # get input
+  lme_input<-get_lme_inputs(LMEnumber=lme)
+  
   # set up workers
   noCores <- parallel::detectCores() - spareCores # keep some spare core
   if(noCores < 1) stop("You should allow at least one core for this operation.")
   cl <- parallel::makeCluster(noCores, setup_timeout = 0.5)
   parallel::setDefaultCluster(cl = cl)
-  parallel::clusterExport(cl, varlist = c("cl","libraries"),envir=environment())
+  parallel::clusterExport(cl, varlist = c("cl","libraries","lme_input"),envir=environment())
   parallel::clusterEvalQ(cl, {
     for (item in 1:length(libraries)) {
       library(libraries[item],character.only = T)
     }
   })
+  parallel::clusterEvalQ(cl, source("LME_calibration.R"))
+  
   
   
   optim_result <- optimParallel::optimParallel(par = vary,
                                                fn = errorFun,
-                                               params = params,
                                                method   ="L-BFGS-B",
-                                               lower= 0,
-                                               upper= 2,
-                                               parallel=list(loginfo=TRUE, forward=TRUE))
+                                               lower= rep(0,length(vary)),
+                                               upper= rep(2,length(vary)),
+                                               parallel=list(loginfo=TRUE, forward=TRUE), input=lme_input)
   parallel::stopCluster(cl)
   
-  return(optim_result)
+  return(optim_result$par)
 }
 
 
