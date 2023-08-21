@@ -78,17 +78,6 @@ rungridbyLME <- function(LMEnumber = 14,
   time<-unique(lme_inputs_grid$t)
   grid_results<-vector("list", length(time))
   
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
   # #### WARNING - more chcks here, er in particular
   # # CN: check that aggregated inputs match gridded inputs - similar...
   # # in one I calculated values using weihgted inputs across grid cells, in the other I caclaulted values for each grid cell
@@ -235,6 +224,7 @@ rungridbyLME <- function(LMEnumber = 14,
   # effort_grid[1:10, 1:10] # OK ther is effort 
   
   # run model  for full time period across all grid cells
+  tic()
   grid_results<-gridded_sizemodel(gridded_params,
                                   ERSEM.det.input=F,
                                   # U_mat,
@@ -245,7 +235,7 @@ rungridbyLME <- function(LMEnumber = 14,
                                   output="aggregated",
                                   use.init = TRUE,
                                   burnin.len)
-  
+  toc()
   # # Checks
   # U <- grid_results$U
   # dim(U)
@@ -261,8 +251,19 @@ rungridbyLME <- function(LMEnumber = 14,
   # sum(is.na(V))
   # sum(any(V < 0))
   
-  ### check effort as output 
-  grid_results$effort
+  ### check effort as output and catches 
+  grid_results$effort[180, 200] # grid cell X time # dimnetion here is 3240 instead of 3241 
+  # effort is the same across grid cells and time so it seems it was not spread spatially nor in time 
+  grid_results$Y.u[1,,1] # grid cell X size X time # no catches 
+  
+  # there is biomass, there is effort but not catches... 
+  grid_results$U[1,170,1]
+  grid_results$effort[170,1]
+  grid_results$Y.u[1,170,1]
+  
+  
+  
+  
   
   
   
