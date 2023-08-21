@@ -6,23 +6,27 @@
 source("LME_calibration.R")
 library(tictoc)
 # faster using pbsapply, in the LHSsearch pbapply has cl=6 which uses cluster to run in parallel, but here it is run sequentially if cl is not specified.
-lmenum= 66 # CHECK FIRST 10 
-no_iter = 1000 
-no_cores <- parallel::detectCores() - 1
-tic()
-lmes<-t(pbapply::pbsapply(X=1:lmenum,LHSsearch,iter=no_iter)) 
-toc()
-saveRDS(lmes,paste0("Output/bestvals_LMEs_searchvol_iter_",no_iter,".RDS"))
+ lmenum= 66 # CHECK FIRST 10 
+ no_iter = 100 
+ no_cores <- parallel::detectCores() - 1
+ tic()
+ lmes<-t(pbapply::pbsapply(X=1:lmenum,LHSsearch,iter=no_iter)) 
+ toc()
+ saveRDS(lmes,paste0("Output/bestvals_LMEs_searchvol_iter_",no_iter,".RDS"))
 
 
-# optimParallel to further refine bestvals
-tic()
-lmes<-t(pbapply::pbsapply(X=1:66,fastOptim,vary=vals)) 
-toc()
+# Use optimParallel to get better "bestvals"
+# tic()
+# for (i in 4:66){
+# vals<-unlist(bestvals[i,1:5])
+# bestvals[i,1:5]<-fastOptim(lme=i,vary=vals)
+# bestvals[i,6]<-getError(bestvals[i,1:5],lme=i)
+# }
+# toc()
 
 # LHSsearch(37,iter=10,search_vol=0.6)
 # vals<-unlist(bestvals[1,1:5])
-# newvals<-fastOptim(lme=1,unlist(vals),getError)
+# newvals<-fastOptim(lme=2,unlist(vals),getError)
 
 
 # WARNINGs: 

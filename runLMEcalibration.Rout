@@ -251,3 +251,54 @@ dbl (8): Year, LME, NomActive, area_m2, deptho_m, NomActive_area_m2, catch_t...
 
 ℹ Use `spec()` to retrieve the full column specification for this data.
 ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
+         f.u       f.v    f.minu     f.minv search.vol       rmse
+83 0.5179863 0.2892258 0.7384362 0.06180845  0.9335502 0.06559701
+Rows: 134640 Columns: 12
+── Column specification ────────────────────────────────────────────────────────
+Delimiter: ","
+dbl  (11): LME, sst, sbt, er, intercept, slope, sphy, lphy, depth, area_m2, ...
+date  (1): t
+
+ℹ Use `spec()` to retrieve the full column specification for this data.
+ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
+Rows: 11220 Columns: 8
+── Column specification ────────────────────────────────────────────────────────
+Delimiter: ","
+dbl (8): Year, LME, NomActive, area_m2, deptho_m, NomActive_area_m2, catch_t...
+
+ℹ Use `spec()` to retrieve the full column specification for this data.
+ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
+[1] f.u        f.v        f.minu     f.minv     search.vol rmse      
+<0 rows> (or 0-length row.names)
+Rows: 134640 Columns: 12
+── Column specification ────────────────────────────────────────────────────────
+Delimiter: ","
+dbl  (11): LME, sst, sbt, er, intercept, slope, sphy, lphy, depth, area_m2, ...
+date  (1): t
+
+ℹ Use `spec()` to retrieve the full column specification for this data.
+ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
+Rows: 11220 Columns: 8
+── Column specification ────────────────────────────────────────────────────────
+Delimiter: ","
+dbl (8): Year, LME, NomActive, area_m2, deptho_m, NomActive_area_m2, catch_t...
+
+ℹ Use `spec()` to retrieve the full column specification for this data.
+ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
+          f.u       f.v   f.minu   f.minv search.vol      rmse
+557 0.2108761 0.4766933 0.479491 1.505947  0.2092822 0.1408554
+Rows: 134640 Columns: 12
+── Column specification ────────────────────────────────────────────────────────
+Delimiter: ","
+dbl  (11): LME, sst, sbt, er, intercept, slope, sphy, lphy, depth, area_m2, ...
+date  (1): t
+
+ℹ Use `spec()` to retrieve the full column specification for this data.
+ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
+Rows: 11220 Columns: 8
+── Column specification ────────────────────────────────────────────────────────
+Delimiter: ","
+dbl (8): Year, LME, NomActive, area_m2, deptho_m, NomActive_area_m2, catch_t...
+
+ℹ Use `spec()` to retrieve the full column specification for this data.
+ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
