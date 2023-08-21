@@ -631,7 +631,8 @@ gridded_sizemodel<-function(params,ERSEM.det.input=F,U_mat,V_mat,W_mat,temp.effe
       # # CN check
       # dim(effort) # grid cell X time
       # effort[,3]
-      # ### WARNING - should the argument be effort[,i] instead of effort [,i+1]??
+      # ### WARNING - should the argument be effort[,i] instead of effort [,i+1]?? NO 
+      ## WARNING - now using option 2 in gravity model - TEST AND CHANGE AS NEEDED 
 
       effort[,i+1] = gravitymodel(effort[,i+1], prop.b,depth = depth,iter=10000)
 
