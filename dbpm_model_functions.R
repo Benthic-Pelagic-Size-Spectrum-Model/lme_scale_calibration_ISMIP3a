@@ -55,16 +55,7 @@ gridded_sizemodel<-function(params,ERSEM.det.input=F,U_mat,V_mat,W_mat,temp.effe
     # Fmort.v = params$Fmort.v
     # Fref.v = params$Fref.v
     # Fref.u = params$Fref.u
-    # 
-    # # # all looking OK but dimention of effort...
-    # # dim(effort)
-    # # effort[1,3240]
-    # # Fmort.u
-    # # Fmort.v
-    # # Fref.u
-    # # Fref.v
-    # 
-    # 
+    #
     # Nx = params$Nx
     # c1 = params$c1
     # E = params$E
@@ -280,61 +271,49 @@ gridded_sizemodel<-function(params,ERSEM.det.input=F,U_mat,V_mat,W_mat,temp.effe
     # Y.u[1,131,3]
     # Fvec.u[1,131,1] # initial value 6.368156e-05
     # Fvec.u[1,131,2] # 0 as not calcualted for next time step 
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
+
     #iteration over time, N [days]
     
     pb = txtProgressBar(min = 0, max = Neq, initial = 1, style = 3) # Initial progress bar
     
-    ### WARNINNG TRIAL 
     for (i in 1:(Neq)) { # time
-      
-      # trial
-      # for (i in 1:10) { # time 
-      
-        ### WARNINNG TRIAL 
-      for (j in 1:(Ngrid)) { # grid cells
         
-        # for (j in 1:10) { # grid cells
-          
-      # j = 1
+      if (i < Neq){
+        
+        # get proportion of total fishable biomass for each grid cell
+        #output rates of fisheries catches per yr at size
+        
+        # CN check
+        # class(prop.b) # vector - grid cell
+        prop.b<-(apply(U[,Fref.u:Nx,i]*10^x[Fref.u:Nx]*dx,1,sum) + apply(V[,Fref.v:Nx,i]*10^x[Fref.v:Nx]*dx,1,sum))/sum(apply(U[,Fref.u:Nx,i]*10^x[Fref.u:Nx]*dx,1,sum) + apply(V[,Fref.v:Nx,i]*10^x[Fref.v:Nx]*dx,1,sum))
+        #check sums to 1
+        #sum(prop.b)
+        
+        # redistribute total effort across gridcells according to proportion of biomass in that gridcell
+        
+        # # CN check
+        # dim(effort) # grid cell X time
+        # effort[,3]
+        
+        effort[,i+1] = gravitymodel(effort[,i+1], prop.b,depth = depth,iter=10000)
+        
+        # sum(effort[,1])
+        # sum(effort[,2]) # OK same starting values so should be the same after spreading
+        #
+        # # CN check
+        # effort[,1]
+        # effort[,2]
+        # effort[,3]
+        #
+        # # check different gravity models:
+        # # option 2 # cannot check like this - need to check in terms of catches
+        # effort[,2]
+        # sum(effort[,2])
+        
+      } # end gravity model 
       
-        # CN commented this as gives error when testing loop
+      for (j in 1:(Ngrid)) { # grid cells
+      
         setTxtProgressBar(pb, i) # Update progress bar
       
       # if(W[i]=="NaN"|W[i]<0)
@@ -578,178 +557,34 @@ gridded_sizemodel<-function(params,ERSEM.det.input=F,U_mat,V_mat,W_mat,temp.effe
         V[j,sz,i+1]<-(Si.v[sz]-Ai.v[sz]*V[j,sz-1,i+1])/Bi.v[sz]
         
       }		
-  
-      
-      
      
       #output rates of fisheries catches per yr at size
-      
-      # # CN check this effort output 
-      # Y.u[,Fref.u:Nx,1] # initial values 
-      # sum(Y.u[,Fref.u:Nx,1], na.rm = T) 
-      # sum(Y.u[,Fref.u:Nx,i+1], na.rm = T) 
-      # # Why this? we are in time step 1 why do we have to produce catches for time step 2 if we are caclaulting effort for time step 2 only below? 
-      # # OK so this is by grid cell - still I don't understand why time = 2 ... 
-      
-      # # ### WARNING CN changed this to i instead of i+1 CHECK WITH JULIA
-      # Y.u[1,131,1] # OK initial value as per above 
-      # Fvec.u[1,131,1]
-      # U[1,131,1]
-      # 
-      # Y.u[1,131,2] # 0
-      # dim(Fvec.u)
-      # Fvec.u[1,131,4] # 0 
-      # U[1,131,2] #
-      
 
-      ## WARNING - shouldn't these be calculated after the spread across grid cells???
-      #### WRNING - need to update Fvec.u too!!!! ### NOW MOVED BELOW
-      #### WARNINg the if (i < Neq){} is needed befause effort is 3240 time dimention (and Neq is too) but
-      # dim U and Y.u etc. is 3241 ... so need to fix here and possibly in run_model() too  
+      ### WARNING adding j to the below 
+      if (i < Neq){
+      Fvec.u[j,Fref.u:Nx,i+1] = Fmort.u*effort[j,i+1]
+      Fvec.v[j,Fref.v:Nx,i+1] = Fmort.v*effort[j,i+1]
+      }
 
-      # if (i < Neq){
-      # Fvec.u[,Fref.u:Nx,i+1] = Fmort.u*effort[,i+1]
-      # Fvec.v[,Fref.v:Nx,i+1] = Fmort.v*effort[,i+1]
-      # 
-      # 
-      # Y.u[,Fref.u:Nx,i+1]<-Fvec.u[j,Fref.u:Nx,i+1]*U[j,Fref.u:Nx,i+1]*10^x[Fref.u:Nx]
-      # #output rates of fisheries catches per yr at size
-      # Y.v[,Fref.v:Nx,i+1]<-Fvec.v[j,Fref.v:Nx,i+1]*V[j,Fref.v:Nx,i+1]*10^x[Fref.v:Nx]
-      # }
+      #### WARNING adding j to Y.u and Y.v 
+      Y.u[j,Fref.u:Nx,i+1]<-Fvec.u[j,Fref.u:Nx,i+1]*U[j,Fref.u:Nx,i+1]*10^x[Fref.u:Nx]
+      #output rates of fisheries catches per yr at size
+      Y.v[j,Fref.v:Nx,i+1]<-Fvec.v[j,Fref.v:Nx,i+1]*V[j,Fref.v:Nx,i+1]*10^x[Fref.v:Nx]
       
       # ### ORIGINAL
       # Y.u[,Fref.u:Nx,i+1]<-Fvec.u[j,Fref.u:Nx,i]*U[j,Fref.u:Nx,i+1]*10^x[Fref.u:Nx]
       # #output rates of fisheries catches per yr at size
       # Y.v[,Fref.v:Nx,i+1]<-Fvec.v[j,Fref.v:Nx,i]*V[j,Fref.v:Nx,i+1]*10^x[Fref.v:Nx]
     
-      
       }#end across grid   
         
-      ### WARNING CN - comment all and don't spread effort by grid cell but leave as it is 
-      
-      # increment and redistribute fishing effort input across grid cells for use in the next timestep
-      
-      if (i < Neq){
-
-
-      # # CN check - here you have the fist time step figured out - need to do second
-      #   # check if time =1 is OK
-      #   sum(U[,Fref.u:Nx,1]) # OK values but why different from above??
-      #   sum(V[,Fref.v:Nx,1]) # same OK but why differnt from above? this should be catches for time 1 across grid cells
-      #   ### somewhere here values should be different for time 1 becasue effort is distriuted according to biomass...
-      #
-
-      # get proportion of total fishable biomass for each grid cell
-      #output rates of fisheries catches per yr at size
-
-      # CN check
-      # class(prop.b) # vector - grid cell
-      prop.b<-(apply(U[,Fref.u:Nx,i]*10^x[Fref.u:Nx]*dx,1,sum) + apply(V[,Fref.v:Nx,i]*10^x[Fref.v:Nx]*dx,1,sum))/sum(apply(U[,Fref.u:Nx,i]*10^x[Fref.u:Nx]*dx,1,sum) + apply(V[,Fref.v:Nx,i]*10^x[Fref.v:Nx]*dx,1,sum))
-      #check sums to 1
-      #sum(prop.b)
-
-      # redistribute total effort across gridcells according to proportion of biomass in that gridcell
-
-      # # CN check
-      # dim(effort) # grid cell X time
-      # effort[,3]
-      # ### WARNING - should the argument be effort[,i] instead of effort [,i+1]?? NO 
-      ## WARNING - now using option 2 in gravity model - TEST AND CHANGE AS NEEDED 
-
-      effort[,i+1] = gravitymodel(effort[,i+1], prop.b,depth = depth,iter=10000)
-
-      # sum(effort[,1])
-      # sum(effort[,2]) # OK same starting values so should be the same after spreading
-      #
-      # # CN check
-      # effort[,1]
-      # effort[,2]
-      # effort[,3]
-      #
-      # # check different gravity models:
-      # # option 2 # cannot check like this - need to check in terms of catches
-      # effort[,2]
-      # sum(effort[,2])
-
-
-       }
-
-        #### WRNING - above calculations moved here
-        if (i < Neq){
-        Fvec.u[,Fref.u:Nx,i+1] = Fmort.u*effort[,i+1]
-        Fvec.v[,Fref.v:Nx,i+1] = Fmort.v*effort[,i+1]
-
-
-        Y.u[,Fref.u:Nx,i+1]<-Fvec.u[j,Fref.u:Nx,i+1]*U[j,Fref.u:Nx,i+1]*10^x[Fref.u:Nx]
-        #output rates of fisheries catches per yr at size
-        Y.v[,Fref.v:Nx,i+1]<-Fvec.v[j,Fref.v:Nx,i+1]*V[j,Fref.v:Nx,i+1]*10^x[Fref.v:Nx]
-        }
-
-        
-        
     }#end time iteration
-      
-    # # CN check outputs 
-    # # biomass
-    # U[1,140,1] # 0.1040443
-    # # effort 
-    # effort[1,1] # 0.0006368156
-    # # catchability (somewhere above?) and size selectivity (could not find - should be u.min)? 
-    # # catches 
-    # Y.u[1,140,1] # 4.180535 # WARNING - catches higher than biomass 
-    # 
-    # # biomass
-    # U[1,140,2] # 0.1040771 # more biomass 
-    # # effort 
-    # effort[1,2] # 0.0006368156 # same effort 
-    # # catches 
-    # Y.u[1,140,2] # 3.082433e-19 # very low catches
-    # 
-    # # OK now X10 timesteps 
-    # # biomass
-    # U[1,140,3] # 0.1041038 # more biomass 
-    # # effort 
-    # effort[1,3] # 0.0006368156 # same effort 
-    # # catches 
-    # Y.u[1,140,3] # 3.387244e-19# zero catches... untill Fvec.u was updated too!
-    # 
-    # # CN when catchability and catches are moved after effort calculation 
-    # # biomass
-    # U[1,140,1] # 0.1040443
-    # # effort 
-    # effort[1,1] # 0.0006368156
-    # # catchability (somewhere above?) and size selectivity (could not find - should be u.min)? 
-    # # catches 
-    # Y.u[1,140,1] # 4.180535 # WARNING - catches higher than biomass 
-    # 
-    # # biomass
-    # U[1,140,2] # 0.1040771 # more biomass 
-    # # effort 
-    # effort[1,2] # 3.007568e-94 # CHANGES here 
-    # # catches 
-    # Y.u[1,140,2] # 5.899763e-106 # changes here - lower catches 
-    # 
-    # # OK now X10 timesteps 
-    # # biomass
-    # U[1,140,3] # 0.1041038 # more biomass 
-    # # effort 
-    # effort[1,3] # even lower 
-    # # catches 
-    # Y.u[1,140,3] # even lower 
-    # 
-    # 
-    
-      
-    ### CN added effort 
+
     return(list(U=U[,,],GG.u=GG.u[,,],PM.u=PM.u[,,],V=V[,,],GG.v=GG.v[,,],PM.v=PM.v[,,],Y.u=Y.u[,,],Y.v=Y.v[,,],W=W[,], params=params, effort = effort[,]))
   
-    
     # return(list(U=U[,Neq+1],GG.u=GG.u[,Neq],PM.u=PM.u[,Neq],V=V[,Neq+1],GG.v=GG.v[,Neq],PM.v=PM.v[,Neq],Y=Y[,Neq],W=W[Neq+1], params=params))
     
-  ## WARNING CN commented for testing   
-  })  
-  # end with(params)
-  
+  }) # end with(params)
   
 }#end gridded size-based model function
 

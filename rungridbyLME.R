@@ -13,21 +13,21 @@
 
 rm(list=ls())
 
+source("LME_calibration.R") # also calls dbpm_model_functions.R
+source("Plotting_functions_DBPM.R")
+
 rungridbyLME <- function(LMEnumber = 14, 
                          yearly = FALSE, 
                          f.effort = TRUE, 
                          # search_vol = 0.64,
                          savePlots = F){
   
-  # CN trial
-  LMEnumber = 1
-  yearly = FALSE
-  f.effort = TRUE
-  # search_vol = 0.64
-  savePlots = TRUE
-
-  # setup
-  source("LME_calibration.R")
+  # # CN trial
+  # LMEnumber = 1
+  # yearly = FALSE
+  # f.effort = TRUE
+  # # search_vol = 0.64
+  # savePlots = TRUE
   
   LME_path <- paste0("/rd/gem/private/fishmip_outputs/ISIMIP3a/DBPM/obsclim/LME_",LMEnumber,"_output")
   if(!file.exists(LME_path)) dir.create(LME_path)
@@ -45,10 +45,6 @@ rungridbyLME <- function(LMEnumber = 14,
   # vals <- readRDS("bestvals_LMEs.RDS")
   vals <- readRDS("Output/bestvals_LMEs_iter_10.RDS")
   
-  ## CN WARNING - this gives NAs for all size classes >90 - ask Julia if this is OK
-  ## CN CORRECTION: added a search_vol param in function argument because
-  ## search_vol needs to be consistent with what we are using to run the final 
-  ## model and was not (it was set to 64 inside the run_model() function) 
   # run model using time-averaged inputs
   initial_results<-run_model(vals=c(0.1,0.5,1,1), # vals[LMEnumber,], # WARNING - check: replace with fake best values that work
                              input=lme_input_init,
@@ -65,8 +61,6 @@ rungridbyLME <- function(LMEnumber = 14,
   
   # get gridded inputs and run through all grid cells one timestep at a time
   
-  ### WARNING - CN error here - CORRECTED due to wrong input resolution in function 
-  ### WARNING LME.x and LME.y to correct - CORRECTED
   ### corrected for gridded = F, now need to correct for gridded = T - CHECKED 
   # also need to check yearly = TRUE or comment it to avoid use - thus far not used. 
   lme_inputs_grid<- get_lme_inputs(LMEnumber = LMEnumber, 
@@ -134,14 +128,8 @@ rungridbyLME <- function(LMEnumber = 14,
   sbt_grid<-lme_inputs_grid %>%
     pivot_wider(id_cols=cell,names_from = t, values_from = sbt)
   
-  ## NOTE - here is where you change fishing effort 
   effort_grid<-lme_inputs_grid %>%
     pivot_wider(id_cols=cell,names_from = t, values_from = NomActive_area_m2_relative)
-  
-  # # check effort # very low 
-  # effort_grid[1:10, 1:10]
-  
-  
   
   ## Creating a 100 years stable spinup before 1841
   spinFunc <- function(var_name){
@@ -193,7 +181,7 @@ rungridbyLME <- function(LMEnumber = 14,
   # sbt_grid[,3:dim(sbt_grid)[2]] <- sbt_grid[,2]
   
   ## WARNING search_vol to adjust according to runLMEcalibration
-  # now using 0.064 as in runLMEcalibration (LME_calibration.R/run_model())
+  # needs to match runLMEcalibration (LME_calibration.R/run_model())
   
   # set up params for each month, across grid cells
   gridded_params <- sizeparam(equilibrium = FALSE
@@ -220,9 +208,6 @@ rungridbyLME <- function(LMEnumber = 14,
                               ,W.initial = W.initial
                               ,Ngrid=dim(depth_grid)[1])      
   
-  # dim(effort_grid)
-  # effort_grid[1:10, 1:10] # OK ther is effort 
-  
   # run model  for full time period across all grid cells
   tic()
   grid_results<-gridded_sizemodel(gridded_params,
@@ -236,402 +221,66 @@ rungridbyLME <- function(LMEnumber = 14,
                                   use.init = TRUE,
                                   burnin.len)
   toc()# 65.50608 min 
-  
+
   #### TEST 1:
   # LME 1
   # random bestvalues - i.e. the ones that picked manually best approximate catches (0.1,0.5,1,1) 
   # search vol = 0.64 as OK for this LME
-  # Fmort = first calculate Fmort and catches then spread (gravity model)
+  # Fmort = first calculate Fmort and catches then spread (gravity model) - i.e. same effort cross grid cells is used
   # gravity model option 1 
   # WARNING - need to fix dim(U) == dim(Y) != dim(effort) here and in LME_calibration.r/run_model() 
   
   # check effort - it should be different across grid cells still.
-  grid_results$effort[,2] # OK from step 2 onward it is spread 
-  # biomass trend ? plot below 
-  # catch trend ? plot below
+  # grid_results$effort[,2] # OK from step 2 onward it is spread but using effort before spreading ... 
+  # biomass trend in plot 
+  # catch trend in plot
   
-  #### TEST 2 
+  #### TEST 3
   # LME 1
   # random bestvalues - i.e. the ones that picked manually best approximate catches (0.1,0.5,1,1) 
   # search vol = 0.64 as OK for this LME
-  # Fmort = first spread then calculate Fmort and catches  XXX
+  # Fmort = first spread effort then calculate Fmort and catches as discussed with Julia 
   # gravity model option 1 
+  # WARNING - need to fix dim(U) == dim(Y) != dim(effort) here and in LME_calibration.r/run_model() 
+  ## also fixed a bug: add j dimention when calcualting Fmort and catches - done by checking the gravity model 
   
-  # biomass trend ? 
-  # catch trend ? 
+  # # removing the stable spinup section to have matching dimensions with the code
+  ## WARNING  move to plotting function for now as need to figure out catch trend 
+  # grid_results$U <- grid_results$U[,,1201:3241]
+  # grid_results$V <- grid_results$V[,,1201:3241]
+  # grid_results$Y.u <- grid_results$Y.u[,,1201:3241]
+  # grid_results$Y.v <- grid_results$Y.v[,,1201:3241]
+  # gridded_params$Neq <- 2040
   
-  #### TEST 3
+  # save results from run
+  saveRDS(grid_results,paste0(LME_path,"/grid_results.rds"))
+  # save inputs and params object needed for plotting 
+  save(lme_input_init, lme_inputs_grid, gridded_params, file =paste0(LME_path,"/grid_results_inputs_params.RData"))
   
-  
-  
-  
-  # # Checks
-  # U <- grid_results$U
-  # dim(U)
-  # U[1,,2040]
-  # sum(is.na(U))
-  # sum(any(U < 0))
-  # dim(U) # this grid cell X size X time 
-  # sum(U, na.rm = TRUE)
-  # is.na(U[])
-  # 
-  # V <- grid_results$V
-  # V[1,,2041]
-  # sum(is.na(V))
-  # sum(any(V < 0))
-  
-  ### check effort as output and catches 
-  grid_results$effort[180, 200] # grid cell X time # dimnetion here is 3240 instead of 3241 
-  # effort is the same across grid cells and time so it seems it was not spread spatially nor in time 
-  grid_results$Y.u[1,,1] # grid cell X size X time # no catches 
-  
-  # there is biomass, there is effort but not catches... 
-  grid_results$U[1,170,1]
-  grid_results$effort[170,1]
-  grid_results$Y.u[1,170,1]
-  
-  
-  
-  
-  
-  
-  
-  ## WARNING commented as long running time - remember to uncomment for final model runs 
-  # saveRDS(grid_results,paste0(LME_path,"/grid_results.rds"))
-  # grid_results <- readRDS(paste0(LME_path,"/grid_results.rds"))
-  
-  #removing the stable spinup section to have matching dimensions with the code
-  grid_results$U <- grid_results$U[,,1201:3241]
-  grid_results$V <- grid_results$V[,,1201:3241]
-  grid_results$Y.u <- grid_results$Y.u[,,1201:3241]
-  grid_results$Y.v <- grid_results$Y.v[,,1201:3241]
-  gridded_params$Neq <- 2040
-  
-  
-  # no catches at all... 
-  sum(grid_results$Y.u)
-  sum(grid_results$Y.v)
-  
-  
-  
-  
-
-  
-  ### WARNING need to check depth integration and Neq - do they match what used for inputs and for runLMEcalibration? 
-  out<-getGriddedOutputs(input=lme_inputs_grid,results=grid_results,params=gridded_params)
-  
-  # # Warning - again commented as takes long but remember to uncomment when running the final model 
-  # saveRDS(out,paste0(LME_path,"/out_results.rds"))
-  
-  # out <- readRDS(paste0(LME_path,"/out_results.rds"))
-  
-  ## WARNING - Save results here and move plots to another function?? 
-  #### CHECK OUTPUTS!!
-  
-  cells<-unique(out$cell)
-  out$cell<-as.factor(out$cell)
-  
-  colnames(out)
-  head(out[,c("t","Totalcatch","TotalVcatch","TotalUcatch","TotalVbiomass","TotalUbiomass")])
-  
-  # download world map
-  # world <- ne_download(category = "cultural", 
-  #                      type = "admin_0_countries", 
-  #                      scale = "large",
-  #                      returnclass = "sf")
-  # 
-  # saveRDS(world,"worldMap.rds")
-  world <- readRDS("worldMap.rds")
-  
-  # Plots ----
-  ## Maps of biomass averaged across decades for U and V
-  biom_df <- out[,c(1,2,4,16,17)]
-  biom_df <- biom_df %>% mutate(totalB = TotalVbiomass + TotalUbiomass)
-  
-  # # calculate the mean biomass for each decade
-  # biom_decade_avg <- biom_df %>%
-  #   mutate(decade = as.integer(substr(t, 1, 3)) * 10) %>% 
-  #   group_by(decade, lon, lat) %>%  
-  #   summarize(avg_Ubiomass = mean(TotalUbiomass,na.rm=T),
-  #             avg_Vbiomass = mean(TotalVbiomass,na.rm=T))
-  # 
-  # # Axis
-  # lat_ext <- unique(biom_decade_avg)$lat[c(1,dim(biom_decade_avg)[1])]
-  # lon_ext <- unique(biom_decade_avg)$lon[c(1,dim(biom_decade_avg)[1])]
-  # 
-  # # facet plot U
-  # p1 <- ggplot(biom_decade_avg)+
-  #   geom_tile(aes(x = lon, y = lat, fill = avg_Ubiomass)) +
-  #   geom_sf(data = world) +
-  #   coord_sf(xlim = lon_ext, ylim = lat_ext, expand = FALSE) +
-  #   scale_fill_gradient2(low = "white", high = "red", name = "Average Biomass in g/m2") +
-  #   facet_wrap(~decade,ncol = 6) +
-  #   scale_x_continuous(name = "Longitude", breaks = seq(lon_ext[1],lon_ext[2], by = 6)) +
-  #   scale_y_continuous(name = "Latitude") +
-  #   theme(legend.position = "bottom") +
-  #   ggtitle("Maps of biomass averaged across decades for U")
-  # 
-  # # facet plot V
-  # p2 <- ggplot(biom_decade_avg)+
-  #   geom_tile(aes(x = lon, y = lat, fill = avg_Vbiomass)) +
-  #   geom_sf(data = world) +
-  #   coord_sf(xlim = lon_ext, ylim = lat_ext, expand = FALSE) +
-  #   scale_fill_gradient2(low = "white", high = "red", name = "Average Biomass in g/m2") +
-  #   facet_wrap(~decade,ncol = 6) +
-  #   scale_x_continuous(name = "Longitude", breaks = seq(lon_ext[1],lon_ext[2], by = 6)) +
-  #   scale_y_continuous(name = "Latitude") +
-  #   theme(legend.position = "bottom") +
-  #   ggtitle("Maps of biomass averaged across decades for V")
-  
-  ## Time series of biomass 1841-2020 U + V 
-  # calculate the mean biomass across gridcell
-  biom_grid_avg <- biom_df %>%
-    group_by(t) %>%  
-    summarize(avg_biomass = mean(totalB))  
-  
-  # time series of biomass
-  p3 <- ggplot(biom_grid_avg)+
-    geom_line(aes(x = t, y = avg_biomass)) +
-    scale_y_continuous(name = "Average biomass in g/m2")+
-    scale_x_date(name = "Time in year") +
-    ggtitle("Average biomass through time")
-  
-  pdf("Output/TEST2_rungridbyLME.pdf", height =3, width = 3)
-  p3
-  dev.off()
-  
-  
-  # ## Size spectra U + V averaged per decade per longitude
-  # # Using grid_results$U and V. Dim are gridcell*size*time (monthly)
-  # 
-  # totBiom <- grid_results$U + grid_results$V
-  # # averaging per decade. First decade is 108 month then the rest is 120
-  # 
-  # 
-  # 
-  # 
-  # 
-  # 
-  # 
-  # 
-  # ### CN WARNING should this be 2040 now that we saved up to 2040? BELOW TOO
-  # 
-  # 
-  # decade_start <- c(1,seq(109,2041,by = 120))
-  # spectra_decade_avg <- array(NA, dim = c(dim(totBiom)[1:2],length(decade_start)),
-  #                             dimnames = list("gridCell" = 1:dim(totBiom)[1],
-  #                                             "size" = grid_results$params$x,
-  #                                             "decade" = seq(1840,2010,by = 10)))
-  # for(iTime in 1:(length(decade_start)-1)){
-  #   t_start <- decade_start[iTime]
-  #   t_end <- decade_start[iTime+1]
-  #   tempBiom <- totBiom[,,t_start:t_end]
-  #   avgBiom <- apply(tempBiom,c(1,2),mean)
-  #   spectra_decade_avg[,,iTime] <- avgBiom
-  # }
-  # 
-  # 
-  # # average per longitude
-  # biom_df$cell <- paste(biom_df$lat,biom_df$lon)
-  # cell <- unique(biom_df$cell) # each grid cell is a combo of lat and long
-  # cell_lat <- substr(cell, 1,5)
-  # lat_list <- vector("list", length = length(unique(cell_lat)))
-  # names(lat_list) <- unique(cell_lat)
-  # for(iCell in unique(cell_lat)) lat_list[[iCell]] <- which(cell_lat == iCell)
-  # # this vector contains the id of grid cells having the same latitude
-  # 
-  # spectra_grid_avg <- array(NA, dim = c(length(lat_list),dim(spectra_decade_avg)[2:3]),
-  #                           dimnames = list("latitude" = names(lat_list),
-  #                                           "size" = dimnames(spectra_decade_avg)[[2]],
-  #                                           "decade" = dimnames(spectra_decade_avg)[[3]]))
-  # for (iCell in names(lat_list)) {
-  #   tempBiom <- spectra_decade_avg[lat_list[[iCell]],,]
-  #   if(length(dim(tempBiom)) == 3) avgBiom <- apply(tempBiom,c(2,3),mean) # if = 2 means only one lat value
-  #   else avgBiom <- tempBiom
-  #   spectra_grid_avg[iCell,,] <- avgBiom
-  # }
-  # 
-  # # show sizes only between $ref and #Nx
-  # spectra_grid_avg <- spectra_grid_avg[,grid_results$params$ref:grid_results$params$Nx,]
-  # 
-  # plot_dat <- reshape2::melt(spectra_grid_avg)
-  # 
-  # p4 <- ggplot(plot_dat) +
-  #   geom_line(aes(x = size, y = value, color = latitude), alpha = .5) +
-  #   facet_wrap(~decade) +
-  #   scale_y_continuous(trans = "log10", name = "Biomass in g") +
-  #   scale_x_continuous(name = "Size in log10 g") +
-  #   ggtitle("Size spectra averaged per decade per longitude (U+V)")
-  # 
-  # ## plot growth rate GG.u + GG.v per decade per gridcell
-  # totGrowth <- grid_results$GG.u + grid_results$GG.v
-  # 
-  # # averaging per decade. First decade is 108 month then the rest is 120
-  # decade_start <- c(1,seq(109,2041,by = 120))
-  # growth_decade_avg <- array(NA, dim = c(dim(totBiom)[1:2],length(decade_start)),
-  #                            dimnames = list("gridCell" = 1:dim(totBiom)[1],
-  #                                            "size" = grid_results$params$x,
-  #                                            "decade" = seq(1840,2010,by = 10)))
-  # for(iTime in 1:(length(decade_start)-1)){
-  #   t_start <- decade_start[iTime]
-  #   t_end <- decade_start[iTime+1]
-  #   tempGrowth <- totGrowth[,,t_start:t_end]
-  #   avgGrowth <- apply(tempGrowth,c(1,2),mean)
-  #   growth_decade_avg[,,iTime] <- avgGrowth
-  # }
-  # 
-  # # average per longitude - using lat_list from previous plot
-  # growth_grid_avg <- array(NA, dim = c(length(lat_list),dim(growth_decade_avg)[2:3]),
-  #                          dimnames = list("latitude" = names(lat_list),
-  #                                          "size" = dimnames(growth_decade_avg)[[2]],
-  #                                          "decade" = dimnames(growth_decade_avg)[[3]]))
-  # 
-  # for (iCell in names(lat_list)) {
-  #   tempBiom <- growth_decade_avg[lat_list[[iCell]],,]
-  #   if(length(dim(tempBiom)) == 3) avgBiom <- apply(tempBiom,c(2,3),mean) # if = 2 means only one lat value
-  #   else avgBiom <- tempBiom
-  #   growth_grid_avg[iCell,,] <- avgBiom
-  # }
-  # 
-  # # show sizes only between $ref and #Nx
-  # growth_grid_avg <- growth_grid_avg[,grid_results$params$ref:grid_results$params$Nx,]
-  # 
-  # plot_dat <- reshape2::melt(growth_grid_avg)
-  # 
-  # p5 <- ggplot(plot_dat) +
-  #   geom_line(aes(x = size, y = value, color = latitude)) +
-  #   facet_wrap(~decade) +
-  #   scale_y_continuous(trans = "log10", name = "Relative growth rate per year") +
-  #   scale_x_continuous(name = "Size in log10 g") +
-  #   ggtitle("Growth rate averaged per decade per longitude (U+V)")
-  # 
-  ## plot total catch U and V from out
-  catch_df <- out[,c(1,2,4,14,15)]
-  catch_df <- catch_df %>% mutate(totalC = TotalVcatch + TotalUcatch)
-  
-  # # calculate the mean catch for each decade
-  # catch_decade_avg <- catch_df %>%
-  #   mutate(decade = as.integer(substr(t, 1, 3)) * 10) %>% 
-  #   group_by(decade, lon, lat) %>%  
-  #   summarize(avg_Ucatch = mean(TotalUcatch),
-  #             avg_Vcatch = mean(TotalVcatch))  
-  # 
-  # # plot map facets of average U catch per decade
-  # p6 <- ggplot(catch_decade_avg)+
-  #   geom_tile(aes(x = lon, y = lat, fill = avg_Ucatch)) +
-  #   geom_sf(data = world) +
-  #   coord_sf(xlim = lon_ext, ylim = lat_ext, expand = FALSE) +
-  #   scale_fill_gradient2(low = "white", high = "red", name = "Average Catch in X") +
-  #   facet_wrap(~decade,ncol = 6) +
-  #   scale_x_continuous(name = "Longitude", breaks = seq(lon_ext[1],lon_ext[2], by = 6)) +
-  #   scale_y_continuous(name = "Latitude") +
-  #   theme(legend.position = "bottom") +
-  #   ggtitle("Maps of catches averaged across decades for U")
-  # 
-  # # plot map facets of average V catch per decade
-  # p7 <- ggplot(catch_decade_avg)+
-  #   geom_tile(aes(x = lon, y = lat, fill = avg_Vcatch)) +
-  #   geom_sf(data = world) +
-  #   coord_sf(xlim = lon_ext, ylim = lat_ext, expand = FALSE) +
-  #   scale_fill_gradient2(low = "white", high = "red", name = "Average Catch in X") +
-  #   facet_wrap(~decade,ncol = 6) +
-  #   scale_x_continuous(name = "Longitude", breaks = seq(lon_ext[1],lon_ext[2], by = 6)) +
-  #   scale_y_continuous(name = "Latitude") +
-  #   theme(legend.position = "bottom") +
-  #   ggtitle("Maps of catches averaged across decades for V")
-  
-  ## plot time series of catches U  + V with empirical data
-  # calculate total catch across gridcells
-  catch_grid_avg <- catch_df %>%
-    mutate(Year = year(t)) %>% 
-    filter(Year >=1950) %>% 
-    group_by(Year) %>%  
-    summarize(avg_catch = mean(totalC)) #WARNING weighted.mean here would be better 
-  # empirical data is in lme_input_init$catch_tonnes_area_m2,it's monthly, convert to yearly
-  
-  catch_empirical<-lme_input_init %>% 
-    mutate(Year = year(t)) %>% 
-    group_by(Year) %>%  
-    filter(Year >=1950) %>% 
-    summarize(empirical = mean(catch_tonnes_area_m2)) %>% 
-    mutate(empirical = empirical*1e06) # CN WARNING this needs to be transformed in g m2 
-  
-  catch_grid_avg<-catch_grid_avg %>% 
-    full_join(catch_empirical)
-  
-  sum(catch_grid_avg$avg_catch, na.rm = T) # no catches at all.... 
-  
-  p8 <- ggplot(catch_grid_avg) +
-    geom_line(aes(x = Year, y = avg_catch))+
-    geom_point(aes(x = Year, y = empirical)) +
-    ggtitle("Time series of catches versus empirical data (U+V)")
-  
-  pdf("Output/TEST2_catches_rungridbyLME.pdf", height =3, width = 3)
-  p8
-  dev.off()
-  
-  # Save the plots in a PDF file
-  if(savePlots){
-    
-    # # CN change 
-    # LME_plot<-list(p1,p2,p3,p4,p5,p6,p7,p8)
-    # # pdf(paste0(LME_path,"/plots.pdf"), height = 8, width = 6)
-    # tic()
-    # pdf("plots.pdf", height = 8, width = 6)
-    # marrangeGrob(grobs = LME_plot, nrow=2, ncol=1)
-    # dev.off()
-    # toc()
-    
-    name = ifelse(f.effort == FALSE, "/plots_no_fishing.pdf", "/plots_fishing.pdf")
-    
-    pdf(paste0(LME_path, name), height = 8, width = 6, onefile = T)
-    print(p1)
-    print(p2)
-    print(p3)
-    print(p4)
-    print(p5)
-    print(p6)
-    print(p7)
-    print(p8)
-    dev.off()
-    
-    # print also in local for fast checking 
-    name = ifelse(f.effort == FALSE, "_no_fishing.pdf", "_fishing.pdf")
-    pdf(paste0("Output/LME_",LMEnumber, name), height = 8, width = 6, onefile = T)
-    print(p1)
-    print(p2)
-    print(p3)
-    print(p4)
-    print(p5)
-    print(p6)
-    print(p7)
-    print(p8)
-    dev.off()
-    
-    
-  }
 }
 
 ## TESTS:
-# test run for LME14 AND a different LME
 library(tictoc)
-tic()
-rungridbyLME(LMEnumber = 14, 
-             yearly = FALSE, # for get_lme_inputs()
-             f.effort = FALSE, # for rungridbyLME()
-             # search_vol = 0.64,# for sizeparam() but indicated as value there now - can change. 
-             savePlots = TRUE)
-toc() # 43.18363 min for LME 14 
+
+# tic()
+# rungridbyLME(LMEnumber = 1, 
+#              yearly = FALSE, # for get_lme_inputs()
+#              f.effort = FALSE, # for rungridbyLME()
+#              # search_vol = 0.64,# for sizeparam() but indicated as value there now - can change. 
+#              savePlots = TRUE)
+# toc() # 43.18363 min for LME 14 
+# 
+# plotgridbyLME(LMEnumber = 1)
 
 tic()
-rungridbyLME(LMEnumber = 14, 
+rungridbyLME(LMEnumber = 1, 
              yearly = FALSE, # for get_lme_inputs()
              f.effort = TRUE, # for rungridbyLME()
-             # search_vol = 0.64,# for sizeparam() but indicated as value there now - can change. 
+             # search_vol = 0.64,
              savePlots = TRUE)
 toc() # 43.18363 min for LME 14 
 
-
+plotgridbyLME(LMEnumber = 1)
 
 
 # #Test 1- compare with results from DBPM, no fishing (checking code consistency)
