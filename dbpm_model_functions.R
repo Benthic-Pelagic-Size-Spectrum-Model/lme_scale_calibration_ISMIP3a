@@ -49,14 +49,14 @@ gridded_sizemodel<-function(params,ERSEM.det.input=F,U_mat,V_mat,W_mat,temp.effe
     # k.sm = params$k.sm
     # p.s =params$p.s
     # xs = params$xs
-    # # FISHING 
+    # # FISHING
     # Fmort.u = params$Fmort.u
     # effort = params$effort
     # Fmort.v = params$Fmort.v
     # Fref.v = params$Fref.v
     # Fref.u = params$Fref.u
     # 
-    # # # all looking OK but dimention of effort... 
+    # # # all looking OK but dimention of effort...
     # # dim(effort)
     # # effort[1,3240]
     # # Fmort.u
@@ -93,7 +93,7 @@ gridded_sizemodel<-function(params,ERSEM.det.input=F,U_mat,V_mat,W_mat,temp.effe
     # det.coupling = params$det.coupling
     # delta_t = params$delta_t
     # idx = params$idx
-    
+
     
     
     
@@ -302,6 +302,21 @@ gridded_sizemodel<-function(params,ERSEM.det.input=F,U_mat,V_mat,W_mat,temp.effe
     
     
     
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     #iteration over time, N [days]
     
     pb = txtProgressBar(min = 0, max = Neq, initial = 1, style = 3) # Initial progress bar
@@ -310,13 +325,15 @@ gridded_sizemodel<-function(params,ERSEM.det.input=F,U_mat,V_mat,W_mat,temp.effe
     for (i in 1:(Neq)) { # time
       
       # trial
-      # for (i in 1:20) { # time 
+      # for (i in 1:10) { # time 
       
         ### WARNINNG TRIAL 
       for (j in 1:(Ngrid)) { # grid cells
         
-        # for (j in 1:10) { # grid cells 
+        # for (j in 1:10) { # grid cells
           
+      # j = 1
+      
         # CN commented this as gives error when testing loop
         setTxtProgressBar(pb, i) # Update progress bar
       
@@ -584,16 +601,21 @@ gridded_sizemodel<-function(params,ERSEM.det.input=F,U_mat,V_mat,W_mat,temp.effe
       # Fvec.u[1,131,4] # 0 
       # U[1,131,2] #
       
-      
+
       ## WARNING - shouldn't these be calculated after the spread across grid cells???
       #### WRNING - need to update Fvec.u too!!!! ### NOW MOVED BELOW
-      Fvec.u[,Fref.u:Nx,i+1] = Fmort.u*effort[,i+1]
-      Fvec.v[,Fref.v:Nx,i+1] = Fmort.v*effort[,i+1]
+      #### WARNINg the if (i < Neq){} is needed befause effort is 3240 time dimention (and Neq is too) but
+      # dim U and Y.u etc. is 3241 ... so need to fix here and possibly in run_model() too  
 
-      Y.u[,Fref.u:Nx,i+1]<-Fvec.u[j,Fref.u:Nx,i+1]*U[j,Fref.u:Nx,i+1]*10^x[Fref.u:Nx]
-      #output rates of fisheries catches per yr at size
-      Y.v[,Fref.v:Nx,i+1]<-Fvec.v[j,Fref.v:Nx,i+1]*V[j,Fref.v:Nx,i+1]*10^x[Fref.v:Nx]
-
+      # if (i < Neq){
+      # Fvec.u[,Fref.u:Nx,i+1] = Fmort.u*effort[,i+1]
+      # Fvec.v[,Fref.v:Nx,i+1] = Fmort.v*effort[,i+1]
+      # 
+      # 
+      # Y.u[,Fref.u:Nx,i+1]<-Fvec.u[j,Fref.u:Nx,i+1]*U[j,Fref.u:Nx,i+1]*10^x[Fref.u:Nx]
+      # #output rates of fisheries catches per yr at size
+      # Y.v[,Fref.v:Nx,i+1]<-Fvec.v[j,Fref.v:Nx,i+1]*V[j,Fref.v:Nx,i+1]*10^x[Fref.v:Nx]
+      # }
       
       # ### ORIGINAL
       # Y.u[,Fref.u:Nx,i+1]<-Fvec.u[j,Fref.u:Nx,i]*U[j,Fref.u:Nx,i+1]*10^x[Fref.u:Nx]
@@ -652,15 +674,17 @@ gridded_sizemodel<-function(params,ERSEM.det.input=F,U_mat,V_mat,W_mat,temp.effe
 
        }
 
-        # #### WRNING - need to update Fvec.u too!!!! 
-        # Fvec.u[,Fref.u:Nx,i+1] = Fmort.u*effort[,i+1]
-        # Fvec.v[,Fref.v:Nx,i+1] = Fmort.v*effort[,i+1]
-        # 
-        # Y.u[,Fref.u:Nx,i+1]<-Fvec.u[j,Fref.u:Nx,i+1]*U[j,Fref.u:Nx,i+1]*10^x[Fref.u:Nx]
-        # #output rates of fisheries catches per yr at size
-        # Y.v[,Fref.v:Nx,i+1]<-Fvec.v[j,Fref.v:Nx,i+1]*V[j,Fref.v:Nx,i+1]*10^x[Fref.v:Nx]
-        
-        
+        #### WRNING - above calculations moved here
+        if (i < Neq){
+        Fvec.u[,Fref.u:Nx,i+1] = Fmort.u*effort[,i+1]
+        Fvec.v[,Fref.v:Nx,i+1] = Fmort.v*effort[,i+1]
+
+
+        Y.u[,Fref.u:Nx,i+1]<-Fvec.u[j,Fref.u:Nx,i+1]*U[j,Fref.u:Nx,i+1]*10^x[Fref.u:Nx]
+        #output rates of fisheries catches per yr at size
+        Y.v[,Fref.v:Nx,i+1]<-Fvec.v[j,Fref.v:Nx,i+1]*V[j,Fref.v:Nx,i+1]*10^x[Fref.v:Nx]
+        }
+
         
         
     }#end time iteration
@@ -1625,9 +1649,9 @@ gravitymodel<-function(effort=effort[,3000],prop.b, depth, iter){
   for(j in 1:iter) {
     
     a<-eff
-    # suit = prop.b*(1-d/max(d))*(1-a/0.001)
+    suit = prop.b*(1-d/max(d))*(1-a/0.001)
     # # CN option 2 from below 
-    suit = prop.b*(1-d/max(d))
+    # suit = prop.b*(1-d/max(d))
     # # CN option 3 from below 
     # suit = prop.b
     # rescale:

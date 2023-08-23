@@ -235,7 +235,36 @@ rungridbyLME <- function(LMEnumber = 14,
                                   output="aggregated",
                                   use.init = TRUE,
                                   burnin.len)
-  toc()
+  toc()# 65.50608 min 
+  
+  #### TEST 1:
+  # LME 1
+  # random bestvalues - i.e. the ones that picked manually best approximate catches (0.1,0.5,1,1) 
+  # search vol = 0.64 as OK for this LME
+  # Fmort = first calculate Fmort and catches then spread (gravity model)
+  # gravity model option 1 
+  # WARNING - need to fix dim(U) == dim(Y) != dim(effort) here and in LME_calibration.r/run_model() 
+  
+  # check effort - it should be different across grid cells still.
+  grid_results$effort[,2] # OK from step 2 onward it is spread 
+  # biomass trend ? plot below 
+  # catch trend ? plot below
+  
+  #### TEST 2 
+  # LME 1
+  # random bestvalues - i.e. the ones that picked manually best approximate catches (0.1,0.5,1,1) 
+  # search vol = 0.64 as OK for this LME
+  # Fmort = first spread then calculate Fmort and catches  XXX
+  # gravity model option 1 
+  
+  # biomass trend ? 
+  # catch trend ? 
+  
+  #### TEST 3
+  
+  
+  
+  
   # # Checks
   # U <- grid_results$U
   # dim(U)
@@ -319,40 +348,40 @@ rungridbyLME <- function(LMEnumber = 14,
   biom_df <- out[,c(1,2,4,16,17)]
   biom_df <- biom_df %>% mutate(totalB = TotalVbiomass + TotalUbiomass)
   
-  # calculate the mean biomass for each decade
-  biom_decade_avg <- biom_df %>%
-    mutate(decade = as.integer(substr(t, 1, 3)) * 10) %>% 
-    group_by(decade, lon, lat) %>%  
-    summarize(avg_Ubiomass = mean(TotalUbiomass,na.rm=T),
-              avg_Vbiomass = mean(TotalVbiomass,na.rm=T))
-  
-  # Axis
-  lat_ext <- unique(biom_decade_avg)$lat[c(1,dim(biom_decade_avg)[1])]
-  lon_ext <- unique(biom_decade_avg)$lon[c(1,dim(biom_decade_avg)[1])]
-  
-  # facet plot U
-  p1 <- ggplot(biom_decade_avg)+
-    geom_tile(aes(x = lon, y = lat, fill = avg_Ubiomass)) +
-    geom_sf(data = world) +
-    coord_sf(xlim = lon_ext, ylim = lat_ext, expand = FALSE) +
-    scale_fill_gradient2(low = "white", high = "red", name = "Average Biomass in g/m2") +
-    facet_wrap(~decade,ncol = 6) +
-    scale_x_continuous(name = "Longitude", breaks = seq(lon_ext[1],lon_ext[2], by = 6)) +
-    scale_y_continuous(name = "Latitude") +
-    theme(legend.position = "bottom") +
-    ggtitle("Maps of biomass averaged across decades for U")
-  
-  # facet plot V
-  p2 <- ggplot(biom_decade_avg)+
-    geom_tile(aes(x = lon, y = lat, fill = avg_Vbiomass)) +
-    geom_sf(data = world) +
-    coord_sf(xlim = lon_ext, ylim = lat_ext, expand = FALSE) +
-    scale_fill_gradient2(low = "white", high = "red", name = "Average Biomass in g/m2") +
-    facet_wrap(~decade,ncol = 6) +
-    scale_x_continuous(name = "Longitude", breaks = seq(lon_ext[1],lon_ext[2], by = 6)) +
-    scale_y_continuous(name = "Latitude") +
-    theme(legend.position = "bottom") +
-    ggtitle("Maps of biomass averaged across decades for V")
+  # # calculate the mean biomass for each decade
+  # biom_decade_avg <- biom_df %>%
+  #   mutate(decade = as.integer(substr(t, 1, 3)) * 10) %>% 
+  #   group_by(decade, lon, lat) %>%  
+  #   summarize(avg_Ubiomass = mean(TotalUbiomass,na.rm=T),
+  #             avg_Vbiomass = mean(TotalVbiomass,na.rm=T))
+  # 
+  # # Axis
+  # lat_ext <- unique(biom_decade_avg)$lat[c(1,dim(biom_decade_avg)[1])]
+  # lon_ext <- unique(biom_decade_avg)$lon[c(1,dim(biom_decade_avg)[1])]
+  # 
+  # # facet plot U
+  # p1 <- ggplot(biom_decade_avg)+
+  #   geom_tile(aes(x = lon, y = lat, fill = avg_Ubiomass)) +
+  #   geom_sf(data = world) +
+  #   coord_sf(xlim = lon_ext, ylim = lat_ext, expand = FALSE) +
+  #   scale_fill_gradient2(low = "white", high = "red", name = "Average Biomass in g/m2") +
+  #   facet_wrap(~decade,ncol = 6) +
+  #   scale_x_continuous(name = "Longitude", breaks = seq(lon_ext[1],lon_ext[2], by = 6)) +
+  #   scale_y_continuous(name = "Latitude") +
+  #   theme(legend.position = "bottom") +
+  #   ggtitle("Maps of biomass averaged across decades for U")
+  # 
+  # # facet plot V
+  # p2 <- ggplot(biom_decade_avg)+
+  #   geom_tile(aes(x = lon, y = lat, fill = avg_Vbiomass)) +
+  #   geom_sf(data = world) +
+  #   coord_sf(xlim = lon_ext, ylim = lat_ext, expand = FALSE) +
+  #   scale_fill_gradient2(low = "white", high = "red", name = "Average Biomass in g/m2") +
+  #   facet_wrap(~decade,ncol = 6) +
+  #   scale_x_continuous(name = "Longitude", breaks = seq(lon_ext[1],lon_ext[2], by = 6)) +
+  #   scale_y_continuous(name = "Latitude") +
+  #   theme(legend.position = "bottom") +
+  #   ggtitle("Maps of biomass averaged across decades for V")
   
   ## Time series of biomass 1841-2020 U + V 
   # calculate the mean biomass across gridcell
@@ -367,144 +396,149 @@ rungridbyLME <- function(LMEnumber = 14,
     scale_x_date(name = "Time in year") +
     ggtitle("Average biomass through time")
   
-  ## Size spectra U + V averaged per decade per longitude
-  # Using grid_results$U and V. Dim are gridcell*size*time (monthly)
-  
-  totBiom <- grid_results$U + grid_results$V
-  # averaging per decade. First decade is 108 month then the rest is 120
+  pdf("Output/TEST2_rungridbyLME.pdf", height =3, width = 3)
+  p3
+  dev.off()
   
   
-  
-  
-  
-  
-  
-  
-  ### CN WARNING should this be 2040 now that we saved up to 2040? BELOW TOO
-  
-  
-  decade_start <- c(1,seq(109,2041,by = 120))
-  spectra_decade_avg <- array(NA, dim = c(dim(totBiom)[1:2],length(decade_start)),
-                              dimnames = list("gridCell" = 1:dim(totBiom)[1],
-                                              "size" = grid_results$params$x,
-                                              "decade" = seq(1840,2010,by = 10)))
-  for(iTime in 1:(length(decade_start)-1)){
-    t_start <- decade_start[iTime]
-    t_end <- decade_start[iTime+1]
-    tempBiom <- totBiom[,,t_start:t_end]
-    avgBiom <- apply(tempBiom,c(1,2),mean)
-    spectra_decade_avg[,,iTime] <- avgBiom
-  }
-  
-  
-  # average per longitude
-  biom_df$cell <- paste(biom_df$lat,biom_df$lon)
-  cell <- unique(biom_df$cell) # each grid cell is a combo of lat and long
-  cell_lat <- substr(cell, 1,5)
-  lat_list <- vector("list", length = length(unique(cell_lat)))
-  names(lat_list) <- unique(cell_lat)
-  for(iCell in unique(cell_lat)) lat_list[[iCell]] <- which(cell_lat == iCell)
-  # this vector contains the id of grid cells having the same latitude
-  
-  spectra_grid_avg <- array(NA, dim = c(length(lat_list),dim(spectra_decade_avg)[2:3]),
-                            dimnames = list("latitude" = names(lat_list),
-                                            "size" = dimnames(spectra_decade_avg)[[2]],
-                                            "decade" = dimnames(spectra_decade_avg)[[3]]))
-  for (iCell in names(lat_list)) {
-    tempBiom <- spectra_decade_avg[lat_list[[iCell]],,]
-    if(length(dim(tempBiom)) == 3) avgBiom <- apply(tempBiom,c(2,3),mean) # if = 2 means only one lat value
-    else avgBiom <- tempBiom
-    spectra_grid_avg[iCell,,] <- avgBiom
-  }
-  
-  # show sizes only between $ref and #Nx
-  spectra_grid_avg <- spectra_grid_avg[,grid_results$params$ref:grid_results$params$Nx,]
-  
-  plot_dat <- reshape2::melt(spectra_grid_avg)
-  
-  p4 <- ggplot(plot_dat) +
-    geom_line(aes(x = size, y = value, color = latitude), alpha = .5) +
-    facet_wrap(~decade) +
-    scale_y_continuous(trans = "log10", name = "Biomass in g") +
-    scale_x_continuous(name = "Size in log10 g") +
-    ggtitle("Size spectra averaged per decade per longitude (U+V)")
-  
-  ## plot growth rate GG.u + GG.v per decade per gridcell
-  totGrowth <- grid_results$GG.u + grid_results$GG.v
-  
-  # averaging per decade. First decade is 108 month then the rest is 120
-  decade_start <- c(1,seq(109,2041,by = 120))
-  growth_decade_avg <- array(NA, dim = c(dim(totBiom)[1:2],length(decade_start)),
-                             dimnames = list("gridCell" = 1:dim(totBiom)[1],
-                                             "size" = grid_results$params$x,
-                                             "decade" = seq(1840,2010,by = 10)))
-  for(iTime in 1:(length(decade_start)-1)){
-    t_start <- decade_start[iTime]
-    t_end <- decade_start[iTime+1]
-    tempGrowth <- totGrowth[,,t_start:t_end]
-    avgGrowth <- apply(tempGrowth,c(1,2),mean)
-    growth_decade_avg[,,iTime] <- avgGrowth
-  }
-  
-  # average per longitude - using lat_list from previous plot
-  growth_grid_avg <- array(NA, dim = c(length(lat_list),dim(growth_decade_avg)[2:3]),
-                           dimnames = list("latitude" = names(lat_list),
-                                           "size" = dimnames(growth_decade_avg)[[2]],
-                                           "decade" = dimnames(growth_decade_avg)[[3]]))
-  
-  for (iCell in names(lat_list)) {
-    tempBiom <- growth_decade_avg[lat_list[[iCell]],,]
-    if(length(dim(tempBiom)) == 3) avgBiom <- apply(tempBiom,c(2,3),mean) # if = 2 means only one lat value
-    else avgBiom <- tempBiom
-    growth_grid_avg[iCell,,] <- avgBiom
-  }
-  
-  # show sizes only between $ref and #Nx
-  growth_grid_avg <- growth_grid_avg[,grid_results$params$ref:grid_results$params$Nx,]
-  
-  plot_dat <- reshape2::melt(growth_grid_avg)
-  
-  p5 <- ggplot(plot_dat) +
-    geom_line(aes(x = size, y = value, color = latitude)) +
-    facet_wrap(~decade) +
-    scale_y_continuous(trans = "log10", name = "Relative growth rate per year") +
-    scale_x_continuous(name = "Size in log10 g") +
-    ggtitle("Growth rate averaged per decade per longitude (U+V)")
-  
+  # ## Size spectra U + V averaged per decade per longitude
+  # # Using grid_results$U and V. Dim are gridcell*size*time (monthly)
+  # 
+  # totBiom <- grid_results$U + grid_results$V
+  # # averaging per decade. First decade is 108 month then the rest is 120
+  # 
+  # 
+  # 
+  # 
+  # 
+  # 
+  # 
+  # 
+  # ### CN WARNING should this be 2040 now that we saved up to 2040? BELOW TOO
+  # 
+  # 
+  # decade_start <- c(1,seq(109,2041,by = 120))
+  # spectra_decade_avg <- array(NA, dim = c(dim(totBiom)[1:2],length(decade_start)),
+  #                             dimnames = list("gridCell" = 1:dim(totBiom)[1],
+  #                                             "size" = grid_results$params$x,
+  #                                             "decade" = seq(1840,2010,by = 10)))
+  # for(iTime in 1:(length(decade_start)-1)){
+  #   t_start <- decade_start[iTime]
+  #   t_end <- decade_start[iTime+1]
+  #   tempBiom <- totBiom[,,t_start:t_end]
+  #   avgBiom <- apply(tempBiom,c(1,2),mean)
+  #   spectra_decade_avg[,,iTime] <- avgBiom
+  # }
+  # 
+  # 
+  # # average per longitude
+  # biom_df$cell <- paste(biom_df$lat,biom_df$lon)
+  # cell <- unique(biom_df$cell) # each grid cell is a combo of lat and long
+  # cell_lat <- substr(cell, 1,5)
+  # lat_list <- vector("list", length = length(unique(cell_lat)))
+  # names(lat_list) <- unique(cell_lat)
+  # for(iCell in unique(cell_lat)) lat_list[[iCell]] <- which(cell_lat == iCell)
+  # # this vector contains the id of grid cells having the same latitude
+  # 
+  # spectra_grid_avg <- array(NA, dim = c(length(lat_list),dim(spectra_decade_avg)[2:3]),
+  #                           dimnames = list("latitude" = names(lat_list),
+  #                                           "size" = dimnames(spectra_decade_avg)[[2]],
+  #                                           "decade" = dimnames(spectra_decade_avg)[[3]]))
+  # for (iCell in names(lat_list)) {
+  #   tempBiom <- spectra_decade_avg[lat_list[[iCell]],,]
+  #   if(length(dim(tempBiom)) == 3) avgBiom <- apply(tempBiom,c(2,3),mean) # if = 2 means only one lat value
+  #   else avgBiom <- tempBiom
+  #   spectra_grid_avg[iCell,,] <- avgBiom
+  # }
+  # 
+  # # show sizes only between $ref and #Nx
+  # spectra_grid_avg <- spectra_grid_avg[,grid_results$params$ref:grid_results$params$Nx,]
+  # 
+  # plot_dat <- reshape2::melt(spectra_grid_avg)
+  # 
+  # p4 <- ggplot(plot_dat) +
+  #   geom_line(aes(x = size, y = value, color = latitude), alpha = .5) +
+  #   facet_wrap(~decade) +
+  #   scale_y_continuous(trans = "log10", name = "Biomass in g") +
+  #   scale_x_continuous(name = "Size in log10 g") +
+  #   ggtitle("Size spectra averaged per decade per longitude (U+V)")
+  # 
+  # ## plot growth rate GG.u + GG.v per decade per gridcell
+  # totGrowth <- grid_results$GG.u + grid_results$GG.v
+  # 
+  # # averaging per decade. First decade is 108 month then the rest is 120
+  # decade_start <- c(1,seq(109,2041,by = 120))
+  # growth_decade_avg <- array(NA, dim = c(dim(totBiom)[1:2],length(decade_start)),
+  #                            dimnames = list("gridCell" = 1:dim(totBiom)[1],
+  #                                            "size" = grid_results$params$x,
+  #                                            "decade" = seq(1840,2010,by = 10)))
+  # for(iTime in 1:(length(decade_start)-1)){
+  #   t_start <- decade_start[iTime]
+  #   t_end <- decade_start[iTime+1]
+  #   tempGrowth <- totGrowth[,,t_start:t_end]
+  #   avgGrowth <- apply(tempGrowth,c(1,2),mean)
+  #   growth_decade_avg[,,iTime] <- avgGrowth
+  # }
+  # 
+  # # average per longitude - using lat_list from previous plot
+  # growth_grid_avg <- array(NA, dim = c(length(lat_list),dim(growth_decade_avg)[2:3]),
+  #                          dimnames = list("latitude" = names(lat_list),
+  #                                          "size" = dimnames(growth_decade_avg)[[2]],
+  #                                          "decade" = dimnames(growth_decade_avg)[[3]]))
+  # 
+  # for (iCell in names(lat_list)) {
+  #   tempBiom <- growth_decade_avg[lat_list[[iCell]],,]
+  #   if(length(dim(tempBiom)) == 3) avgBiom <- apply(tempBiom,c(2,3),mean) # if = 2 means only one lat value
+  #   else avgBiom <- tempBiom
+  #   growth_grid_avg[iCell,,] <- avgBiom
+  # }
+  # 
+  # # show sizes only between $ref and #Nx
+  # growth_grid_avg <- growth_grid_avg[,grid_results$params$ref:grid_results$params$Nx,]
+  # 
+  # plot_dat <- reshape2::melt(growth_grid_avg)
+  # 
+  # p5 <- ggplot(plot_dat) +
+  #   geom_line(aes(x = size, y = value, color = latitude)) +
+  #   facet_wrap(~decade) +
+  #   scale_y_continuous(trans = "log10", name = "Relative growth rate per year") +
+  #   scale_x_continuous(name = "Size in log10 g") +
+  #   ggtitle("Growth rate averaged per decade per longitude (U+V)")
+  # 
   ## plot total catch U and V from out
   catch_df <- out[,c(1,2,4,14,15)]
   catch_df <- catch_df %>% mutate(totalC = TotalVcatch + TotalUcatch)
   
-  # calculate the mean catch for each decade
-  catch_decade_avg <- catch_df %>%
-    mutate(decade = as.integer(substr(t, 1, 3)) * 10) %>% 
-    group_by(decade, lon, lat) %>%  
-    summarize(avg_Ucatch = mean(TotalUcatch),
-              avg_Vcatch = mean(TotalVcatch))  
-  
-  # plot map facets of average U catch per decade
-  p6 <- ggplot(catch_decade_avg)+
-    geom_tile(aes(x = lon, y = lat, fill = avg_Ucatch)) +
-    geom_sf(data = world) +
-    coord_sf(xlim = lon_ext, ylim = lat_ext, expand = FALSE) +
-    scale_fill_gradient2(low = "white", high = "red", name = "Average Catch in X") +
-    facet_wrap(~decade,ncol = 6) +
-    scale_x_continuous(name = "Longitude", breaks = seq(lon_ext[1],lon_ext[2], by = 6)) +
-    scale_y_continuous(name = "Latitude") +
-    theme(legend.position = "bottom") +
-    ggtitle("Maps of catches averaged across decades for U")
-  
-  # plot map facets of average V catch per decade
-  p7 <- ggplot(catch_decade_avg)+
-    geom_tile(aes(x = lon, y = lat, fill = avg_Vcatch)) +
-    geom_sf(data = world) +
-    coord_sf(xlim = lon_ext, ylim = lat_ext, expand = FALSE) +
-    scale_fill_gradient2(low = "white", high = "red", name = "Average Catch in X") +
-    facet_wrap(~decade,ncol = 6) +
-    scale_x_continuous(name = "Longitude", breaks = seq(lon_ext[1],lon_ext[2], by = 6)) +
-    scale_y_continuous(name = "Latitude") +
-    theme(legend.position = "bottom") +
-    ggtitle("Maps of catches averaged across decades for V")
+  # # calculate the mean catch for each decade
+  # catch_decade_avg <- catch_df %>%
+  #   mutate(decade = as.integer(substr(t, 1, 3)) * 10) %>% 
+  #   group_by(decade, lon, lat) %>%  
+  #   summarize(avg_Ucatch = mean(TotalUcatch),
+  #             avg_Vcatch = mean(TotalVcatch))  
+  # 
+  # # plot map facets of average U catch per decade
+  # p6 <- ggplot(catch_decade_avg)+
+  #   geom_tile(aes(x = lon, y = lat, fill = avg_Ucatch)) +
+  #   geom_sf(data = world) +
+  #   coord_sf(xlim = lon_ext, ylim = lat_ext, expand = FALSE) +
+  #   scale_fill_gradient2(low = "white", high = "red", name = "Average Catch in X") +
+  #   facet_wrap(~decade,ncol = 6) +
+  #   scale_x_continuous(name = "Longitude", breaks = seq(lon_ext[1],lon_ext[2], by = 6)) +
+  #   scale_y_continuous(name = "Latitude") +
+  #   theme(legend.position = "bottom") +
+  #   ggtitle("Maps of catches averaged across decades for U")
+  # 
+  # # plot map facets of average V catch per decade
+  # p7 <- ggplot(catch_decade_avg)+
+  #   geom_tile(aes(x = lon, y = lat, fill = avg_Vcatch)) +
+  #   geom_sf(data = world) +
+  #   coord_sf(xlim = lon_ext, ylim = lat_ext, expand = FALSE) +
+  #   scale_fill_gradient2(low = "white", high = "red", name = "Average Catch in X") +
+  #   facet_wrap(~decade,ncol = 6) +
+  #   scale_x_continuous(name = "Longitude", breaks = seq(lon_ext[1],lon_ext[2], by = 6)) +
+  #   scale_y_continuous(name = "Latitude") +
+  #   theme(legend.position = "bottom") +
+  #   ggtitle("Maps of catches averaged across decades for V")
   
   ## plot time series of catches U  + V with empirical data
   # calculate total catch across gridcells
@@ -519,7 +553,8 @@ rungridbyLME <- function(LMEnumber = 14,
     mutate(Year = year(t)) %>% 
     group_by(Year) %>%  
     filter(Year >=1950) %>% 
-    summarize(empirical = mean(catch_tonnes_area_m2)) 
+    summarize(empirical = mean(catch_tonnes_area_m2)) %>% 
+    mutate(empirical = empirical*1e06) # CN WARNING this needs to be transformed in g m2 
   
   catch_grid_avg<-catch_grid_avg %>% 
     full_join(catch_empirical)
@@ -530,6 +565,10 @@ rungridbyLME <- function(LMEnumber = 14,
     geom_line(aes(x = Year, y = avg_catch))+
     geom_point(aes(x = Year, y = empirical)) +
     ggtitle("Time series of catches versus empirical data (U+V)")
+  
+  pdf("Output/TEST2_catches_rungridbyLME.pdf", height =3, width = 3)
+  p8
+  dev.off()
   
   # Save the plots in a PDF file
   if(savePlots){
