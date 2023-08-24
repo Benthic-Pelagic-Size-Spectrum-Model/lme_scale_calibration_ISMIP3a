@@ -282,33 +282,13 @@ gridded_sizemodel<-function(params,ERSEM.det.input=F,U_mat,V_mat,W_mat,temp.effe
         
         # get proportion of total fishable biomass for each grid cell
         #output rates of fisheries catches per yr at size
-        
-        # CN check
-        # class(prop.b) # vector - grid cell
         prop.b<-(apply(U[,Fref.u:Nx,i]*10^x[Fref.u:Nx]*dx,1,sum) + apply(V[,Fref.v:Nx,i]*10^x[Fref.v:Nx]*dx,1,sum))/sum(apply(U[,Fref.u:Nx,i]*10^x[Fref.u:Nx]*dx,1,sum) + apply(V[,Fref.v:Nx,i]*10^x[Fref.v:Nx]*dx,1,sum))
         #check sums to 1
         #sum(prop.b)
         
         # redistribute total effort across gridcells according to proportion of biomass in that gridcell
-        
-        # # CN check
-        # dim(effort) # grid cell X time
-        # effort[,3]
-        
-        effort[,i+1] = gravitymodel(effort[,i+1], prop.b,depth = depth,iter=10000)
-        
-        # sum(effort[,1])
-        # sum(effort[,2]) # OK same starting values so should be the same after spreading
-        #
-        # # CN check
-        # effort[,1]
-        # effort[,2]
-        # effort[,3]
-        #
-        # # check different gravity models:
-        # # option 2 # cannot check like this - need to check in terms of catches
-        # effort[,2]
-        # sum(effort[,2])
+        effort[,i+1] = gravitymodel(effort[,i+1], prop.b,depth = depth,iter=1)
+        # for option 2 iter = 1
         
       } # end gravity model 
       
@@ -558,20 +538,19 @@ gridded_sizemodel<-function(params,ERSEM.det.input=F,U_mat,V_mat,W_mat,temp.effe
         
       }		
      
-      #output rates of fisheries catches per yr at size
-
-      ### WARNING adding j to the below 
+      # update Fmort 
       if (i < Neq){
-      Fvec.u[j,Fref.u:Nx,i+1] = Fmort.u*effort[j,i+1]
-      Fvec.v[j,Fref.v:Nx,i+1] = Fmort.v*effort[j,i+1]
+        Fvec.u[j,Fref.u:Nx,i+1] = Fmort.u*effort[j,i+1]
+        Fvec.v[j,Fref.v:Nx,i+1] = Fmort.v*effort[j,i+1]
       }
 
-      #### WARNING adding j to Y.u and Y.v 
+      #output rates of fisheries catches per yr at size
       Y.u[j,Fref.u:Nx,i+1]<-Fvec.u[j,Fref.u:Nx,i+1]*U[j,Fref.u:Nx,i+1]*10^x[Fref.u:Nx]
       #output rates of fisheries catches per yr at size
       Y.v[j,Fref.v:Nx,i+1]<-Fvec.v[j,Fref.v:Nx,i+1]*V[j,Fref.v:Nx,i+1]*10^x[Fref.v:Nx]
       
       # ### ORIGINAL
+      #output rates of fisheries catches per yr at size
       # Y.u[,Fref.u:Nx,i+1]<-Fvec.u[j,Fref.u:Nx,i]*U[j,Fref.u:Nx,i+1]*10^x[Fref.u:Nx]
       # #output rates of fisheries catches per yr at size
       # Y.v[,Fref.v:Nx,i+1]<-Fvec.v[j,Fref.v:Nx,i]*V[j,Fref.v:Nx,i+1]*10^x[Fref.v:Nx]
@@ -1484,9 +1463,9 @@ gravitymodel<-function(effort=effort[,3000],prop.b, depth, iter){
   for(j in 1:iter) {
     
     a<-eff
-    suit = prop.b*(1-d/max(d))*(1-a/0.001)
+    # suit = prop.b*(1-d/max(d))*(1-a/0.001)
     # # CN option 2 from below 
-    # suit = prop.b*(1-d/max(d))
+    suit = prop.b*(1-d/max(d))
     # # CN option 3 from below 
     # suit = prop.b
     # rescale:
