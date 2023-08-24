@@ -6,13 +6,14 @@
 source("LME_calibration.R")
 library(tictoc)
 # faster using pbsapply, in the LHSsearch pbapply has cl=6 which uses cluster to run in parallel, but here it is run sequentially if cl is not specified.
- lmenum= 66 # CHECK FIRST 10 
- no_iter = 100 
- no_cores <- parallel::detectCores() - 1
- tic()
- lmes<-t(pbapply::pbsapply(X=1:lmenum,LHSsearch,iter=no_iter)) 
- toc()
- saveRDS(lmes,paste0("Output/bestvals_LMEs_searchvol_iter_",no_iter,".RDS"))
+lmenum= 66  
+no_iter = 100
+search_vol="estimated" # other option is to specify a value for search_vol 
+no_cores <- parallel::detectCores() - 1
+tic()
+lmes<-t(pbapply::pbsapply(X=1:lmenum,LHSsearch,iter=no_iter, search_vol=search_vol)) 
+toc()
+saveRDS(lmes,paste0("Output/bestvals_LMEs_searchvol_", search_vol,"_iter_",no_iter,".RDS"))
 
 
 # Use optimParallel to get better "bestvals"
@@ -32,43 +33,33 @@ library(tictoc)
 # WARNINGs: 
 
 # 2. some LME (e.g. LME 4) do not run because the model called by LHSsearch does not produce biomass 
-# in run_model() I tried: 
-# remove effort -> input$NomActive_area_m2<-0 # still no biomass 
-# also increase search_vol to 6.4 # even worst 
 # increase to 64 # even worst 
 # decrease to 0.064 # now we have biomass!
-# add effort back in # now we also have catches but these are very low... 
 
-# 3. catches are always too small compared to observed data - F.mort estimated in LHSsearch can only go to 1, 
+# 3. catches are always too small compared to observed data 
+# F.mort estimated in LHSsearch can only go to 1, 
 # so increase effort in get_lme_inputs() by 
-# 100 - small improvement 
-# 1000 - Now pretty good and same as CalibrationPlot.pdf for LME 1 
-# now try all LMEs with these parameters: 
-# effort/12 then effort *10000
-# search_vol = 0.064 
-# OK bestvals for all LMEs but approach not meaningful  
-
-# SO
-# use relative effort (effort_m2/max(effort_m2) which will have higher values than effort_m2, with the highest been 1)  
-# relative effort for each LME - not working as well as the above. 
-# Catches are much lower than observed but for LME 39 which shows opposite pattern
+# using relative effort (effort_m2/max(effort_m2), with the highest value been 1)  
+# relative effort for each LME - not working wellif search_vol = 0.064 as catches remain low  
 # doing this also means that effort is equal across LMEs (from 1 to close to 0 in each LME)
-# relative effort across LMEs - same as above   
+# relative effort across LMEs - same as above and do not use (Julia)   
 
 # now try increasing search_vol again to 0.64
 # relative effort for each LME - not working as well as the above
 # relative effort across LMEs - working well (best option) but LME 4 and others not working again. 
 
+# now estimating search vol + relative effort for each LME + iter = 100 (but will need to increase to 1000 at least)
+
 ############### Make plots
 
 #### Check other model performance indicators using the above estimates
 #bestvals<-data.frame(readRDS("bestvals_LMEs.RDS")) # these bestvalues don't give the CalibrationPlot 
-bestvals<-data.frame(readRDS(paste0("Output/bestvals_LMEs_searchvol_064_iter_",no_iter,".RDS")))
+bestvals<-data.frame(readRDS(paste0("Output/bestvals_LMEs_searchvol_", search_vol,"_iter_",no_iter,".RDS")))
 
 # add column for correlation:
 bestvals$cor<-rep(0,lmenum)
 
-pdf(paste0("Output/CalibrationPlots_searchvol_iter_",no_iter,".pdf"),height = 6, width = 8)
+pdf(paste0("Output/CalibrationPlots_searchvol", search_vol,"_iter_", no_iter,".pdf"),height = 6, width = 8)
 
 for (i in 1:66){
   
@@ -81,7 +72,7 @@ for (i in 1:66){
   lme_input<-get_lme_inputs(LMEnumber=i, gridded=F,yearly=F)
   
   # try with highest possible values of Fmort to see if catch are in line with observed
-  out<-run_model(vals = unlist(bestvals[i,1:5]),input=lme_input,withinput=T) # vals = unlist(bestvals[i,c(1:4)])
+  out<-run_model(vals = unlist(bestvals[i,1:5]),input=lme_input,withinput=T)
   
   ### CN this is copy-paste from getError(): 
   ## aggregate by year (mean to conserve units)
@@ -168,7 +159,7 @@ for (i in 1:66){
    }
 
 dev.off()
-# saveRDS(bestvals,paste0("Output/bestvals_LMEs_cor_",no_iter,".RDS"))
+# saveRDS(bestvals,paste0("Output/bestvals_LMEs_cor_searchvol_", search_vol,"_iter_",no_iter,".RDS"))
 
 #### TO DO: Check other model performance indicators using the above estimates
 

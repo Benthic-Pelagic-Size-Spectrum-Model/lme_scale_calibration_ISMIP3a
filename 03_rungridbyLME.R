@@ -19,8 +19,7 @@ source("Plotting_functions_DBPM.R")
 rungridbyLME <- function(LMEnumber = 14, 
                          yearly = FALSE, 
                          f.effort = TRUE, 
-                         # search_vol = 0.64,
-                         savePlots = F){
+                         vals = vals){
   
   # # CN trial
   # LMEnumber = 1
@@ -41,12 +40,18 @@ rungridbyLME <- function(LMEnumber = 14,
   # get initial values from LME-scale results
   lme_input_init <-get_lme_inputs(LMEnumber = LMEnumber, gridded = F, yearly = F)
   
-  ### WARNING - update with latest bestvalue dataset!
-  # vals <- readRDS("bestvals_LMEs.RDS")
-  vals <- readRDS("Output/bestvals_LMEs_iter_10.RDS")
+  # # vals <- readRDS("bestvals_LMEs.RDS")
+  # vals <- readRDS("Output/bestvals_LMEs_iter_10.RDS")
+  # 
+  # # run model using time-averaged inputs
+  # initial_results<-run_model(vals=c(0.1,0.5,1,1), # vals[LMEnumber,], # WARNING - check: replace with fake best values that work
+  #                            input=lme_input_init,
+  #                            withinput = F)
   
-  # run model using time-averaged inputs
-  initial_results<-run_model(vals=c(0.1,0.5,1,1), # vals[LMEnumber,], # WARNING - check: replace with fake best values that work
+  ## OR ### CHECK VERSION ABOVE IS THE SAME # moved outside function
+  # vals <- data.frame(readRDS("Output/bestvals_LMEs_iter_10.RDS")) 
+  
+  initial_results<-run_model(vals=unlist(vals[LMEnumber,]), 
                              input=lme_input_init,
                              withinput = F)
   
@@ -158,21 +163,22 @@ rungridbyLME <- function(LMEnumber = 14,
   # cell <- cell[1:(length(cell)-2)] #the code above produces a NA with the last cell
   
   if(f.effort){
-    f.u <- 0.1 # WARNING - check: replace with fake best values that work 
-    f.v <- 0.5
+    # f.u <- 0.1 # WARNING - check: replace with fake best values that work 
+    # f.v <- 0.5
     # # CN correct 
-    # f.u<-as.numeric(vals[LMEnumber,1])
-    # f.v<-as.numeric(vals[LMEnumber,2])
+    f.u<-as.numeric(vals[LMEnumber,1])
+    f.v<-as.numeric(vals[LMEnumber,2])
     # # f.u<-as.numeric(vals[1])
     # # f.v<-as.numeric(vals[2])
   } else  f.u <- f.v <- 0
   
   # CN corrected by adding LMEnumber 
-  f.minu <- 1 # WARNING - check: replace with fake best values that work 
-  f.minv <- 1
-  # f.minu<-as.numeric(vals[LMEnumber,3])
-  # f.minv<-as.numeric(vals[LMEnumber,4])
-  
+  # f.minu <- 1 # WARNING - check: replace with fake best values that work 
+  # f.minv <- 1
+  f.minu<-as.numeric(vals[LMEnumber,3])
+  f.minv<-as.numeric(vals[LMEnumber,4])
+  search_vol<-as.numeric(vals[LMEnumber,5])
+
   # Making values constant through time
   # er_grid[,3:dim(er_grid)[2]] <- er_grid[,2]
   # intercept_grid[,3:dim(intercept_grid)[2]] <- intercept_grid[,2]
@@ -190,7 +196,7 @@ rungridbyLME <- function(LMEnumber = 14,
                               ,xmin.consumer.v = -3
                               ,tmax = dim(er_grid[,-1])[2]/12
                               ,tstepspryr  =  12
-                              ,search_vol = 0.64
+                              ,search_vol = search_vol
                               ,fmort.u = f.u
                               ,fminx.u = f.minu
                               ,fmort.v = f.v
@@ -260,25 +266,21 @@ rungridbyLME <- function(LMEnumber = 14,
 }
 
 ## TESTS:
-library(tictoc)
+ 
 
-# tic()
-# rungridbyLME(LMEnumber = 1, 
-#              yearly = FALSE, # for get_lme_inputs()
-#              f.effort = FALSE, # for rungridbyLME()
-#              # search_vol = 0.64,# for sizeparam() but indicated as value there now - can change. 
-#              savePlots = TRUE)
-# toc() # 43.18363 min for LME 14 
-# 
-# plotgridbyLME(LMEnumber = 1)
+# get the latest best values based on iterations and search_vol
+iter = 100
+seach_vol = "estimated"  
+vals <- data.frame(readRDS(paste0("Output/bestvals_LMEs_searchvol_", search_vol,"_iter_",no_iter,".RDS")))
+
+library(tictoc)
 
 tic()
 rungridbyLME(LMEnumber = 1, 
              yearly = FALSE, # for get_lme_inputs()
              f.effort = TRUE, # for rungridbyLME()
-             # search_vol = 0.64,
-             savePlots = TRUE)
-toc() # 43.18363 min for LME 14 
+             vals = vals)
+toc() 
 
 plotgridbyLME(LMEnumber = 1)
 

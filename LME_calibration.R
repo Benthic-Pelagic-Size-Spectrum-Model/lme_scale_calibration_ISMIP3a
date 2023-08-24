@@ -233,7 +233,7 @@ if (gridded) {
   # subset data 
   lme_fish<-subset(lme_fish, LME %in% LMEnumber)
   
-  # # or use relative effort - for each LME independently 
+  # # or use relative effort - for each LME independently - PREFERRED
   lme_fish$NomActive_relative<-lme_fish$NomActive/max(lme_fish$NomActive) # same as below
   lme_fish$NomActive_area_m2_relative<-lme_fish$NomActive_area_m2/max(lme_fish$NomActive_area_m2)
   
@@ -289,14 +289,15 @@ if (gridded) {
 run_model<-function(vals = X,input=lme_input,withinput=T){
   
   # # CN trial
-  # vals = sim
-  # input=lme_input
+  # vals = vals
+  # input=input
   # withinput=T
   
   f.u<-as.numeric(vals[1])
   f.v<-as.numeric(vals[2])
   f.minu<-as.numeric(vals[3])
   f.minv<-as.numeric(vals[4])
+  search_vol<-as.numeric(vals[5])
    
   # set up params
   params <- sizeparam(equilibrium = FALSE
@@ -305,7 +306,7 @@ run_model<-function(vals = X,input=lme_input,withinput=T){
                       ,xmin.consumer.v = -3
                       ,tmax = length(input$sst)/12
                       ,tstepspryr  =  12
-                      ,search_vol = 0.64#vals[5]
+                      ,search_vol = search_vol
                       ,fmort.u = f.u
                       ,fminx.u = f.minu
                       ,fmort.v = f.v
@@ -364,11 +365,12 @@ run_model<-function(vals = X,input=lme_input,withinput=T){
 # # Error function
 getError <-function(vals = X,input=lme_input,lme=NULL){
 
-  # # trial 
+  # # trial
   # vals = sim
   # input=lme_input
-  
-  if(!is.null(lme)) input<-get_lme_inputs(LMEnumber=lme)
+  # lme = 1
+
+  # if(!is.null(lme)) input<-get_lme_inputs(LMEnumber=lme)
   
   result<-run_model(vals, input)
 
@@ -397,11 +399,12 @@ getError <-function(vals = X,input=lme_input,lme=NULL){
 
 # now could try again with lhs instead of the regular grid of parameters
 
-LHSsearch<-function(X=LME,iter=1,search_vol=NULL) {
+LHSsearch<-function(X=LME,iter=1,search_vol="estimated") {
 
   # # trial
   # X = 1
-  # iter = 10
+  # iter = 100
+  # search_vol=0.64 # not estimated 
   
   LMEnum=X
   set.seed(1234)
@@ -414,7 +417,10 @@ LHSsearch<-function(X=LME,iter=1,search_vol=NULL) {
   sim[,"f.minu"]<- sim[,"f.minu"]*2
   sim[,"f.minv"]<- sim[,"f.minv"]*2
   
-  if (!is.null(search_vol)) sim[,"search.vol"]<- search_vol
+  # adjust range of search vol, others go form 0-1
+  sim[,"search.vol"]<-runif(n=iter, min=0.064, max=0.64)
+  
+  if (is.numeric(search_vol)) sim[,"search.vol"]<- search_vol
   # use below to select a constant value for search.vol
   # sim[,"search.vol"]<- 0.2
   
