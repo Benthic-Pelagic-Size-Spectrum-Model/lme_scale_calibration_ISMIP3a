@@ -418,7 +418,7 @@ LHSsearch<-function(X=LME,iter=1,search_vol="estimated") {
   sim[,"f.minv"]<- sim[,"f.minv"]*2
   
   # adjust range of search vol, others go form 0-1
-  sim[,"search.vol"]<-runif(n=iter, min=0.064, max=1.0)
+  sim[,"search.vol"]<-sim[,"search.vol"]+0.001 # runif(n=iter, min=0.064, max=1.0)
   
   if (is.numeric(search_vol)) sim[,"search.vol"]<- search_vol
   # use below to select a constant value for search.vol

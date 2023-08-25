@@ -15,22 +15,6 @@ lmes<-t(pbapply::pbsapply(X=1:lmenum,LHSsearch,iter=no_iter, search_vol=search_v
 toc()
 saveRDS(lmes,paste0("Output/bestvals_LMEs_searchvol_", search_vol,"_iter_",no_iter,".RDS"))
 
-# test - can I committ from new instance? 
-
-# Use optimParallel to get better "bestvals"
-# tic()
-# for (i in 4:66){
-# vals<-unlist(bestvals[i,1:5])
-# bestvals[i,1:5]<-fastOptim(lme=i,vary=vals)
-# bestvals[i,6]<-getError(bestvals[i,1:5],lme=i)
-# }
-# toc()
-
- # test_lme4<-LHSsearch(4,iter=100)
- # vals<-unlist(bestvals[3,1:5])
- # newvals<-fastOptim(lme=2,unlist(vals),getError)
-
-
 # WARNINGs: 
 
 # 2. some LME (e.g. LME 4) do not run because the model called by LHSsearch does not produce biomass 
@@ -59,6 +43,8 @@ bestvals<-data.frame(readRDS(paste0("Output/bestvals_LMEs_searchvol_", search_vo
 
 # add column for correlation:
 bestvals$cor<-rep(0,lmenum)
+# add column for NA catches:
+bestvals$catchNA<-rep(0,lmenum)
 
 pdf(paste0("Output/CalibrationPlots_searchvol_", search_vol,"_iter_", no_iter,".pdf"),height = 6, width = 8)
 
@@ -82,48 +68,12 @@ for (i in 1:66){
     summarise(TotalCatchPerYr=mean(Totalcatch),
               ObsCatchPerYr=mean(catch_tonnes_area_m2,na.rm=T))
   # convert units
-  # CN from tonnes to g
   out$ObsCatchPerYr<-out$ObsCatchPerYr*1e6
-  
-  ### CHECK OPTIONS: 
-  
-  #### 1 # raw effort (early values each month) 
-  # Year TotalCatchPerYr ObsCatchPerYr
-  # <dbl>           <dbl>         <dbl>
-  #   1  1950        0.000993         0.220
-  # 2  1951        0.00107          0.246
-  # 3  1952        0.00101          0.276
-  # 4  1953        0.00103          0.276
-  # 5  1954        0.00108          0.273
-  # 6  1955        0.00105          0.246
-  # 7  1956        0.00103          0.278
-  # 8  1957        0.00105          0.289
-  # 9  1958        0.00119          0.299
-  # 10  1959        0.00130          0.311
-  
-  #### 2 # effort/12 (early values/12 each month) 
-  # Year TotalCatchPerYr ObsCatchPerYr
-  # <dbl>           <dbl>         <dbl>
-  #   1  1950     0.0000828        0.0183
-  # 2  1951       0.0000895        0.0205
-  # 3  1952       0.0000845        0.0230
-  # 4  1953       0.0000861        0.0230
-  # 5  1954       0.0000899        0.0227
-  # 6  1955       0.0000872        0.0205
-  # 7  1956       0.0000861        0.0232
-  # 8  1957       0.0000873        0.0240
-  # 9  1958       0.0000994        0.0249
-  # 10  1959       0.000109         0.0259
-  
-  #### 3 # change back to old effort input file 
-  ## checked - same values and trends for LME 1 across effort datasets. 
-  # the trend in modelled catches for this version follows the trend in effort BUT 
-  # the trend in modelled catches for the old version where LME calibration was working do not.  
-  
   
   # bestvals$rmse[i]<-sqrt(sum(out$squared_error,na.rm=T)/sum(!is.na(out$squared_error)))
   
   bestvals$cor[i]<-cor(out$ObsCatchPerYr,out$TotalCatchPerYr,use="complete.obs")
+  bestvals$catchNA[i]<-sum(is.na(out$TotalCatchPerYr))
   
   p1<-ggplot() +
     geom_line(data = out, aes(x = Year, y = TotalCatchPerYr)) +
@@ -237,3 +187,35 @@ dev.off()
 # # #save the file
 # # saveRDS(simset,"simset_LMEs.RDS")
 # 
+
+# Use optimParallel to get better "bestvals" for LMES that do not have good enough fit to data
+
+# refine<-which(bestvals$cor<0.5|bestvals$rmse>0.5|bestvals$catchNA>0)
+# tic()
+# for (i in 1:dim(bestvals[refine,])[1]){
+#   vals<-unlist(bestvals[refine,][i,1:5])
+#   optim_result<-fastOptim(lme=refine[i],vary=vals)
+#   bestvals[refine,][i,1:5]<-unlist(optim_result$par)[1:5]
+#   bestvals[refine,][i,6]<-unlist(optim_result$value)
+#   print(i)
+# }
+# toc()
+
+refine<-which(bestvals$cor<0.5|bestvals$rmse>0.5|bestvals$catchNA>0)
+tic()
+for (i in 1:dim(bestvals[refine,])[1]){
+  vals<-unlist(bestvals[refine,][i,1:5])
+  result<-LHSsearch(X=refine[i],iter=1000)
+  bestvals[refine,][i,1:6]<-result
+  print(i)
+}
+toc()
+
+saveRDS(bestvals,paste0("Output/refined_bestvals_LMEs_cor_searchvol_", search_vol,"_iter_",no_iter,".RDS"))
+
+## then need to put these back with  the other "bestvals".
+
+# test_lme4<-LHSsearch(4,iter=100)
+# vals<-unlist(bestvals[3,1:5])
+# newvals<-fastOptim(lme=2,unlist(vals),getError)
+
