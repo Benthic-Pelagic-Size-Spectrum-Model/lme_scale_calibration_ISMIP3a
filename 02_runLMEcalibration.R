@@ -25,9 +25,9 @@ saveRDS(lmes,paste0("Output/bestvals_LMEs_searchvol_", search_vol,"_iter_",no_it
 # }
 # toc()
 
-# LHSsearch(37,iter=10,search_vol=0.6)
-# vals<-unlist(bestvals[1,1:5])
-# newvals<-fastOptim(lme=2,unlist(vals),getError)
+ # test_lme4<-LHSsearch(4,iter=100)
+ # vals<-unlist(bestvals[3,1:5])
+ # newvals<-fastOptim(lme=2,unlist(vals),getError)
 
 
 # WARNINGs: 
@@ -59,7 +59,7 @@ bestvals<-data.frame(readRDS(paste0("Output/bestvals_LMEs_searchvol_", search_vo
 # add column for correlation:
 bestvals$cor<-rep(0,lmenum)
 
-pdf(paste0("Output/CalibrationPlots_searchvol", search_vol,"_iter_", no_iter,".pdf"),height = 6, width = 8)
+pdf(paste0("Output/CalibrationPlots_searchvol_", search_vol,"_iter_", no_iter,".pdf"),height = 6, width = 8)
 
 for (i in 1:66){
   

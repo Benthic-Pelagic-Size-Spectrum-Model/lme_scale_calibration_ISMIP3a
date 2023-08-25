@@ -418,7 +418,7 @@ LHSsearch<-function(X=LME,iter=1,search_vol="estimated") {
   sim[,"f.minv"]<- sim[,"f.minv"]*2
   
   # adjust range of search vol, others go form 0-1
-  sim[,"search.vol"]<-runif(n=iter, min=0.064, max=0.64)
+  sim[,"search.vol"]<-runif(n=iter, min=0.064, max=1.0)
   
   if (is.numeric(search_vol)) sim[,"search.vol"]<- search_vol
   # use below to select a constant value for search.vol
@@ -446,7 +446,7 @@ LHSsearch<-function(X=LME,iter=1,search_vol="estimated") {
 
   #X<-readRDS(file = "lhs_res_LME42_b.RDS")
   # check this time param set with lowest error
-  findmin<-which(sim$rmse==min(sim$rmse))
+  findmin<-which(sim$rmse==min(sim$rmse,na.rm=T))
   bestvals<- sim[findmin,]
   print(bestvals[c(1:6)])
   # 
