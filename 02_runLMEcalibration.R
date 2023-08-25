@@ -15,6 +15,7 @@ lmes<-t(pbapply::pbsapply(X=1:lmenum,LHSsearch,iter=no_iter, search_vol=search_v
 toc()
 saveRDS(lmes,paste0("Output/bestvals_LMEs_searchvol_", search_vol,"_iter_",no_iter,".RDS"))
 
+# test - can I committ from new instance? 
 
 # Use optimParallel to get better "bestvals"
 # tic()
