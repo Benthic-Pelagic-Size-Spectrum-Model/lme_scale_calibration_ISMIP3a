@@ -5,18 +5,18 @@
 plotgridbyLME<-function(LMEnumber = 1){
   
   # # trial 
-  # LMEnumber = 1
+  # LMEnumber = 2
   
   # load outputs 
   LME_path = paste0("/rd/gem/private/fishmip_outputs/ISIMIP3a/DBPM/obsclim/LME_",LMEnumber,"_output")
   grid_results <- readRDS(paste0(LME_path,"/grid_results.rds"))
   
-  # ### WARNING need to comment out to figure out trend in biomass 
-  # removing the stable spinup section to have matching dimensions with the code
-  grid_results$U <- grid_results$U[,,1201:3241]
-  grid_results$V <- grid_results$V[,,1201:3241]
-  grid_results$Y.u <- grid_results$Y.u[,,1201:3241]
-  grid_results$Y.v <- grid_results$Y.v[,,1201:3241]
+  # # ### WARNING need to comment out to figure out trend in biomass 
+  # # removing the stable spinup section to have matching dimensions with the code
+  # grid_results$U <- grid_results$U[,,1201:3241]
+  # grid_results$V <- grid_results$V[,,1201:3241]
+  # grid_results$Y.u <- grid_results$Y.u[,,1201:3241]
+  # grid_results$Y.v <- grid_results$Y.v[,,1201:3241]
 
   # load inputs and param object 
   load(paste0(LME_path,"/grid_results_inputs_params.RData"))
@@ -36,7 +36,7 @@ plotgridbyLME<-function(LMEnumber = 1){
   out$cell<-as.factor(out$cell)
 
   # colnames(out)
-  # head(out[,c("t","Totalcatch","TotalVcatch","TotalUcatch","TotalVbiomass","TotalUbiomass")])
+  head(out[,c("t","Totalcatch","TotalVcatch","TotalUcatch","TotalVbiomass","TotalUbiomass")])
 
   # download world map
   # world <- ne_download(category = "cultural", 

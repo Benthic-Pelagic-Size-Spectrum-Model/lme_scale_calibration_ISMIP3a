@@ -218,9 +218,6 @@ rungridbyLME <- function(LMEnumber = 14,
   tic()
   grid_results<-gridded_sizemodel(gridded_params,
                                   ERSEM.det.input=F,
-                                  # U_mat,
-                                  # V_mat,
-                                  # W_mat,
                                   temp.effect=T,
                                   eps=1e-5,
                                   output="aggregated",
@@ -228,34 +225,21 @@ rungridbyLME <- function(LMEnumber = 14,
                                   burnin.len)
   toc()# 65.50608 min 
 
-  #### TEST 1:
-  # LME 1
-  # random bestvalues - i.e. the ones that picked manually best approximate catches (0.1,0.5,1,1) 
-  # search vol = 0.64 as OK for this LME
-  # Fmort = first calculate Fmort and catches then spread (gravity model) - i.e. same effort cross grid cells is used
-  # gravity model option 1 
-  # WARNING - need to fix dim(U) == dim(Y) != dim(effort) here and in LME_calibration.r/run_model() 
-  
-  # check effort - it should be different across grid cells still.
-  # grid_results$effort[,2] # OK from step 2 onward it is spread but using effort before spreading ... 
-  # biomass trend in plot 
-  # catch trend in plot
-  
-  #### TEST 3
+  #### TEST 3 - OK working 
   # LME 1
   # random bestvalues - i.e. the ones that picked manually best approximate catches (0.1,0.5,1,1) 
   # search vol = 0.64 as OK for this LME
   # Fmort = first spread effort then calculate Fmort and catches as discussed with Julia 
-  # gravity model option 1 
+  # gravity model option 2 with iter = 1 
   # WARNING - need to fix dim(U) == dim(Y) != dim(effort) here and in LME_calibration.r/run_model() 
-  ## also fixed a bug: add j dimention when calcualting Fmort and catches - done by checking the gravity model 
   
-  # # removing the stable spinup section to have matching dimensions with the code
-  ## WARNING  move to plotting function for now as need to figure out catch trend 
-  # grid_results$U <- grid_results$U[,,1201:3241]
-  # grid_results$V <- grid_results$V[,,1201:3241]
-  # grid_results$Y.u <- grid_results$Y.u[,,1201:3241]
-  # grid_results$Y.v <- grid_results$Y.v[,,1201:3241]
+  # removing the stable spinup section to have matching dimensions with the code
+  # WARNING  move to plotting function for now as need to figure out catch trend
+  grid_results$U <- grid_results$U[,,1201:3241]
+  grid_results$V <- grid_results$V[,,1201:3241]
+  grid_results$Y.u <- grid_results$Y.u[,,1201:3241]
+  grid_results$Y.v <- grid_results$Y.v[,,1201:3241]
+  # moved to plotting function as needed there
   # gridded_params$Neq <- 2040
   
   # save results from run
@@ -266,23 +250,43 @@ rungridbyLME <- function(LMEnumber = 14,
 }
 
 ## TESTS:
- 
 
 # get the latest best values based on iterations and search_vol
-iter = 100
-seach_vol = "estimated"  
+no_iter = 100
+search_vol = "estimated"  
 vals <- data.frame(readRDS(paste0("Output/bestvals_LMEs_searchvol_", search_vol,"_iter_",no_iter,".RDS")))
 
 library(tictoc)
 
-tic()
-rungridbyLME(LMEnumber = 1, 
-             yearly = FALSE, # for get_lme_inputs()
-             f.effort = TRUE, # for rungridbyLME()
-             vals = vals)
-toc() 
+# tic()
+# rungridbyLME(LMEnumber = 1, 
+#              yearly = FALSE, # for get_lme_inputs()
+#              f.effort = TRUE, # for rungridbyLME()
+#              vals = vals)
+# toc() 
+# 
+# plotgridbyLME(LMEnumber = 1)
 
-plotgridbyLME(LMEnumber = 1)
+## RUN all LMEs 
+
+# run only LMEs with a good correlation/error and all catches 
+# refine<-which(vals$cor<0.5|vals$rmse>0.5|vals$catchNA>0) # no columns here....
+LMEnumber<-which(vals$rmse<0.5) 
+LMEnumber<-LMEnumber[1:2] # trial
+
+# tic()
+# pbapply::pbsapply(X=LMEnumber,rungridbyLME,yearly = FALSE, f.effort = TRUE, vals = vals, cl = detectCores() - 5)
+# toc()
+
+## OR 
+tic()
+mclapply(LMEnumber, function(x) rungridbyLME(x, yearly = FALSE, f.effort = TRUE, vals = vals), mc.cores = detectCores()-5)
+toc() # 1536.929 sec elapsed/25 min. 2 LMEs But need to check results 
+
+### now produce plots - EMPTY when run in // but OK when run individually and from inside the function. 
+tic()
+mclapply(LMEnumber, function(x) plotgridbyLME(x), mc.cores = detectCores()-5)
+toc() 
 
 
 # #Test 1- compare with results from DBPM, no fishing (checking code consistency)
