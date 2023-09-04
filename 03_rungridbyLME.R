@@ -13,6 +13,8 @@
 
 rm(list=ls())
 
+library(tictoc)
+
 source("LME_calibration.R") # also calls dbpm_model_functions.R
 source("Plotting_functions_DBPM.R")
 
@@ -22,12 +24,11 @@ rungridbyLME <- function(LMEnumber = 14,
                          vals = vals){
   
   # # CN trial
-  # LMEnumber = 1
+  # LMEnumber = 4
   # yearly = FALSE
   # f.effort = TRUE
-  # # search_vol = 0.64
-  # savePlots = TRUE
-  
+  # vals = vals 
+
   LME_path <- paste0("/rd/gem/private/fishmip_outputs/ISIMIP3a/DBPM/obsclim/LME_",LMEnumber,"_output")
   if(!file.exists(LME_path)) dir.create(LME_path)
   
@@ -253,10 +254,9 @@ rungridbyLME <- function(LMEnumber = 14,
 
 # get the latest best values based on iterations and search_vol
 no_iter = 100
-search_vol = "estimated"  
-vals <- data.frame(readRDS(paste0("Output/bestvals_LMEs_searchvol_", search_vol,"_iter_",no_iter,".RDS")))
-
-library(tictoc)
+search_vol = "estimated" 
+version = "refined_"
+vals <- data.frame(readRDS(paste0("Output/", version,"bestvals_LMEs_cor_searchvol_", search_vol,"_iter_",no_iter,".RDS")))
 
 # tic()
 # rungridbyLME(LMEnumber = 1, 
@@ -271,17 +271,35 @@ library(tictoc)
 
 # run only LMEs with a good correlation/error and all catches 
 # refine<-which(vals$cor<0.5|vals$rmse>0.5|vals$catchNA>0) # no columns here....
-LMEnumber<-which(vals$rmse<0.5) 
-LMEnumber<-LMEnumber[1:2] # trial
+LMEnumber<-which(vals$cor>0.5 & vals$rmse<0.5 & vals$catchNA==0) 
 
 # tic()
 # pbapply::pbsapply(X=LMEnumber,rungridbyLME,yearly = FALSE, f.effort = TRUE, vals = vals, cl = detectCores() - 5)
-# toc()
+# toc() # trying this now BUT: WARNING: Session forced to suspend due to system upgrade, restart, maintenance, or other issue. Your session data was saved however running computations may have been interrupted.
+# 
+# ## OR 
+# tic()
+# mclapply(LMEnumber, function(x) rungridbyLME(x, yearly = FALSE, f.effort = TRUE, vals = vals), mc.cores = detectCores()-5)
+# toc() # 1536.929 sec elapsed/25 min. 2 LMEs - not working with all LMEs - no output printed. 
 
-## OR 
+## OR standard loop (possibly very slow)
+
 tic()
-mclapply(LMEnumber, function(x) rungridbyLME(x, yearly = FALSE, f.effort = TRUE, vals = vals), mc.cores = detectCores()-5)
-toc() # 1536.929 sec elapsed/25 min. 2 LMEs But need to check results 
+for (i in 1:length(LMEnumber)){
+  
+  # # trial 
+  i = 42 # 41 is LME 61 considering the selection above
+  print(paste0("Now working on LME", LMEnumber[i]))
+  
+  rungridbyLME(LMEnumber = LMEnumber[i],
+               yearly = FALSE, # for get_lme_inputs()
+               f.effort = TRUE, # for rungridbyLME()
+               vals = vals)
+  
+}
+toc()
+
+# loop started at 4:09 pm Aug 30th - about 20h - STACK at LME 61 - need to check why
 
 ### now produce plots - EMPTY when run in // but OK when run individually and from inside the function. 
 tic()

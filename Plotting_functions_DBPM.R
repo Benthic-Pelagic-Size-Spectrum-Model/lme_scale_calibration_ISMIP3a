@@ -298,7 +298,7 @@ plotgridbyLME<-function(LMEnumber = 1){
   dev.off()
   
   # print also in local for fast checking 
-  name = ifelse(f.effort == FALSE, "_no_fishing.pdf", "_fishing.pdf")
+  # name = ifelse(f.effort == FALSE, "_no_fishing.pdf", "_fishing.pdf")
   # ## adding gravity option to plot name for testing 
   # pdf(paste0("Output/Gravity2_LME_",LMEnumber, name), height = 8, width = 6, onefile = T)
   # print(p1)
@@ -311,21 +311,21 @@ plotgridbyLME<-function(LMEnumber = 1){
   # print(p8)
   # dev.off()
   
-  # increase the size of some plots as are not visible 
-  pdf(paste0("Output/Gravity2_BiomassU_LME_",LMEnumber, name))
-  p1
-  dev.off()
-  
-  pdf(paste0("Output/Gravity2_BiomassV_LME_",LMEnumber, name))
-  p2
-  dev.off()
-  
-  pdf(paste0("Output/Gravity2_CatchU_LME_",LMEnumber, name))
-  p6
-  dev.off()
-  
-  pdf(paste0("Output/Gravity2_CatchV_LME_",LMEnumber, name))
-  p7
-  dev.off()
+  # # increase the size of some plots as are not visible 
+  # pdf(paste0("Output/Gravity2_BiomassU_LME_",LMEnumber, name))
+  # p1
+  # dev.off()
+  # 
+  # pdf(paste0("Output/Gravity2_BiomassV_LME_",LMEnumber, name))
+  # p2
+  # dev.off()
+  # 
+  # pdf(paste0("Output/Gravity2_CatchU_LME_",LMEnumber, name))
+  # p6
+  # dev.off()
+  # 
+  # pdf(paste0("Output/Gravity2_CatchV_LME_",LMEnumber, name))
+  # p7
+  # dev.off()
   
 }
