@@ -11,6 +11,9 @@
 #' 
 #' 
 
+
+#### set environment ----
+
 rm(list=ls())
 
 library(tictoc)
@@ -18,16 +21,29 @@ library(tictoc)
 source("LME_calibration.R") # also calls dbpm_model_functions.R
 source("Plotting_functions_DBPM.R")
 
+# get the latest best values based on iterations and search_vol
+no_iter = 100
+search_vol = "estimated" 
+version = "refined_"
+vals <- data.frame(readRDS(paste0("Output/", version,"bestvals_LMEs_cor_searchvol_", search_vol,"_iter_",no_iter,".RDS")))
+
+# run only LMEs with a good correlation/error and all catches 
+LMEnumber<-which(vals$cor>0.5 & vals$rmse<0.5 & vals$catchNA==0) 
+
+#### run gridded model by LME ----
+
+#### MOVE TO FUNCTION CODE
 rungridbyLME <- function(LMEnumber = 14, 
                          yearly = FALSE, 
                          f.effort = TRUE, 
                          vals = vals){
   
-  # # CN trial
-  # LMEnumber = 4
-  # yearly = FALSE
-  # f.effort = TRUE
-  # vals = vals 
+  # CN trial
+  LMEnumber = 61
+  yearly = FALSE
+  f.effort = TRUE
+  vals = vals
+  
 
   LME_path <- paste0("/rd/gem/private/fishmip_outputs/ISIMIP3a/DBPM/obsclim/LME_",LMEnumber,"_output")
   if(!file.exists(LME_path)) dir.create(LME_path)
@@ -164,20 +180,15 @@ rungridbyLME <- function(LMEnumber = 14,
   # cell <- cell[1:(length(cell)-2)] #the code above produces a NA with the last cell
   
   if(f.effort){
-    # f.u <- 0.1 # WARNING - check: replace with fake best values that work 
-    # f.v <- 0.5
-    # # CN correct 
     f.u<-as.numeric(vals[LMEnumber,1])
     f.v<-as.numeric(vals[LMEnumber,2])
-    # # f.u<-as.numeric(vals[1])
-    # # f.v<-as.numeric(vals[2])
-  } else  f.u <- f.v <- 0
+    f.minu<-as.numeric(vals[LMEnumber,3])
+    f.minv<-as.numeric(vals[LMEnumber,4])
+  } else { 
+    f.u <- f.v <- 0 
+    f.minu <- f.minv <- 0 
+    }
   
-  # CN corrected by adding LMEnumber 
-  # f.minu <- 1 # WARNING - check: replace with fake best values that work 
-  # f.minv <- 1
-  f.minu<-as.numeric(vals[LMEnumber,3])
-  f.minv<-as.numeric(vals[LMEnumber,4])
   search_vol<-as.numeric(vals[LMEnumber,5])
 
   # Making values constant through time
@@ -225,6 +236,17 @@ rungridbyLME <- function(LMEnumber = 14,
                                   use.init = TRUE,
                                   burnin.len)
   toc()# 65.50608 min 
+  
+  
+  
+  #### Arrivata qui with LME 61 
+  
+  
+  
+  
+  
+  
+  
 
   #### TEST 3 - OK working 
   # LME 1
@@ -232,7 +254,6 @@ rungridbyLME <- function(LMEnumber = 14,
   # search vol = 0.64 as OK for this LME
   # Fmort = first spread effort then calculate Fmort and catches as discussed with Julia 
   # gravity model option 2 with iter = 1 
-  # WARNING - need to fix dim(U) == dim(Y) != dim(effort) here and in LME_calibration.r/run_model() 
   
   # removing the stable spinup section to have matching dimensions with the code
   # WARNING  move to plotting function for now as need to figure out catch trend
@@ -250,13 +271,7 @@ rungridbyLME <- function(LMEnumber = 14,
   
 }
 
-## TESTS:
-
-# get the latest best values based on iterations and search_vol
-no_iter = 100
-search_vol = "estimated" 
-version = "refined_"
-vals <- data.frame(readRDS(paste0("Output/", version,"bestvals_LMEs_cor_searchvol_", search_vol,"_iter_",no_iter,".RDS")))
+## TEST 
 
 # tic()
 # rungridbyLME(LMEnumber = 1, 
@@ -268,10 +283,6 @@ vals <- data.frame(readRDS(paste0("Output/", version,"bestvals_LMEs_cor_searchvo
 # plotgridbyLME(LMEnumber = 1)
 
 ## RUN all LMEs 
-
-# run only LMEs with a good correlation/error and all catches 
-# refine<-which(vals$cor<0.5|vals$rmse>0.5|vals$catchNA>0) # no columns here....
-LMEnumber<-which(vals$cor>0.5 & vals$rmse<0.5 & vals$catchNA==0) 
 
 # tic()
 # pbapply::pbsapply(X=LMEnumber,rungridbyLME,yearly = FALSE, f.effort = TRUE, vals = vals, cl = detectCores() - 5)
@@ -299,13 +310,103 @@ for (i in 1:length(LMEnumber)){
 }
 toc()
 
-# loop started at 4:09 pm Aug 30th - about 20h - STACK at LME 61 - need to check why
+# STACK at LME 61 
+
+#### plot gridded and averadged output by LME ----
+
+LMEnumber<-LMEnumber[1:40]
 
 ### now produce plots - EMPTY when run in // but OK when run individually and from inside the function. 
 tic()
 mclapply(LMEnumber, function(x) plotgridbyLME(x), mc.cores = detectCores()-5)
 toc() 
+# run start at 10:05am - NEED TO CHECK IF THEY HAVE BEEN PRODUCED 
 
+#### global map of gridded output ----
+
+# this function is very similar to the beginning of plotgridbyLME() above but considers only gridded outputs
+# wth the final aim of aggregating all outputs to plot global map 
+
+#### MOVE TO FUNCTION CODE
+##### POSSIBLY WORTH DOING ALL PLOTS CALCUALTIONS HERE AS THE MOST EXPENSIVE ACTION IS TO LOAD THE OUTPUTS - SO BETTER DOING IT ONLY ONCE ... 
+# COMBINED WITH PLOTTING FUNCTION ABOVE... 
+getGriddedOutputs_decade<-function(LMEnumber = 1){
+  
+  # # trial 
+  # LMEnumber = 1
+  
+  # load outputs 
+  LME_path = paste0("/rd/gem/private/fishmip_outputs/ISIMIP3a/DBPM/obsclim/LME_",LMEnumber,"_output")
+  full_file_name<-paste0(LME_path,"/grid_results.rds")
+  
+  if(file.exists(full_file_name)){
+    
+    print(paste0("Now working on LME", LMEnumber))
+    
+    grid_results <- readRDS(paste0(LME_path,"/grid_results.rds"))
+  
+    # # ### WARNING need to comment out to figure out trend in biomass 
+    # # removing the stable spinup section to have matching dimensions with the code
+    # grid_results$U <- grid_results$U[,,1201:3241]
+    # grid_results$V <- grid_results$V[,,1201:3241]
+    # grid_results$Y.u <- grid_results$Y.u[,,1201:3241]
+    # grid_results$Y.v <- grid_results$Y.v[,,1201:3241]
+  
+    # load inputs and param object 
+    load(paste0(LME_path,"/grid_results_inputs_params.RData"))
+    gridded_params$Neq <- 2040
+  
+    ### WARNING need to check depth integration and Neq - do they match what used for inputs and for runLMEcalibration? 
+    out<-getGriddedOutputs(input=lme_inputs_grid,results=grid_results,params=gridded_params)
+
+    # averaged across decades for U and V
+    out2<-out %>% 
+      select(lat,lon,t,TotalVcatch, TotalUcatch, TotalVbiomass, TotalUbiomass) %>% 
+      mutate(year = year(t)) %>% 
+      group_by(LME, year, lat, lon) %>% 
+      summarize(
+        Ubiomass_year = mean(TotalUbiomass,na.rm=T),
+        Vbiomass_year = mean(TotalVbiomass,na.rm=T), 
+        Ucatch_year = mean(TotalUcatch,na.rm=T),
+        Vcatch_year = mean(TotalVcatch,na.rm=T)) %>% 
+      ungroup() %>% 
+      mutate(biomass_year = Ubiomass_year+Vbiomass_year,
+             catch_year = Ucatch_year+Vcatch_year)
+  
+    return(out2)
+  }
+}
+
+# loop through LMEs 
+
+tic()
+a<-mclapply(LMEnumber, function(x) getGriddedOutputs_decade(x), mc.cores = detectCores()-5)
+toc() 
+
+
+df<-list()
+
+tic()
+for (i in 1:length(LMEnumber)){
+
+  print(paste0("Now working on LME", LMEnumber[i]))
+  
+  df[[i]]<-getGriddedOutputs_decade(LMEnumber = LMEnumber[i])
+  
+}
+toc()
+
+
+# do call df 
+
+# transfor in raster each of the 6 elements 
+
+# one map for each element - see EC code. 
+
+
+
+
+#### tesing ----
 
 # #Test 1- compare with results from DBPM, no fishing (checking code consistency)
 # # 1.	Test 1: run yearly = TRUE, no fishing (effort = 0), search volume = 64. 
@@ -320,8 +421,6 @@ toc()
 # lat_mask <- tcb$dim$lat$vals >= min(lat_ext) & tcb$dim$lat$vals <= max(lat_ext)
 # lon_mask <- tcb$dim$lon$vals >= min(lon_ext) & tcb$dim$lon$vals <= max(lon_ext)
 # time_mask <- tcb$dim$time$vals >= 1841 & tcb$dim$time$vals <= 2010
-
-
 
 
 # library(ncdf4)
