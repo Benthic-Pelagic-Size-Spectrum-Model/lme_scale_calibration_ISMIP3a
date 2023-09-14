@@ -17,6 +17,11 @@
 rm(list=ls())
 
 library(tictoc)
+library(raster)
+library(tidyverse)
+
+select<-dplyr::select
+summarise <-dplyr::summarise
 
 source("LME_calibration.R") # also calls dbpm_model_functions.R
 source("Plotting_functions_DBPM.R")
@@ -343,8 +348,10 @@ getGriddedOutputs_decade<-function(LMEnumber = 1){
     
     print(paste0("Now working on LME", LMEnumber))
     
+    tic()
     grid_results <- readRDS(paste0(LME_path,"/grid_results.rds"))
-  
+    toc() # 49 sec
+    
     # # ### WARNING need to comment out to figure out trend in biomass 
     # # removing the stable spinup section to have matching dimensions with the code
     # grid_results$U <- grid_results$U[,,1201:3241]
@@ -357,13 +364,17 @@ getGriddedOutputs_decade<-function(LMEnumber = 1){
     gridded_params$Neq <- 2040
   
     ### WARNING need to check depth integration and Neq - do they match what used for inputs and for runLMEcalibration? 
+    tic()
     out<-getGriddedOutputs(input=lme_inputs_grid,results=grid_results,params=gridded_params)
-
+    toc() # 18 sec
+    
     # averaged across decades for U and V
+    tic()
     out2<-out %>% 
-      select(lat,lon,t,TotalVcatch, TotalUcatch, TotalVbiomass, TotalUbiomass) %>% 
-      mutate(year = year(t)) %>% 
-      group_by(LME, year, lat, lon) %>% 
+      select(lat,lon,LME,t,TotalVcatch, TotalUcatch, TotalVbiomass, TotalUbiomass) %>% 
+      mutate(year = year(t), 
+             decade = floor(year/10)*10) %>% # original data resolution is month - can do year than decade. 
+      group_by(LME, decade, lat, lon) %>% 
       summarize(
         Ubiomass_year = mean(TotalUbiomass,na.rm=T),
         Vbiomass_year = mean(TotalVbiomass,na.rm=T), 
@@ -372,36 +383,62 @@ getGriddedOutputs_decade<-function(LMEnumber = 1){
       ungroup() %>% 
       mutate(biomass_year = Ubiomass_year+Vbiomass_year,
              catch_year = Ucatch_year+Vcatch_year)
-  
+    toc() # 2 sec
+    
     return(out2)
   }
 }
 
 # loop through LMEs 
 
+# trial<-LMEnumber[1:3]
+# df<-list()
+# 
+# tic()
+# for (i in 1:length(trial)){
+#   df[[i]]<-getGriddedOutputs_decade(LMEnumber = LMEnumber[i])
+# }
+# toc() # 123 sec 3 LMEs 
+
+# try mclapply
+LMEnumber<-LMEnumber[1:40] # for now run first LMEs that worked 
 tic()
 a<-mclapply(LMEnumber, function(x) getGriddedOutputs_decade(x), mc.cores = detectCores()-5)
-toc() 
+toc() # 55 sec 
 
-
-df<-list()
-
-tic()
-for (i in 1:length(LMEnumber)){
-
-  print(paste0("Now working on LME", LMEnumber[i]))
-  
-  df[[i]]<-getGriddedOutputs_decade(LMEnumber = LMEnumber[i])
-  
-}
-toc()
-
-
-# do call df 
+df_to_plot<-do.call(rbind, a)
+# head(df_to_plot)
 
 # transfor in raster each of the 6 elements 
 
+##### consider one raster for year 
+
+df_to_plot_biomass<-df_to_plot %>% 
+  select(lat,lon,catch_year,decade) %>%  # does the order count? 
+  unique()
+
+### not good coding, for now OK but needs fixing 
+df_to_plot_biomass<-df_to_plot_biomass[,c("lon","lat","catch_year", "decade")]
+df_to_plot_biomass_list<-split(df_to_plot_biomass, df_to_plot_biomass$decade)
+df_to_plot_biomass_list<-lapply(df_to_plot_biomass_list, function(x) x<-x %>% select(-decade))
+
+raster_decade<-list()
+for (i in 1:length(df_to_plot_biomass_list)){
+  raster_decade[[i]]<-rasterFromXYZ(df_to_plot_biomass_list[[i]])
+}
+names(raster_decade)<-unique(df_to_plot_biomass$decade)
+
+# plot 2010? 
+plot(raster_decade[[18]])
+
 # one map for each element - see EC code. 
+# for now print raster if possible 
+getwd()
+pdf("/home/dbpm/lme_scale_calibration_ISMIP3a/Output/global_catch_map.pdf")
+raster_decade[[18]]
+dev.off()
+
+
 
 
 
