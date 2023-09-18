@@ -11,7 +11,6 @@
 #' 
 #' 
 
-
 #### set environment ----
 
 rm(list=ls())
@@ -19,12 +18,15 @@ rm(list=ls())
 library(tictoc)
 library(raster)
 library(tidyverse)
+library(data.table)
 
 select<-dplyr::select
 summarise <-dplyr::summarise
 
 source("LME_calibration.R") # also calls dbpm_model_functions.R
 source("Plotting_functions_DBPM.R")
+
+LME_path <- "/rd/gem/private/fishmip_outputs/ISIMIP3a/DBPM/obsclim/"
 
 # get the latest best values based on iterations and search_vol
 no_iter = 100
@@ -43,15 +45,15 @@ rungridbyLME <- function(LMEnumber = 14,
                          f.effort = TRUE, 
                          vals = vals){
   
-  # CN trial
-  LMEnumber = 61
-  yearly = FALSE
-  f.effort = TRUE
-  vals = vals
+  # # CN trial
+  # LMEnumber = 61
+  # yearly = FALSE
+  # f.effort = TRUE
+  # vals = vals
   
 
-  LME_path <- paste0("/rd/gem/private/fishmip_outputs/ISIMIP3a/DBPM/obsclim/LME_",LMEnumber,"_output")
-  if(!file.exists(LME_path)) dir.create(LME_path)
+  LME_path_full <- paste0(LME_path, "/rd/gem/private/fishmip_outputs/ISIMIP3a/DBPM/obsclim/","LME_",LMEnumber,"_output")
+  if(!file.exists(LME_path_full)) dir.create(LME_path_full)
   
   ## Tests ----
   # test 1 - check no fishing runs and compare to the matching netcdf? 
@@ -243,14 +245,7 @@ rungridbyLME <- function(LMEnumber = 14,
   toc()# 65.50608 min 
   
   
-  
-  #### Arrivata qui with LME 61 
-  
-  
-  
-  
-  
-  
+  #### Arrivata qui with LME 61 - works OK
   
 
   #### TEST 3 - OK working 
@@ -270,9 +265,9 @@ rungridbyLME <- function(LMEnumber = 14,
   # gridded_params$Neq <- 2040
   
   # save results from run
-  saveRDS(grid_results,paste0(LME_path,"/grid_results.rds"))
+  saveRDS(grid_results,paste0(LME_path_full,"/grid_results.rds"))
   # save inputs and params object needed for plotting 
-  save(lme_input_init, lme_inputs_grid, gridded_params, file =paste0(LME_path,"/grid_results_inputs_params.RData"))
+  save(lme_input_init, lme_inputs_grid, gridded_params, file =paste0(LME_path_full,"/grid_results_inputs_params.RData"))
   
 }
 
@@ -296,7 +291,7 @@ rungridbyLME <- function(LMEnumber = 14,
 # ## OR 
 # tic()
 # mclapply(LMEnumber, function(x) rungridbyLME(x, yearly = FALSE, f.effort = TRUE, vals = vals), mc.cores = detectCores()-5)
-# toc() # 1536.929 sec elapsed/25 min. 2 LMEs - not working with all LMEs - no output printed. 
+# toc() # 1536.929 sec elapsed/25 min. No working with all LMEs ?!
 
 ## OR standard loop (possibly very slow)
 
@@ -325,7 +320,7 @@ LMEnumber<-LMEnumber[1:40]
 tic()
 mclapply(LMEnumber, function(x) plotgridbyLME(x), mc.cores = detectCores()-5)
 toc() 
-# run start at 10:05am - NEED TO CHECK IF THEY HAVE BEEN PRODUCED 
+# problem running this too... 
 
 #### global map of gridded output ----
 
@@ -335,21 +330,22 @@ toc()
 #### MOVE TO FUNCTION CODE
 ##### POSSIBLY WORTH DOING ALL PLOTS CALCUALTIONS HERE AS THE MOST EXPENSIVE ACTION IS TO LOAD THE OUTPUTS - SO BETTER DOING IT ONLY ONCE ... 
 # COMBINED WITH PLOTTING FUNCTION ABOVE... 
-getGriddedOutputs_decade<-function(LMEnumber = 1){
+getGriddedOutputs_decade<-function(LME_path, LMEnumber){
   
   # # trial 
-  # LMEnumber = 1
+  # LMEnumber = 12
   
   # load outputs 
-  LME_path = paste0("/rd/gem/private/fishmip_outputs/ISIMIP3a/DBPM/obsclim/LME_",LMEnumber,"_output")
-  full_file_name<-paste0(LME_path,"/grid_results.rds")
+  LME_path_full = paste0(LME_path, "LME_",LMEnumber,"_output")
+  full_file_name<-paste0(LME_path_full,"/grid_results.rds")
+  full_file_name_output<-paste0(LME_path_full,"/grid_results_toCheckMap.rds")
   
   if(file.exists(full_file_name)){
     
     print(paste0("Now working on LME", LMEnumber))
     
     tic()
-    grid_results <- readRDS(paste0(LME_path,"/grid_results.rds"))
+    grid_results <- readRDS(paste0(LME_path_full,"/grid_results.rds"))
     toc() # 49 sec
     
     # # ### WARNING need to comment out to figure out trend in biomass 
@@ -360,7 +356,7 @@ getGriddedOutputs_decade<-function(LMEnumber = 1){
     # grid_results$Y.v <- grid_results$Y.v[,,1201:3241]
   
     # load inputs and param object 
-    load(paste0(LME_path,"/grid_results_inputs_params.RData"))
+    load(paste0(LME_path_full,"/grid_results_inputs_params.RData"))
     gridded_params$Neq <- 2040
   
     ### WARNING need to check depth integration and Neq - do they match what used for inputs and for runLMEcalibration? 
@@ -385,63 +381,52 @@ getGriddedOutputs_decade<-function(LMEnumber = 1){
              catch_year = Ucatch_year+Vcatch_year)
     toc() # 2 sec
     
-    return(out2)
+    # write.csv(x = out2, file = file.path(full_file_name_output))
+    fwrite(x = out2, file = file.path(full_file_name_output))
+    
   }
 }
 
-# loop through LMEs 
-
-# trial<-LMEnumber[1:3]
-# df<-list()
-# 
-# tic()
-# for (i in 1:length(trial)){
-#   df[[i]]<-getGriddedOutputs_decade(LMEnumber = LMEnumber[i])
-# }
-# toc() # 123 sec 3 LMEs 
-
-# try mclapply
-LMEnumber<-LMEnumber[1:40] # for now run first LMEs that worked 
+# apply function in //
+trial<-LMEnumber # for now run first LMEs that worked 
 tic()
-a<-mclapply(LMEnumber, function(x) getGriddedOutputs_decade(x), mc.cores = detectCores()-5)
-toc() # 55 sec 
+a<-mclapply(trial, function(x) getGriddedOutputs_decade(LME_path,LMEnumber = x), mc.cores = detectCores()-5)
+toc() # 81 sec 6 LMEs.  
 
-df_to_plot<-do.call(rbind, a)
-# head(df_to_plot)
+# get all files and put them together
+file_list<-list.files(path = LME_path, pattern = "toCheckMap", recursive = TRUE, full.name = TRUE)
+df_to_plot<-rbindlist(mclapply(file_list, function(x) fread(x), mc.cores = detectCores()-5))
 
-# transfor in raster each of the 6 elements 
+### all LMEs togetehr and plot 
 
-##### consider one raster for year 
+plot_global_raster<-function(df_to_plot, variable_to_plot, decade_to_plot){
+  
+  # # trial 
+  # variable_to_plot = "biomass_year"
+  # decade_to_plot = 2010
+  
+  raster_to_plot<-df_to_plot %>% 
+    select(lat,lon,eval(variable_to_plot),decade) %>%  
+    unique() %>% 
+    filter(decade == decade_to_plot) %>% 
+    select(lon,lat,eval(variable_to_plot)) %>% 
+    relocate(lon,lat,eval(variable_to_plot)) %>% # order is key for raster function below   
+    rasterFromXYZ()
 
-df_to_plot_biomass<-df_to_plot %>% 
-  select(lat,lon,catch_year,decade) %>%  # does the order count? 
-  unique()
-
-### not good coding, for now OK but needs fixing 
-df_to_plot_biomass<-df_to_plot_biomass[,c("lon","lat","catch_year", "decade")]
-df_to_plot_biomass_list<-split(df_to_plot_biomass, df_to_plot_biomass$decade)
-df_to_plot_biomass_list<-lapply(df_to_plot_biomass_list, function(x) x<-x %>% select(-decade))
-
-raster_decade<-list()
-for (i in 1:length(df_to_plot_biomass_list)){
-  raster_decade[[i]]<-rasterFromXYZ(df_to_plot_biomass_list[[i]])
+  name = paste0(LME_path, "global_", variable_to_plot, decade_to_plot, "map", ".pdf")
+  pdf(name)
+  plot(raster_to_plot)
+  dev.off()
+  
+  name = paste0("/home/dbpm/lme_scale_calibration_ISMIP3a/Output/", "global_", variable_to_plot, "_", decade_to_plot, "_map", ".pdf") # easier to check but needs to be deleted
+  pdf(name)
+  plot(raster_to_plot)
+  dev.off()
+  
 }
-names(raster_decade)<-unique(df_to_plot_biomass$decade)
 
-# plot 2010? 
-plot(raster_decade[[18]])
-
-# one map for each element - see EC code. 
-# for now print raster if possible 
-getwd()
-pdf("/home/dbpm/lme_scale_calibration_ISMIP3a/Output/global_catch_map.pdf")
-raster_decade[[18]]
-dev.off()
-
-
-
-
-
+plot_global_raster(df_to_plot = df_to_plot, variable_to_plot = "biomass_year", decade_to_plot = 2010)
+plot_global_raster(df_to_plot = df_to_plot, variable_to_plot = "catch_year", decade_to_plot = 2010)
 
 #### tesing ----
 
