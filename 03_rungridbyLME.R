@@ -388,7 +388,7 @@ getGriddedOutputs_decade<-function(LME_path, LMEnumber){
 }
 
 # apply function in //
-trial<-LMEnumber # for now run first LMEs that worked 
+trial<-LMEnumber[1:40] # for now run first LMEs that worked 
 tic()
 a<-mclapply(trial, function(x) getGriddedOutputs_decade(LME_path,LMEnumber = x), mc.cores = detectCores()-5)
 toc() # 81 sec 6 LMEs.  
