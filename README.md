@@ -11,4 +11,4 @@ Step 2. For each LME run model with and without fishing
 - Initial tests carried out with LME 14  
 - Takes parameter estimates from Step 1 to create initial values by re-running the LME scale inputs  
 - Get inputs for `gridded_sizemodel()` and runs for LME  
-- Produces diagnostic plots for each LME  
+- Produces diagnostic plots for each LME
