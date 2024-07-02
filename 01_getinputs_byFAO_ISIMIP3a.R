@@ -21,9 +21,7 @@ rm(list=ls())
 
 # library(raster)
 library(terra)
-# library(stringr)
 library(tidyverse)
-library(tictoc)
 library(data.table)
 library(parallel)
 library(dtplyr)
@@ -36,8 +34,20 @@ library(dtplyr)
 # and monthly weighted.mean for each climate variable. 
 # it then add spin up from control to the cliamte variables.  
 
-calc_inputs_FAO <- function(file_name_obs, file_name_crtl, file_path_crtl, 
-                            file_path_obs){
+#Testing function
+data_folder <- "/rd/gem/public/fishmip/ISIMIP3a/InputData/DBPM_lme_inputs/gridded/obsclim/025deg"
+path_obs <- list.files(data_folder, pattern = "expc-bot", full.names = T)[1]
+data_folder <- "/rd/gem/public/fishmip/ISIMIP3a/InputData/DBPM_lme_inputs/gridded/ctrlclim/025deg"
+path_crtl <- list.files(data_folder, pattern = "expc-bot", full.names = T)[1]
+
+calc_inputs_FAO <- function(#file_name_obs, 
+                            #file_name_crtl, 
+                            path_crtl, 
+                            path_obs){
+  #This function XXXXXXXXXXXXXXXXXXXXX
+  #Inputs:
+  #path_crtl (character) - Full file path for control data
+  #path_obs (character) - Full file path for observations data
   
   # # trial, deleted by RFH to tidy code (Sep 2023) 
   
@@ -47,95 +57,70 @@ calc_inputs_FAO <- function(file_name_obs, file_name_crtl, file_path_crtl,
   # file_path_crtl <- "./climate/ctrlclim/"
   # file_name_crtl <- "gfdl-mom6-cobalt2_ctrlclim_expc-bot_15arcmin_FAO-LME-21_monthly_1961_2010.csv"
   
-  # extract variable name
-  variable <- str_match(file_name_obs, 
-                        "gfdl-mom6-cobalt2_obsclim_\\s*(.*?)\\s*_15arcmin")[2]
+  #Getting directory path for control and observations datasets
+  file_path_obs <- dirname(path_obs)
+  file_path_crtl <- dirname(path_crtl)
+  
+  #Getting file name for control and observations datasets
+  file_name_obs <- basename(path_obs)
+  file_name_crtl <- basename(path_crtl)
+  
+  #Extracting variable name from observations filename
+  variable <- str_extract(file_name_obs, "obsclim_(.+)_15arc",  group = 1) |> 
+    #If unit is present, it will be disregarded
+    str_split_i("_", i = 1) |> 
+    #Replace dashed with underscores so it is easier to use column name in code
+    str_replace("-", "_")
+  
+  #Getting name of region
+  region <- str_extract(file_name_crtl, "arcmin_(.*)_monthly", 
+                       group = 1)
   
   ##############################################################################
   #### RESHAPE DATA (so FAO data conforms to LME data shape, RFH Sep. 2023) ####
   ##############################################################################
   
   # work on CONTROLCLIM first, OPEN AND RESHAPE DATA 
-  # dataframe of areas for 0.25degree, global
-  # area_frame <- data.frame("lon" = rep(seq(-179.875, 179.875, by = 0.25),
-  #                                      by = 720), 
-  #                          "lat" = rep(seq(-89.875, 89.875, by = 0.25), 
-  #                                      each = 1440), 
-                           # "area_m2" = 1e6*as.vector(t(as.matrix(area(raster(nrows = 720, 
-                           #                                                   ncol = 1440))))))
-  
-  #CHECK: May need to replace this with new masks
-  #Create spat raster object - 0.25 deg resolution
-  area_frame <- rast(resolution = 0.25, nrows = 720, ncol = 1440) |> 
-    #Calculate area of grid cell 
-    cellSize() |> 
-    #Transform to data frame
-    as.data.frame(xy = T) |>
+  #Loading grid in the resolution matching the obsclim and ctrlclim data
+  area_frame <- list.files(file.path("/rd/gem/private/shared_resources", 
+                                     "grid_cell_area_ESMs/isimip3a/"),
+                           #Get resolution of data from file name
+                           str_extract(file_name_crtl, "_\\d{2}arcmin_"),
+                           full.names = T) |> 
+    rast() |> 
+    #Transform to data frame 
+    as.data.frame(xy = T) |> 
     #Rename columns
-    rename("lon" = "x", "lat" = "y", "area_m2" = "area")
+    rename("lon" = "x", "lat" = "y", "area_m2" = "cellareao")
   
-  fao_crtl_raw <- fread(file.path(file_path_crtl, file_name_crtl), 
-                        header = FALSE)
-  
-  #CHECK: Need to verify what is being removed and replace hard coded row
-  dat1 <- fao_crtl_raw[-3, ]
-  dat_names <- unlist(as.vector(dat1[, 1]))
-  all_dat <- t(as.matrix(dat1[, -1]))
-  
-  dates <- strsplit(dat_names[-c(1:2)], "-")
-  years <- unlist(lapply(dates, '[[', 1))
-  months <- lapply(dates, function(x){month.abb[as.numeric(x[2])]})
-  col_names <- c("lat", "lon", paste(months, years, sep = "_"))
-  
-  fao_crtl <- as.data.frame(all_dat)
-  colnames(fao_crtl) <- col_names
-  
-  # fao_crtl <- left_join(fao_crtl, area_frame, 
-  #                       by = c("lat" = "lat", "lon" = "lon"))
-  # Some boundary cells are NAs, remove (very small number)
-  # fao_crtl <- fao_crtl |> na.omit() 
-  
-  #Adding area of grid cell
-  fao_crtl <- fao_crtl |> 
+  #Load ctrlclim data
+  fao_crtl <- fread(path_crtl) |> 
+    #Ignore "area_m2" column
+    select(!area_m2) |> 
+    #Reorganise data so dates are included in a "date" column
+    pivot_longer(!c(lat, lon), names_to = "date", values_to = "value") |> 
+    #Add correct area of the grid cell
     left_join(area_frame, by = join_by(lat, lon)) |> 
-    #Removing empty cells
+    #Remove any empty rows
     drop_na()
   
-  
-  # then work on OBSERVED, OPEN AND RESHAPE DATA
-  fao_raw <- fread(file.path(file_path_obs, file_name_obs), header = FALSE)
-  
-  #CHECK: Need to verify what is being removed and replace hard coded row
-  dat1 <- fao_raw[-3,]
-  dat_names <- unlist(as.vector(dat1[,1]))
-  all_dat <- t(as.matrix(dat1[,-1]))
-  
-  dates <- strsplit(dat_names[-c(1:2)], "-")
-  years <- unlist(lapply(dates, '[[', 1))
-  months <- lapply(dates, function(x){month.abb[as.numeric(x[2])]})
-  col_names <- c("lat", "lon", paste(months, years, sep = "_"))
-  
-  fao <- as.data.frame(all_dat)
-  colnames(fao) <- col_names
-  
-  # fao <- left_join(fao, area_frame, by = c("lat" = "lat", "lon" = "lon"))
-  # fao <- fao |> na.omit()
-  
-  #Adding area of grid cell
-  fao <- fao |> 
+  #Load OBSERVED, OPEN AND RESHAPE DATA
+  fao <- fread(path_obs) |> 
+    #Ignore "area_m2" column
+    select(!area_m2) |> 
+    #Reorganise data so dates are included in a "date" column
+    pivot_longer(!c(lat, lon), names_to = "date", values_to = "value") |> 
+    #Add correct area of the grid cell
     left_join(area_frame, by = join_by(lat, lon)) |> 
-    #Removing any empty rows
+    #Remove any empty rows
     drop_na()
   
-  ## Clear what we don't need
-  rm("fao_crtl_raw", "fao_raw", "dat1", "dates", "all_dat", "years", "months", 
-     "col_names")
   
   ##############################################################################
   ##############################################################################
   
   
-  # 2 methods tested to calculate weighed mean
+  # 2 methods tested to calculate weighted mean
   # METHOD 1 based on dplyr and cell area
   # METHOD 2 based on raster and cos(lat) - NEEDS TO BE UPDATED
   # for lme 1, results are the same for depth (fixed variable) 
@@ -146,65 +131,46 @@ calc_inputs_FAO <- function(file_name_obs, file_name_crtl, file_path_crtl,
   # METHOD 1
   if (variable == "deptho_m"){
     # calculate fixed variables - mean depth and area of FAO 
-    weighted_mean_obs <- fao |> 
-      summarise(deptho_m = weighted.mean(m, area_m2),
-                area_km2 = sum(area_m2)/1e6) |> 
+    weighted_mean_obs_final <- fao |> 
+      summarise(deptho_m = weighted.mean(value, area_m2),
+                total_area_km2 = sum(area_m2)*1e-6) |> 
       ## Change here! From LME to FAO, RFH Sep. 2023
-      mutate(FAO = str_extract(file_name_obs, "(?<=FAO-LME-).+(?=_monthly)")) 
+      mutate(region = region) 
     
-    weighted_mean_obs_final <- weighted_mean_obs
     # shortcut if you need to extract ctrlclim values too for all variables
-    weighted_mean_crtl_final <- weighted_mean_obs 
+    weighted_mean_crtl_final <- weighted_mean_obs_final 
     
   }else{
     
     # CONTROL 
-    weighted_mean_crtl <- fao_crtl |> 
-      # gather(key = "Date",
-      #        value = "value",
-      #        -c("lat", "lon","area_m2"))|> 
-      pivot_longer(-c("lat", "lon", "area_m2"), names_to = "Date", 
-                   values_to = "value") |> 
-      group_by(Date)   |> 
+    weighted_mean_crtl <- fao_crtl |>
+      group_by(date) |> 
       summarise(weighted_mean_crtl = weighted.mean(value, area_m2),
-                area_km2 = sum(area_m2)/1e6) |> 
+                total_area_km2 = sum(area_m2)*1e-6) |>
       ungroup()  |> 
-      ## Change here! From LME to FAO, RFH Sep. 2023
-      mutate(FAO = str_extract(file_name_crtl, "(?<=FAO-LME-).+(?=_monthly)"), 
-             Month = str_extract(Date, "[[:upper:]]+[[:lower:]]+"),
-             Year = str_extract(Date, "\\d+"), 
-             Date = lubridate::my(paste(Month, Year, sep = "." ))) |> 
-      arrange(Date)
+      separate(date, c("month", "year"), sep = "_", remove = F) |> 
+      mutate(date = my(date), region = region) |> 
+      arrange(date)
     
     # to plot METHOD 1 and compare with METHOD 2 -->>  
     # DELETED BY RFH (SEP 2023) TO TIDY CODE 
     
     # SPINUP, based on ctrlclim and used for both ctrlclim and observed
     spinup <- weighted_mean_crtl |>
-      dplyr::select(-Date) |> 
-      filter(Year >= 1961, Year <= 1980) |> 
+      filter(year >= 1961, year <= 1980) |> 
       slice(rep(1:n(), times = 6)) |>
-      mutate(Year = as.character(rep(1841:1960, each = 12)),
-             Date = lubridate::my(paste(Month,Year, sep = "." ))) 
+      mutate(year = as.character(rep(1841:1960, each = 12)),
+             date = my(paste(month, year, sep = "-"))) 
     
     # add spinup to control and check that's all OK 
-    weighted_mean_crtl_final <- weighted_mean_crtl |> 
-      full_join(spinup) |> 
-      arrange(Date) |> 
+    weighted_mean_crtl_final <- spinup |> 
+      bind_rows(weighted_mean_crtl) |> 
+      arrange(date) |> 
       # reorder columns 
-      relocate(any_of(c("FAO", "Date", "Year", "Month", "weighted_mean_crtl", 
-                        "area_km2"))) |> 
+      relocate(c("region", "date", "year", "month", "weighted_mean_crtl", 
+                 "total_area_km2")) |> 
       # rename weighted_mean column according to variable 
-      rename(variable = "weighted_mean_crtl")
-    
-    # reorder columns 
-    # weighted_mean_crtl_final <- weighted_mean_crtl_final[,c("FAO", "Date", 
-    #                                                         "Year", "Month",
-    #                                                         "weighted_mean_crtl",
-    #                                                         "area_km2")]
-    
-    # rename weighted_mean column according to variable 
-    # names(weighted_mean_crtl_final)[5] <- variable
+      mutate(variable_name = variable)
     
     # OBSERVED 
     weighted_mean_obs<-fao |> 
