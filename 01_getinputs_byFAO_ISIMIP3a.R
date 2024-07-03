@@ -12,48 +12,57 @@
 
 
 # Loading libraries -------------------------------------------------------
-library(terra)
+# library(terra)
 library(tidyverse)
 library(data.table)
 library(parallel)
 library(dtplyr)
+library(janitor)
 
 
 # Reorganising data extracted from GFDL-COBALT2-MOM6 model ----------------
 #This function will transform the data so it appears longer (instead of wide)
 #It will also add the correct area of the grid cell for the GFDL model
-reorganise_gfdl <- function(gfdl_path, area_cell_df){
+reorganise_gfdl <- function(gfdl_path, area_cell_df, region){
   #Inputs:
   #gfdl_path (character) - Full path to GFDL data 
   #area_cell_df (data frame) - Contains the area of the grid cell from the GFDL
-  #model. It shgould contain three columns: lon, lat, and area_m2
+  #model. It should contain three columns: lon, lat, and area_m2
+  #region (character) - Region of interest
   #
   #Output:
   #df (data frame) - Contains reorganised GFDL data and adds correct grid cell
   #area
   
-  df <- fread(gfdl_path) |> 
-    #Ignore "area_m2" column
-    select(!area_m2) |> 
-    #Reorganise data so dates are included in a "date" column
-    pivot_longer(!c(lat, lon), names_to = "date", values_to = "value") |> 
+  #Load data
+  df <- fread(gfdl_path, header = F) |> 
+    #Transpose data
+    t() |> 
+    #Use first row as column names
+    row_to_names(1) |> 
+    as.data.frame() |> 
+    remove_empty("cols") |> 
+    #Ensure data is numeric
+    mutate(across(everything(), ~as.numeric(.x))) |> 
+    #Reorganise data so values are in a single column
+    pivot_longer(!c(lat,lon), values_to = "value", names_to = "date") |> 
+    #Apply date format
+    mutate(date = as_date(date)) |> 
     #Add correct area of the grid cell
     left_join(area_cell_df, by = join_by(lat, lon)) |> 
     #Adding scenario to data
     mutate(scenario = str_extract(gfdl_path, 
-                                  "gridded/(.*)/\\d{2,3}deg", group = 1)) |> 
+                                  "fao_inputs/(.*)/\\d{2,3}deg", group = 1)) |> 
     #Remove any empty rows
     drop_na() |> 
-    #Separate date column into month and year
-    separate(date, c("month", "year"), sep = "_", remove = F) |> 
     #Apply date format to date column
-    mutate(date = my(date), region = region) |> 
+    mutate(month = lubridate::month(date, label = T), 
+           year = year(date), region = region) |> 
     #Order by date
     arrange(date)
   
   return(df)
 }
-
 
 
 # Calculating weighted mean by grid cell area -----------------------------
@@ -97,14 +106,7 @@ add_spinup_data <- function(spinup_df, weighted_gfdl, variable){
     mutate(variable_name = variable)
   
   return(df_spinup)
-  
 }
-
-#Testing function
-data_folder <- "/rd/gem/public/fishmip/ISIMIP3a/InputData/DBPM_lme_inputs/gridded/obsclim/025deg"
-path_obs <- list.files(data_folder, pattern = "expc-bot", full.names = T)[1]
-data_folder <- "/rd/gem/public/fishmip/ISIMIP3a/InputData/DBPM_lme_inputs/gridded/ctrlclim/025deg"
-path_crtl <- list.files(data_folder, pattern = "expc-bot", full.names = T)[1]
 
 
 # Calculating weighted means for GFDL data --------------------------------
@@ -116,12 +118,10 @@ calc_inputs <- function(path_crtl, path_obs){
   #Inputs:
   #path_crtl (character) - Full file path for control data
   #path_obs (character) - Full file path for observations data
+  #region (character) - Region of interest
   #Outputs:
-  #XXXXXXXXXXXXXXXXXXXXXXX
-  
-  #Getting directory path for control and observations datasets
-  file_path_obs <- dirname(path_obs)
-  file_path_crtl <- dirname(path_crtl)
+  #(list) - Containing weighted mean (by area of grid cell) for ctrlclim and
+  #obsclim GFDL outputs
   
   #Getting file name for control and observations datasets
   file_name_obs <- basename(path_obs)
@@ -148,31 +148,31 @@ calc_inputs <- function(path_crtl, path_obs){
     rename("lon" = "x", "lat" = "y", "area_m2" = "cellareao")
   
   #Load ctrlclim data
-  fao_crtl <- reorganise_gfdl(path_crtl, area_frame)
+  ctrlclim_df <- reorganise_gfdl(path_crtl, area_frame, region)
   
   #Load obsclim data
-  fao <- reorganise_gfdl(path_obs, area_frame)
+  obsclim_df <- reorganise_gfdl(path_obs, area_frame, region)
   
   # Calculate weighted mean for GFDL variables
   if(variable == "deptho_m"){
     # calculate fixed variables - mean depth and area of FAO 
     # shortcut if you need to extract ctrlclim values too for all variables
-    weighted_mean_crtl_final <- weighted_mean_obs_final <- fao |> 
+    weighted_mean_crtl_final <- weighted_mean_obs_final <- obsclim_df |> 
       summarise(deptho_m = weighted.mean(value, area_m2),
                 total_area_km2 = sum(area_m2)*1e-6) |> 
       # Add name of region from file path
       mutate(region = region)
   }else{
     # ctrlclim
-    weighted_mean_crtl <- weighted_mean_by_area(fao_crtl)
+    weighted_mean_crtl <- weighted_mean_by_area(ctrlclim_df)
     # obsclim 
-    weighted_mean_obs <- weighted_mean_by_area(fao)
+    weighted_mean_obs <- weighted_mean_by_area(obsclim_df)
     
     # SPINUP, based on ctrlclim and used for both ctrlclim and obsclim
     spinup <- weighted_mean_crtl |>
       filter(year >= 1961, year <= 1980) |> 
       slice(rep(1:n(), times = 6)) |>
-      mutate(year = as.character(rep(1841:1960, each = 12)),
+      mutate(year = rep(1841:1960, each = 12),
              date = my(paste(month, year, sep = "-")),
              scenario = "spinup") 
     
@@ -188,55 +188,95 @@ calc_inputs <- function(path_crtl, path_obs){
               weighted_mean_crtl_final = weighted_mean_crtl_final))
 }
 
-# 1B. calc_inputs_all_FAO()
-# this function extracts depth and climate variable files
-# applies calc_inputs_FAO() to each file 
-# and saves a csv with depth and all climate variables as columns for one LME
-calc_inputs_all_FAO<-function(this_FAO){
+
+
+# Flattening list of lists based on sublist names -------------------------
+flatten_list_list <- function(list_list, name_pattern){
+  # This function binds together data frames contained within a list of lists
+  # based on the sublist names identified with the pattern given. 
+  #
+  # Inputs:
+  # list_list (list) - A list with sublists containing data frames. The sublist
+  # names must share a similar name to identify correct data frames to merge
+  # name_pattern (character) - Pattern that helps identify data frames to be
+  # merged
+  #
+  # Outputs:
+  # df_flatten (data frame) - Flatten list of lists
+  #obsclim GFDL outputs
+  #Select data frame within sublist based on name pattern
+  df_flatten <- map(list_list, ~.[str_detect(names(.), name_pattern)]) |> 
+    #Bind all data frames by row
+    map_df(~bind_rows(.)) |> 
+    #Rearrange data
+    pivot_wider(names_from = variable_name, values_from = weighted_mean) |> 
+    clean_names()
+  return(df_flatten)
+}
+
+
+
+# Extracting data from GFDL outputs ---------------------------------------
+
+# # trial 
+region_choice = 21
+
+file_path_obs <- "/rd/gem/private/fishmip_inputs/ISIMIP3a/fao_inputs/obsclim/025deg"
+file_path_crtl <- "/rd/gem/private/fishmip_inputs/ISIMIP3a/fao_inputs/ctrlclim/025deg"
+out_path_obs <- paste0("/rd/gem/private/fishmip_inputs/ISIMIP3a",
+                       "/processed_forcings/fao_inputs/obsclim/025deg")
+out_path_ctrl <- paste0("/rd/gem/private/fishmip_inputs/ISIMIP3a/",
+                        "processed_forcings/fao_inputs/ctrlclim/025deg")
+
+calc_inputs_all <- function(file_path_crtl, file_path_obs, region_choice,
+                            out_path_ctrl, out_path_obs){
+  # This function extracts depth and climate variable files and applies it to 
+  # the region of interest (LME/FAO), and saves a csv with depth and the climate
+  # variable as columns. Nothing is returned, instead results are saved to disk.
+  # Inputs:
+  # file_path_crtl (character) - Full file path for control data
+  # file_path_obs (character) - Full file path for observations data
+  # region_choice (numeric) - A number identifying the FAO or LME of interest
+  # out_path_ctrl (character) - Path to folder where ctrlclim data will be saved
+  # out_path_obs (character) - Path to folder where obsclim data will be saved
+  #
+  # Outputs:
+  # None - This function saves outputs in specified paths
   
-  # # trial 
-  # this_LME = 2
+  #Creating file name pattern to search relevant data files
+  file_pattern <- paste0("FAO-LME-", region_choice, "_")
   
-  file_path_obs <- "/rd/gem/private/fishmip_inputs/ISIMIP3a/fao_inputs/obsclim/0.25deg"
-  file_path_crtl <- "/rd/gem/private/fishmip_inputs/ISIMIP3a/fao_inputs/ctrlclim/0.25deg"
+  #Search ctrlclim and obsclim files available for the region of interest
+  obs_files <- list.files(file_path_obs, pattern = file_pattern, 
+                          full.names = T)
+  ctrl_files <- list.files(file_path_crtl, pattern = file_pattern, 
+                           full.names = T) 
   
-  this_FAO_new <- paste0("FAO-LME-", this_FAO, "_")
+  #Apply calc_inputs function to all files in list
+  obs_ctrl_data <- map2(ctrl_files, obs_files, calc_inputs)
   
-  # this adds the whole path
-  fao_obs <- list.files(file_path_obs, pattern = this_FAO_new) #, full.names = TRUE) 
-  fao_ctrl <- list.files(file_path_crtl, pattern = this_FAO_new) #, full.names = TRUE) 
+  #Divide list into ctrlclim and obsclim data frames 
+  output_obs_all_variables <- flatten_list_list(obs_ctrl_data, "obs_final")
+  output_ctrl_all_variables <- flatten_list_list(obs_ctrl_data, "crtl_final")
   
-  tic()
-  output_obs <- list()
-  output_crtl <- list()
+  #Check if output folder provided exist, if not, create them
+  if(!dir.exists(out_path_ctrl)){
+    dir.create(out_path_ctrl)
+  }
+  if(!dir.exists(out_path_obs)){
+    dir.create(out_path_obs)
+  }
   
-  # loop across inputs: depth, phyc tob, expt, phypico, tos. 
-  for(i in 1:length(fao_obs)){
-    a <- calc_inputs_FAO(file_name_obs = fao_obs[[i]], 
-                         file_name_crtl = fao_ctrl[[i]], 
-                         file_path_crtl = file_path_crtl, 
-                         file_path_obs = file_path_obs)
-    output_obs[[i]] <- a$weighted_mean_obs_final
-    output_crtl[[i]] <- a$weighted_mean_crtl_final
-  } 
-  toc() 
-  
-  # all inputs together for one FAO
-  output_obs_all_variables <- Reduce(merge, output_obs)
-  output_crtl_all_variables <- Reduce(merge, output_crtl)
-  
-  # write output files - temporary path - need to save on gem48! DONE
-  # this_destination_path_obs <- paste0("/data/home/camillan/dbpm/Output/", 
-  #                                     "observed_LME_", this_LME, ".csv")
-  # this_destination_path_ctrl <- paste0("/data/home/camillan/dbpm/Output/",
-  #                                      "control_LME_", this_LME, ".csv")
+  #Create output file name
+  out_file <- file.path(out_path_obs, paste0("obsclim_spinup", 
+                                             file_pattern, "all_inputs.csv")) 
   this_destination_path_obs <- paste0("/rd/gem/private/fishmip_inputs/ISIMIP3a", 
                                       "/processed_forcings/fao_inputs/obsclim/",
-                                      "0.25deg/observed_FAO_", this_FAO, ".csv")
+                                      "0.25deg/observed_FAO_", region_choice, ".csv")
   this_destination_path_ctrl <- paste0("/rd/gem/private/fishmip_inputs/", 
                                        "ISIMIP3a/processed_forcings/fao_inputs",
                                        "/ctrlclim/0.25deg/control_FAO_", 
-                                       this_FAO, ".csv")
+                                       region_choice, ".csv")
   
   fwrite(x = output_obs_all_variables, 
          file = file.path(this_destination_path_obs))
@@ -247,12 +287,12 @@ calc_inputs_all_FAO<-function(this_FAO){
 
 #### 2. apply the functions above to each FAO region -----
 
-this_FAO = c(77, 31, 41, 87, 57, 58, 71, 81, 21, 51, 34, 27, 47, 48, 61, 67, 88) 
+region_choice = c(77, 31, 41, 87, 57, 58, 71, 81, 21, 51, 34, 27, 47, 48, 61, 67, 88) 
 
 tic()
-for (i in 1:length(this_FAO)){
-  message("Processing #", i, " of ", length(this_FAO))
-  calc_inputs_all_FAO(this_FAO[[i]])
+for (i in 1:length(region_choice)){
+  message("Processing #", i, " of ", length(region_choice))
+  calc_inputs_all_FAO(region_choice[[i]])
 }
 toc() 
 
@@ -696,7 +736,7 @@ calc_inputs_FAO <- function(file_name_obs, file_name_crtl, file_path_crtl,
 # source("input_funcs.R")
 source("dbpm_model_functions.R")
 
-calc_inputs_all_FAO<-function(this_FAO, degree){
+calc_inputs_all_FAO<-function(region_choice, degree){
   
   
   ## WARNING - you need to add the 0.25deg option later on - i.e. ifelse()
@@ -738,10 +778,10 @@ calc_inputs_all_FAO<-function(this_FAO, degree){
     
   }
   
-  this_FAO_new<-paste0("FAO-LME-", this_FAO, sep = "")
+  region_choice_new<-paste0("FAO-LME-", region_choice, sep = "")
   
-  fao_obs <- list.files(file_path_obs, pattern = this_FAO_new)
-  fao_ctrl <- list.files(file_path_crtl, pattern = this_FAO_new)  
+  fao_obs <- list.files(file_path_obs, pattern = region_choice_new)
+  fao_ctrl <- list.files(file_path_crtl, pattern = region_choice_new)  
   
 #  tic()
   output_obs<-list()
@@ -839,7 +879,7 @@ calc_inputs_all_FAO<-function(this_FAO, degree){
   this_destination_path_ctrl <- paste0("/rd/gem/private/fishmip_inputs/", 
                                        "ISIMIP3a/processed_forcings/", 
                                        "fao_inputs_gridcell/ctrlclim/", degree,
-                                       "/control_historical_FAO_", this_FAO, 
+                                       "/control_historical_FAO_", region_choice, 
                                        "_", degree, ".csv")
   fwrite(x = output_crtl_all_variables, 
          file = file.path(this_destination_path_ctrl))
@@ -884,7 +924,7 @@ calc_inputs_all_FAO<-function(this_FAO, degree){
   this_destination_path_ctrl <- paste0("/rd/gem/private/fishmip_inputs/",
                                        "ISIMIP3a/processed_forcings/",
                                        "fao_inputs_gridcell/ctrlclim/", degree, 
-                                       "/control_spinup_FAO_", this_FAO, "_",
+                                       "/control_spinup_FAO_", region_choice, "_",
                                        degree, ".csv")
   fwrite(x = spinup, file = file.path(this_destination_path_ctrl))
   rm("spinup")
@@ -972,7 +1012,7 @@ calc_inputs_all_FAO<-function(this_FAO, degree){
   this_destination_path_obs <- paste0("/rd/gem/private/fishmip_inputs/ISIMIP3a",
                                       "/processed_forcings/fao_inputs_gridcell",
                                       "/obsclim/", degree, 
-                                      "/observed_historical_FAO_", this_FAO, 
+                                      "/observed_historical_FAO_", region_choice, 
                                       "_", degree, ".csv")
 
   fwrite(x = output_obs_all_variables, 
@@ -1003,15 +1043,15 @@ calc_inputs_all_FAO<-function(this_FAO, degree){
 
 
 #### 2. apply the functions above to each FAO -----
-this_FAO = c(77, 31, 41, 87, 57, 58, 71, 81, 21, 51, 34, 27, 47, 48, 61, 67, 88) 
+region_choice = c(77, 31, 41, 87, 57, 58, 71, 81, 21, 51, 34, 27, 47, 48, 61, 67, 88) 
 
 tic()
-for (i in 1:length(this_FAO)){
-  message("Processing #", i, " of ", length(this_FAO))
+for (i in 1:length(region_choice)){
+  message("Processing #", i, " of ", length(region_choice))
   message("0.25deg")
-  calc_inputs_all_FAO(this_FAO[[i]], "0.25deg")
+  calc_inputs_all_FAO(region_choice[[i]], "0.25deg")
   message("1deg")
-  calc_inputs_all_FAO(this_FAO[[i]], "1deg")
+  calc_inputs_all_FAO(region_choice[[i]], "1deg")
   
 }
 toc() 
