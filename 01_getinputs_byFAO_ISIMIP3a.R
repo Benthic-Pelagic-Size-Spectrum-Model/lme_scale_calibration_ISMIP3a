@@ -16,42 +16,34 @@ library(tidyverse)
 library(data.table)
 library(parallel)
 library(dtplyr)
-library(janitor)
+# library(janitor)
 library(terra)
 source("supporting_functions.R")
 
-# # trial 
-region_choice = 21
 
-file_path_obs <- "/rd/gem/private/fishmip_inputs/ISIMIP3a/fao_inputs/obsclim/025deg"
-file_path_crtl <- "/rd/gem/private/fishmip_inputs/ISIMIP3a/fao_inputs/ctrlclim/025deg"
-out_path_obs <- paste0("/rd/gem/private/fishmip_inputs/ISIMIP3a",
-                       "/processed_forcings/fao_inputs/obsclim/025deg")
-out_path_ctrl <- paste0("/rd/gem/private/fishmip_inputs/ISIMIP3a/",
-                        "processed_forcings/fao_inputs/ctrlclim/025deg")
+# Apply calc_inputs_all function to each FAO region -----
+file_path_obs <- file.path("/g/data/vf71/fishmip_inputs/ISIMIP3a/fao_inputs",
+                           "obsclim/025deg")
+file_path_ctrl <- file.path("/g/data/vf71/fishmip_inputs/ISIMIP3a/fao_inputs", 
+                            "ctrlclim/025deg")
+out_path_obs <- file.path("/g/data/vf71/fishmip_inputs/ISIMIP3a",
+                          "processed_forcings/fao_inputs/obsclim/025deg")
+out_path_ctrl <- file.path("/g/data/vf71/fishmip_inputs/ISIMIP3a",
+                           "processed_forcings/fao_inputs/ctrlclim/025deg")
+region_choice <- c(21, 27, 31, 34, 41, 47, 48, 51, 57, 58, 61, 67, 71, 77, 
+                   81, 87, 88)
 
-
-
-#### 2. apply the functions above to each FAO region -----
-
-region_choice = c(77, 31, 41, 87, 57, 58, 71, 81, 21, 51, 34, 27, 47, 48, 61, 67, 88) 
-
-tic()
-for (i in 1:length(region_choice)){
-  message("Processing #", i, " of ", length(region_choice))
-  calc_inputs_all_FAO(region_choice[[i]])
-}
-toc() 
+#Applying function to all chosen regions
+region_choice |> 
+  map(~calc_inputs_all(file_path_ctrl, file_path_obs, ., out_path_ctrl, 
+                       out_path_obs))
 
 # 3. read in printed csv file for each FAO and merge info into a unique file ----
 
 # WARNING not there right now as were printed in DBPM gem48 instance and then
 # only the final product was moved to new folder I think! 
 # DONE - now re-run and printed in re/gem
-newly_written_files_observed <- file.path("/rd/gem/private/fishmip_inputs",
-                                          "ISIMIP3a/processed_forcings", 
-                                          "fao_inputs/obsclim/0.25deg") |> 
-  list.files(pattern = "observed", full.names = TRUE)
+newly_written_files_observed <- list.files(out_path_obs, full.names = TRUE)
 
 # pick one randomly and check 
 # map(newly_written_files_observed[[8]], fread)
