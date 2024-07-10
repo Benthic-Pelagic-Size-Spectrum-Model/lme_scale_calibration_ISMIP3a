@@ -1,4 +1,4 @@
-# ------- STEP 1: GET GCM INPUTS FOR DYNAMIC BENTHIC-PELAGIC SIZE SPECTRUM MODEL
+# STEP 1: GET GCM INPUTS FOR DYNAMIC BENTHIC-PELAGIC SIZE SPECTRUM MODEL
 #### Ryan is running this step for ISIMIP3a, 3 scales: 
 # 1 FAO aggregated - for calibration, using 0.25deg inputs only and focusing on
 # obsclim
@@ -16,12 +16,10 @@ library(tidyverse)
 library(data.table)
 library(parallel)
 library(dtplyr)
-# library(janitor)
-library(terra)
 source("supporting_functions.R")
+source("dbpm_model_functions.R")
 
-
-# Apply calc_inputs_all function to each FAO region -----
+# Apply calc_inputs_all() function to each FAO region -----
 file_path_obs <- file.path("/g/data/vf71/fishmip_inputs/ISIMIP3a/fao_inputs",
                            "obsclim/025deg")
 file_path_ctrl <- file.path("/g/data/vf71/fishmip_inputs/ISIMIP3a/fao_inputs", 
@@ -38,26 +36,154 @@ region_choice |>
   map(~calc_inputs_all(file_path_ctrl, file_path_obs, ., out_path_ctrl, 
                        out_path_obs))
 
-# 3. read in printed csv file for each FAO and merge info into a unique file ----
 
-# WARNING not there right now as were printed in DBPM gem48 instance and then
-# only the final product was moved to new folder I think! 
-# DONE - now re-run and printed in re/gem
-newly_written_files_observed <- list.files(out_path_obs, full.names = TRUE)
+# Merging processed inputs into a single file -----------------------------
+combined_FAO_inputs <- list.files(out_path_obs, full.names = TRUE) |> 
+  #Note that the amount of cores available will depend on compute size chosen
+  mclapply(FUN = fread, mc.cores = 28) |> 
+  rbindlist() |> 
+  #Original comment: all depths are almost definitely > 200m in FAO regions 
+  mutate(deptho_m = 200,
+         #Keep only the ID identifying the FAO region
+         region = as.integer(str_remove(region, "FAO-LME-"))) |> 
+  as_tibble()
 
-# pick one randomly and check 
-# map(newly_written_files_observed[[8]], fread)
-
-# combine files 
-combined_FAO_inputs <- rbindlist(mclapply(X = newly_written_files_observed, 
-                                          FUN = fread, mc.cores = 40))
+#Get a list of FAO regions and their total area in km2 to calculate effort/m2
 FAO_area <- combined_FAO_inputs |> 
-  group_by(FAO) |> 
-  dplyr::select(FAO, area_km2) |> 
-  distinct()
+  distinct(region, total_area_km2, deptho_m) |> 
+  as_tibble()
+  
+#From original code: Variable names were standardised to use common terminology
+# sphy = phypico-vint_mol_m-2
+# lphy = phyc-vint_mol_m-2 - phypico-vint_mol_m-2 
+combined_FAO_inputs <- combined_FAO_inputs |> 
+  mutate(sphy = phypico_vint,  lphy = phyc_vint - phypico_vint) |> 
+  #Removing columns not needed
+  select(-c(phyc_vint, phypico_vint))
 
-# head(combined_LME_inputs)
-# sort(unique(combined_LME_inputs$LME)) # WARNING LME 0 missing. 
+# Loading effort and catches data -----------------------------------------
+effort_file_path <- "/g/data/vf71/fishmip_inputs/ISIMIP3a/DKRZ_EffortFiles"
+
+#Effort data
+effort_FAO <- file.path(effort_file_path,
+                        "effort_isimip3a_histsoc_1841_2010.csv") |> 
+  fread() |> 
+  filter(LME == 0) |> 
+  as_tibble() |> 
+  # calculate sum of effort by LME/by total area of LME 
+  group_by(Year, fao_area) |> 
+  summarize(total_nom_active = sum(NomActive, na.rm = T), 
+            .groups = "drop") |> 
+  ungroup() |>
+  full_join(FAO_area, by = c("fao_area" = "region")) |> 
+  mutate(total_nom_active_area_m2 = total_nom_active/(total_area_km2*1e6))
+
+#Catches data
+FAO_catch_input <- list.files(effort_file_path,
+                                   "catch-validation_isimip3a_histsoc",
+                                   full.names = T) |> 
+  read_csv() |>
+  filter(LME == 0) |> 
+  # catch is in tonnes, checked in FishingEffort Rproject
+  mutate(catch_tonnes = Reported+IUU) |> 
+  group_by(Year, fao_area) |> 
+  summarize(catch_tonnes = sum(catch_tonnes), .groups = "drop") |> 
+  # also Reg advise to exclude discards 
+  ungroup() |> 
+  full_join(FAO_area, by = c("fao_area" = "region")) |> 
+  mutate(catch_tonnes_area_m2 = catch_tonnes/(total_area_km2*1e6))
+
+#Merging catches and effort data
+DBPM_FAO_effort_catch_input <- effort_FAO |> 
+  full_join(FAO_catch_input)
+
+#Removing individual data frames
+rm(effort_FAO, FAO_catch_input)
+
+
+# Plotting fish and catch data --------------------------------------------
+# Creating plots to ensure data makes sense - The original code was changed
+# slightly to match the original saved image
+
+#Split dataset as items in a list based on FAO area
+plot_df <- DBPM_FAO_effort_catch_input |> 
+  group_by(fao_area) |> 
+  group_split() |> 
+  #Select first FAO region
+  first()
+
+#Plotting data
+plot_df |> 
+  ggplot(aes(Year, total_nom_active))+
+  ggtitle(paste("FAO region #", unique(plot_df$fao_area), sep = " "))+
+  # spin-up edf8fb
+  annotate("rect", xmin = 1841, xmax = 1960, ymin = 0, ymax = Inf, 
+           fill = "#b2e2e2", alpha = 0.4)+ 
+  # projection 66c2a4
+  annotate("rect", xmin = 1961, xmax = 2010, ymin = 0, ymax = Inf, 
+           fill = "#238b45", alpha = 0.4)+ 
+  geom_point(size = 1)+
+  geom_line()+
+  theme_bw()+
+  theme(labs(y = "Total nom active"),
+        text = element_text(size = 11),
+        axis.title.x = element_blank(),
+        plot.title = element_text(size = 11),
+        axis.title.y = element_text(size = 10),
+        axis.text = element_text(size = 9),
+        legend.title = element_text(size = 10), 
+        legend.text = element_text(size = 9),
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(), 
+        legend.key.size = unit(0.1, "cm")) 
+
+#Saving result that matches previous work
+ggsave("Output/Effort_FAO1_check_DFA.pdf", device = "pdf")
+
+#Removing variables not in use
+rm(plot_df)
+
+
+# Calculating intercept and slope -----------------------------------------
+DBPM_FAO_climate_inputs_slope <- combined_FAO_inputs |>
+  mutate(area_m2 = total_area_km2*1e6) |> 
+  #Remove unused columns and reorder them
+  select(region, date, tos, tob, sphy, lphy, deptho_m, area_m2, 
+         expc_bot) |> 
+  # name columns as in "dbpm_model_functions.R" script
+  rename(FAO = region, t = date, depth = deptho_m, sbt = tob, sst = tos, 
+         expcbot = expc_bot) |> 
+  #Calculate slope and intercept
+  mutate(er = getExportRatio(sphy, lphy, sst, depth),
+         er = ifelse(er < 0, 0, ifelse(er > 1, 1, er)),
+         intercept = GetPPIntSlope(sphy, lphy, mmin = 10^-14.25, 
+                                   mmid = 10^-10.184,
+                                   mmax = 10^-5.25, depth, 
+                                   output = "intercept"),
+         slope = GetPPIntSlope(sphy, lphy, mmin = 10^-14.25, 
+                               mmid = 10^-10.184, mmax = 10^-5.25, depth, 
+                               output = "slope")) |> 
+  relocate(all_of(c("er", "intercept", "slope")), .before = sphy)
+
+
+# Saving catch and effort, and inputs data --------------------------------
+#Folder where outputs will be stored
+folder_out <- file.path("/g/data/vf71/fishmip_inputs/ISIMIP3a",
+                        "processed_forcings/fao_inputs/obsclim/025deg")
+
+#Saving DBPM inputs 
+DBPM_FAO_climate_inputs_slope |> 
+  fwrite(file.path(folder_out, "DBPM_FAO_climate_inputs_slope.csv"))
+
+#Saving catch and effort data 
+DBPM_FAO_effort_catch_input |> 
+  fwrite(file.path(folder_out, "DBPM_FAO_effort_catch_input.csv"))
+
+
+
+
+
+
 
 #### 4. check calculation below in terms of sphy and sphy and adopt same ----
 # variable names
@@ -71,43 +197,9 @@ FAO_area <- combined_FAO_inputs |>
 # resolution. However, you are only using observed at LME scale for calibration 
 # - so run only this scenario. 
 
-# checked with Julia 1/09/2022
-# sphy = phypico-vint_mol_m-2
-# lphy = phyc-vint_mol_m-2 - phypico-vint_mol_m-2 
 
-combined_FAO_inputs <- combined_FAO_inputs |> 
-  mutate(sphy = `phypico-vint`,  lphy = `phyc-vint` - `phypico-vint`) |> 
-  dplyr::select(-c(`phyc-vint`,`phypico-vint`, area_km2))
 
 #### 5. add effort and catches ------
-# also tried _adminCountry - all the same
-# effort_old <- read_csv("/rd/gem/private/users/yannickr/DKRZ_EffortFiles/
-#effort_histsoc_1841_2010_revised.csv") 
-effort <- fread(file.path("/rd/gem/private/users/yannickr/DKRZ_EffortFiles", 
-                          "effort_isimip3a_histsoc_1841_2010.csv"))
-effort_FAO <- effort |> 
-  dplyr::filter(LME == 0)
-
-# ### check LME 1 
-# effort_old<-effort_old |> 
-#   filter(LME == 1) |> 
-#   group_by(LME, Year) |> 
-#   summarise(tot = sum(NomActive)) |> 
-#   mutate(type = "old")
-# 
-# effort_new<-effort |> 
-#   filter(LME == 1) |> 
-#   group_by(LME, Year) |> 
-#   summarise(tot = sum(NomActive)) |> 
-#   mutate(type = "new")
-# 
-# all<-effort_old |> 
-#   full_join(effort_new)
-# 
-# ggplot(all,aes(x = Year, y = tot, group = type, color = type))+
-#   geom_line()+
-#   facet_wrap(~type)
-
 # calculate climate inputs by Year as effort is by Year 
 # no - skip as Julia would like monthly inputs
 
@@ -117,87 +209,6 @@ effort_FAO <- effort |>
 # thinking! STOP ASKING. 
 
 
-DBPM_FAO_climate_inputs <- combined_FAO_inputs
-
-# add LME total area and calculate effort/m2  
-FAO_area<-combined_FAO_inputs |> 
-  # this is FAO_area total area
-  dplyr::select(FAO, area_m2) |> 
-  # all depths are almost definitely > 200m in FAO regions excluding LMEs
-  mutate(deptho_m = 200) |> 
-  distinct()
-
-# calculate sum of effort by LME/by total area of LME 
-DBPM_FAO_effort_input <- effort_FAO |> 
-  group_by(Year, fao_area) |> 
-  summarize(NomActive = sum(NomActive), .groups = "drop") |> 
-  ungroup() |> 
-  full_join(FAO_area, by = c("fao_area" = "FAO")) |> 
-  mutate(NomActive_area_m2 = NomActive/(area_km2*1e6))
-
-# do the same with catches 
-# catch<-read_csv("/rd/gem/private/users/yannickr/DKRZ_EffortFiles/
-#calibration_catch_histsoc_1850_2004.csv")
-catch <- file.path("/rd/gem/private/users/yannickr/DKRZ_EffortFiles", 
-                   "catch-validation_isimip3a_histsoc_1850_2004.csv") |> 
-  read_csv()
-catch_FAO <- catch |>
-  dplyr::filter(LME == 0)
-
-DBPM_FAO_catch_input<-catch_FAO |> 
-  mutate(catch_tonnes = Reported+IUU) |> 
-  group_by(Year, fao_area) |> 
-  # catch is in tonnes, checked in FishingEffort Rproject, 
-  summarize(catch_tonnes = sum(catch_tonnes), .groups = "drop") |> 
-  # also Reg advise to exclude discards 
-  ungroup() |> 
-  full_join(FAO_area, by = c("fao_area" = "FAO")) |> 
-  mutate(catch_tonnes_area_m2 = catch_tonnes/(area_km2*1e6))
-
-DBPM_FAO_effort_catch_input <- DBPM_FAO_effort_input |> 
-  full_join(DBPM_FAO_catch_input)
-
-head(DBPM_FAO_effort_catch_input)
-
-
-#### 6. Plot to check ----
-
-# WARNING - keep going with the checks
-
-my_theme <- theme_bw()+
-  theme(text = element_text(size = 10), 
-        plot.title = element_text(size = 10),
-        axis.title = element_text(size = 9),
-        axis.text = element_text(size = 8),
-        legend.title = element_text(size = 9), 
-        legend.text = element_text(size = 8),
-        panel.grid.major = element_blank(), 
-        panel.grid.minor = element_blank(), 
-        legend.key.size = unit(0.1, "cm")) 
-
-
-plot_df <- split(DBPM_FAO_effort_catch_input, 
-                 DBPM_FAO_effort_catch_input$fao_area)
-
-plot_df[[1]] 
-head(plot_df[[2]])
-
-Value = "NomActive"
-toKeep = "3"
-
-plot <- ggplot(data = plot_df[[3]], aes(x = Year, y = NomActive))+
-  ggtitle(paste("FAO", toKeep, sep = " "))+
-  annotate("rect", xmin = 1841, xmax = 1960, ymin = 0, ymax = Inf, 
-           fill = "#b2e2e2", alpha = 0.4)+ # spin-up edf8fb
-  annotate("rect", xmin = 1961, xmax = 2010, ymin = 0, ymax = Inf, 
-           fill = "#238b45", alpha = 0.4)+ # projection 66c2a4
-  geom_point(size = 1)+
-  geom_line() +
-  my_theme
-
-pdf("Output/Effort_FAO1_check.pdf")
-plot
-dev.off()
 
 #### 7. go to step 2 - batch create inputs.R ----
 # in batch create input, the code uses getgridin_ISIMIP3b to calculate 
@@ -209,67 +220,14 @@ dev.off()
 # this code was taken from the dbpm_isimip_3a repo 
 # (original source = dbpm_isimip_3b - I think as things changed...)
 # source("input_funcs.R")
-source("dbpm_model_functions.R")
 
-# name columns as in code
-# head(DBPM_LME_climate_inputs)
-DBPM_FAO_climate_inputs_renamed <- DBPM_FAO_climate_inputs |>
-  left_join(FAO_area, by = join_by("FAO")) |>
-  mutate(deptho_m = 200, area_m2 = area_km2*1e6) |> 
-  dplyr::select(FAO, Date, deptho_m, area_m2, `expc-bot`, tob, tos, sphy, 
-                lphy) |> 
-  rename(t = Date, depth = deptho_m, sbt = tob, sst = tos, 
-         expcbot = `expc-bot`) |> 
-  # reorder columns 
-  relocate(any_of(c("FAO", "t", "lphy", "sphy", "sbt", "sst", "depth", 
-                    "area_m2", "expcbot")))
 
-# DBPM_FAO_climate_inputs_renamed <-DBPM_FAO_climate_inputs_renamed[,c("FAO", 
-# "t", "lphy", "sphy", "sbt", "sst", "depth", "area_m2", "expcbot")]
 
-### WARNING - change the below with summarise() and test the difference - 
-# same problem as per gridded inputs?  
-head(DBPM_FAO_climate_inputs_renamed)
 
-DBPM_FAO_climate_inputs_slope <- DBPM_FAO_climate_inputs_renamed |>
-  group_by(FAO, t, lphy, sphy, sbt, sst, depth, area_m2, expcbot) |> 
-  summarise(er = getExportRatio(sphy, lphy, sst, depth),
-            er = ifelse(er < 0, 0, ifelse(er > 1, 1, er)),
-            intercept = GetPPIntSlope(sphy, lphy, mmin = 10^-14.25, 
-                                      mmid = 10^-10.184,
-                                      mmax = 10^-5.25, depth, 
-                                      output = "intercept"),
-            slope = GetPPIntSlope(sphy, lphy, mmin = 10^-14.25, 
-                                  mmid = 10^-10.184, mmax = 10^-5.25, depth, 
-                                  output = "slope"), .groups = "drop") |> 
-  ungroup() |> 
-  relocate("FAO", "t", "sst", "sbt", "er", "intercept", "slope", "sphy", 
-           "lphy", "depth", "area_m2","expcbot")
 
-head(DBPM_FAO_climate_inputs_slope)
 
-#### 8. Save results ---- 
-# when depth integration in GetPPIntSlope() is on
-# fwrite(x = DBPM_LME_climate_inputs_slope,
-#        file.path("/rd/gem/private/fishmip_inputs/ISIMIP3a/processed_forcings
-#/lme_inputs/obsclim/0.25deg/",
-#                  "DBPM_LME_climate_inputs_slope_depthIntegrated.csv"))
-fwrite(x = DBPM_FAO_climate_inputs_slope, 
-       file.path("/rd/gem/private/fishmip_inputs/ISIMIP3a/processed_forcings",
-                 "fao_inputs/obsclim/0.25deg/DBPM_FAO_climate_inputs_slope.csv"))
-fwrite(x = DBPM_FAO_effort_catch_input, 
-       file.path("/rd/gem/private/fishmip_inputs/ISIMIP3a/processed_forcings", 
-                 "fao_inputs/obsclim/0.25deg/DBPM_FAO_effort_catch_input.csv"))
 
-# print into public folder too
-fwrite(x = DBPM_FAO_climate_inputs_slope, 
-       file.path("/rd/gem/public/fishmip/ISIMIP3a/InputData/DBPM_fao_inputs", 
-                 "obsclim/0.25deg/DBPM_FAO_climate_inputs_slope.csv"))
-fwrite(x = DBPM_FAO_effort_catch_input,
-       file.path("/rd/gem/public/fishmip/ISIMIP3a/InputData/DBPM_fao_inputs", 
-                 "obsclim/0.25deg/DBPM_FAO_effort_catch_input.csv"))
 
-##### END LME scale -----
 
 
 #### ISIMIP3a scale 2 -----
