@@ -123,7 +123,8 @@ calc_inputs <- function(path_ctrl, path_obs){
   file_name_ctrl <- basename(path_ctrl)
   
   #Extracting variable name from observations filename
-  variable <- str_extract(file_name_obs, "obsclim_(.+)_15arc",  group = 1) |> 
+  variable <- str_extract(file_name_obs, "obsclim_(.+)_(15arcmin|onedeg)",
+                          group = 1) |> 
     #If unit is present, it will be disregarded
     str_split_i("_", i = 1) 
   
