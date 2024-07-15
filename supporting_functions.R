@@ -47,7 +47,8 @@ reorganise_gfdl <- function(gfdl_path, area_cell_df, region){
     left_join(area_cell_df, by = join_by(lat, lon)) |> 
     #Adding scenario to data
     mutate(scenario = str_extract(gfdl_path, 
-                                  "fao_inputs/(.*)/\\d{2,3}deg", group = 1)) |> 
+                                  "(fao|lme)_inputs/(.*)/\\d{1,3}deg", 
+                                  group = 2)) |> 
     #Remove any empty rows
     drop_na() |> 
     #Apply date format to date column
@@ -97,7 +98,7 @@ add_spinup_data <- function(spinup_df, weighted_gfdl, variable){
     # reorder columns 
     relocate(c("region", "date", "year", "month", "scenario", "weighted_mean",
                "total_area_km2")) |> 
-    # rename weighted_mean column according to variable 
+    # add name of variable to data frame
     mutate(variable_name = variable)
   
   return(df_spinup)
@@ -123,7 +124,7 @@ calc_inputs <- function(path_ctrl, path_obs){
   file_name_ctrl <- basename(path_ctrl)
   
   #Extracting variable name from observations filename
-  variable <- str_extract(file_name_obs, "obsclim_(.+)_(15arcmin|onedeg)",
+  variable <- str_extract(file_name_obs, "clim_(.+)_\\d{2}arcmin",
                           group = 1) |> 
     #If unit is present, it will be disregarded
     str_split_i("_", i = 1) 
@@ -186,7 +187,7 @@ calc_inputs <- function(path_ctrl, path_obs){
 
 
 # Flattening list of lists based on sublist names -------------------------
-flatten_list_list <- function(list_list, name_pattern){
+flatten_list_list <- function(list_list, name_pattern, column_values){
   # This function binds together data frames contained within a list of lists
   # based on the sublist names identified with the pattern given. 
   #
@@ -204,7 +205,8 @@ flatten_list_list <- function(list_list, name_pattern){
     #Bind all data frames by row
     map_df(~bind_rows(.)) |> 
     #Rearrange data
-    pivot_wider(names_from = variable_name, values_from = weighted_mean) |> 
+    pivot_wider(names_from = variable_name, 
+                values_from = all_of(column_values)) |> 
     clean_names()
   return(df_flatten)
 }
@@ -212,7 +214,7 @@ flatten_list_list <- function(list_list, name_pattern){
 
 # Extracting data from GFDL outputs ---------------------------------------
 calc_inputs_all <- function(file_path_ctrl, file_path_obs, region_choice,
-                            out_path_ctrl, out_path_obs, FAO = T){
+                            out_path_ctrl, out_path_obs){
   # This function extracts depth and climate variable files and applies it to 
   # the region of interest (LME/FAO), and saves a csv with depth and the climate
   # variable as columns. Nothing is returned, instead results are saved to disk.
@@ -228,21 +230,22 @@ calc_inputs_all <- function(file_path_ctrl, file_path_obs, region_choice,
   
   message("Processing region: ", region_choice)
   
-  #Creating file name pattern to search relevant data files
-  file_pattern <- paste0("FAO-LME-", region_choice, "_")
-  
   #Search ctrlclim and obsclim files available for the region of interest
-  obs_files <- list.files(file_path_obs, pattern = file_pattern, 
-                          full.names = T)
-  ctrl_files <- list.files(file_path_ctrl, pattern = file_pattern, 
-                           full.names = T) 
+  obs_files <- list.files(file_path_obs, 
+                          pattern = paste0("(-|_)LME(-|_)", region_choice,
+                                           "_"), full.names = T)
+  ctrl_files <- list.files(file_path_ctrl, 
+                           pattern = paste0("(-|_)LME(-|_)", region_choice, 
+                                            "_"), full.names = T) 
   
   #Apply calc_inputs function to all files in list
   obs_ctrl_data <- map2(ctrl_files, obs_files, calc_inputs)
   
   #Divide list into ctrlclim and obsclim data frames 
-  output_obs_all_variables <- flatten_list_list(obs_ctrl_data, "obs_final")
-  output_ctrl_all_variables <- flatten_list_list(obs_ctrl_data, "ctrl_final")
+  output_obs_all_variables <- flatten_list_list(obs_ctrl_data, "obs_final",
+                                                "weighted_mean")
+  output_ctrl_all_variables <- flatten_list_list(obs_ctrl_data, "ctrl_final",
+                                                 "weighted_mean")
   
   #Check if output folder provided exist, if not, create them
   if(!dir.exists(out_path_ctrl)){
@@ -252,13 +255,13 @@ calc_inputs_all <- function(file_path_ctrl, file_path_obs, region_choice,
     dir.create(out_path_obs, recursive = T)
   }
   
+  reg <- output_ctrl_all_variables |> distinct(FAO) |> pull()
+  
   #Create output file name
-  out_file_obsclim <- file.path(out_path_obs, 
-                                paste0("obsclim_spinup_", file_pattern, 
-                                       "all_inputs.csv")) 
-  out_file_ctrlclim <- file.path(out_path_ctrl,
-                                 paste0("ctrlclim_spinup_", file_pattern, 
-                                       "all_inputs.csv")) 
+  out_file_obsclim <- file.path(out_path_obs, paste0("obsclim_spinup_", reg, 
+                                                     "_all_inputs.csv")) 
+  out_file_ctrlclim <- file.path(out_path_ctrl, paste0("ctrlclim_spinup_", 
+                                                       reg, "_all_inputs.csv")) 
   
   #Saving data frames containing all data: spinup + obsclim/ctrlclim
   fwrite(x = output_obs_all_variables, file = out_file_obsclim)
@@ -266,4 +269,185 @@ calc_inputs_all <- function(file_path_ctrl, file_path_obs, region_choice,
 }
 
 
+# Processing obsclim/ctrlclim GFDL data -----------------------------------
+gridded_inputs <- function(ctrl_files, obs_files){
+  # This function loads gridded data and reorganises it for further analyses.
+  #
+  #Inputs:
+  #ctrl_files (character) - Full file path for control data
+  #obs_files (character) - Full file path for observations data
+  #region (character) - Region of interest
+  #Outputs:
+  #(list) - Containing reorganised data for ctrlclim and obsclim GFDL outputs
+  
+  #Getting file name for control and observations datasets
+  file_name_obs <- basename(obs_files)
+  file_name_ctrl <- basename(ctrl_files)
+  
+  #Extracting variable name from observations filename
+  variable <- str_extract(file_name_obs, "clim_(.+)_\\d{2}arcmin",
+                          group = 1) |> 
+    #If unit is present, it will be disregarded
+    str_split_i("_", i = 1) 
+  
+  #Getting name of region
+  region <- str_extract(file_name_ctrl, "arcmin_(.*)_monthly", group = 1)
+  
+  #Loading grid in the resolution matching the obsclim and ctrlclim data
+  area_frame <- list.files(file.path("/g/data/vf71/shared_resources",
+                                     "grid_cell_area_ESMs/isimip3a"),
+                           #Get resolution of data from file name
+                           paste0(str_extract(file_name_ctrl, 
+                                              "_\\d{2}arcmin_"), ".*csv$"),
+                           full.names = T) |> 
+    read_csv() |> 
+    #Rename columns
+    rename("lon" = "x", "lat" = "y", "area_m2" = "cellareao")
+  
+  #Load ctrlclim data
+  ctrlclim_df <- reorganise_gfdl(ctrl_files, area_frame, region) |> 
+    # add name of variable to data frame
+    mutate(variable_name = variable)
+  
+  #Load obsclim data
+  obsclim_df <- reorganise_gfdl(obs_files, area_frame, region) |> 
+    # add name of variable to data frame
+    mutate(variable_name = variable)
+  
+  return(list(obsclim_df = obsclim_df, 
+              ctrlclim_df = ctrlclim_df))
+}
+
+
+dbpm_calcs <- function(flatten_list){
+  # This function calculates DBPM inputs from flatten lists containing all
+  # input variables from GFDL
+  #
+  #Inputs:
+  #flatten_list (data frame) - Data frame containing all DBPM input variables
+  #from the gridded_inputs() function
+  #obs_files (character) - Full file path for observations data
+  #region (character) - Region of interest
+  #Outputs:
+  #df (data frame) - Containing reorganised gridded GFDL data
+  
+  #Check if a "depth" column is included in the dara frame
+  if(sum(grepl("depth", names(flatten_list))) == 0){
+    #If "depth" does not exist, add it
+    flatten_list <- flatten_list |> 
+      mutate(depth = 200)
+  }else{
+    #Ensure "depth" column in correctly labelled
+    names(flatten_list) <- str_replace(
+      names(flatten_list), "deptho_m", "depth")
+  }
+  
+  #Calculate DBPM inputs
+  df <- flatten_list |> 
+    mutate(sphy = phypico_vint,  lphy = phyc_vint - phypico_vint) |> 
+    #Removing columns not needed
+    select(-c(phyc_vint, phypico_vint)) |> 
+    # name columns as in "dbpm_model_functions.R" script
+    rename(FAO = region, t = date, sbt = tob, sst = tos, expcbot = expc_bot) |> 
+    #Calculate slope and intercept
+    mutate(er = getExportRatio(sphy, lphy, sst, depth),
+           er = ifelse(er < 0, 0, ifelse(er > 1, 1, er)),
+           intercept = GetPPIntSlope(sphy, lphy, mmin = 10^-14.25, 
+                                     mmid = 10^-10.184,
+                                     mmax = 10^-5.25, depth, 
+                                     output = "intercept"),
+           slope = GetPPIntSlope(sphy, lphy, mmin = 10^-14.25, 
+                                 mmid = 10^-10.184, mmax = 10^-5.25, depth, 
+                                 output = "slope")) |> 
+    #Reorganise columns following original script
+    relocate("FAO", .before = t) |> 
+    relocate(all_of(c("sst", "sbt", "er", "intercept", "slope", "sphy", "lphy",
+                      "depth", "area_m2", "expcbot", "year", "month")), 
+             .after = t) |> 
+    #Keep up to 3 decimal places
+    mutate(across(sst:slope, ~round(.x, 3)),
+           across(sphy:lphy, ~round(.x, 5)))
+  
+  return(df)
+}
+
+
+# Extracting data from GFDL outputs in gridded form -----------------------
+calc_inputs_gridded <- function(file_path_ctrl, file_path_obs, region_choice,
+                                out_path_ctrl, out_path_obs){
+  # This function extracts climate variable data for a region of interest 
+  # (LME/FAO), and saves a csv with depth and the climate
+  # variable as columns. Nothing is returned, instead results are saved to disk.
+  # Inputs:
+  # file_path_ctrl (character) - Full file path for control data
+  # file_path_obs (character) - Full file path for observations data
+  # region_choice (numeric) - A number identifying the FAO or LME of interest
+  # out_path_ctrl (character) - Path to folder where ctrlclim data will be saved
+  # out_path_obs (character) - Path to folder where obsclim data will be saved
+  #
+  # Outputs:
+  # None - This function saves outputs in specified paths
+  
+  message("Processing region: ", region_choice)
+  
+  #Search ctrlclim and obsclim files available for the region of interest
+  obs_files <- list.files(file_path_obs, 
+                          pattern = paste0("(-|_)LME(-|_)", region_choice,
+                                           "_"), full.names = T)
+  ctrl_files <- list.files(file_path_ctrl, 
+                           pattern = paste0("(-|_)LME(-|_)", region_choice, 
+                                            "_"), full.names = T) 
+  
+  #Apply calc_inputs function to all files in list
+  obs_ctrl_data <- map2(ctrl_files, obs_files, gridded_inputs)
+  
+  #Divide list into ctrlclim and obsclim data frames 
+  output_obs_all_variables <- flatten_list_list(obs_ctrl_data, "obsclim",
+                                                "value") |> 
+    dbpm_calcs()
+  
+  output_ctrl_all_variables <- flatten_list_list(obs_ctrl_data, "ctrlclim",
+                                                 "value") |> 
+    dbpm_calcs()
+  
+  # Calculate spinup: 6 cycles of 20 years from ctrlclim data
+  spinup <- output_ctrl_all_variables |> 
+    arrange(lat, lon, t) |> 
+    filter(year >= 1961 & year <= 1980)
+  
+  spinup <- spinup |> 
+    #Repeat six times
+    slice(rep(1:n(), times = 6)) |>
+    #Relabel dates
+    mutate(i = rep(1:6, each = nrow(spinup)),
+           year = year-(120-(20*(i-1))),
+           t = my(paste(month, year, sep = "-")),
+           scenario = "spinup") |>
+    select(!i)
+  
+  
+  #Check if output folder provided exist, if not, create them
+  if(!dir.exists(out_path_ctrl)){
+    dir.create(out_path_ctrl, recursive = T)
+  }
+  if(!dir.exists(out_path_obs)){
+    dir.create(out_path_obs, recursive = T)
+  }
+  
+  #Getting name of region
+  reg <- output_ctrl_all_variables |> distinct(FAO) |> pull()
+  
+  #Create output file name
+  out_file_obsclim <- file.path(out_path_obs, paste0("obsclim_historical_", 
+                                                     reg, "_all_inputs.csv")) 
+  out_file_ctrlclim <- file.path(out_path_ctrl, paste0("ctrlclim_historical_", 
+                                                       reg, "_all_inputs.csv"))
+  out_file_spinup <- file.path(out_path_ctrl, paste0("ctrlclim_spinup_", 
+                                                     reg, "_all_inputs.csv"))
+  
+  #Saving data frames containing all data: spinup + obsclim/ctrlclim
+  fwrite(x = output_obs_all_variables, file = out_file_obsclim)
+  fwrite(x = output_ctrl_all_variables, file = out_file_ctrlclim)
+  fwrite(x = spinup, file = out_file_spinup)
+}
 
