@@ -213,6 +213,23 @@ region_choice |>
 
 
 
+# ISIMIP3a scale 3 --------------------------------------------------------
+#Applying getGCM() function to all experiments and resolutions
+base_path <- "/g/data/vf71/fishmip_inputs/ISIMIP3a"
+
+#0.25 degree datasets
+getGCM(folder_path = file.path(base_path, "global_inputs/ctrlclim/025deg"),
+       save_path = file.path(base_path, "processed_forcings/ctrlclim/025deg")) 
+
+getGCM(folder_path = file.path(base_path, "global_inputs/obsclim/025deg"),
+       save_path = file.path(base_path, "processed_forcings/obsclim/025deg"))
+
+#1 degree datasets
+getGCM(folder_path = file.path(base_path, "global_inputs/ctrlclim/1deg"),
+       save_path = file.path(base_path, "processed_forcings/ctrlclim/1deg"))
+
+getGCM(folder_path = file.path(base_path, "global_inputs/obsclim/1deg"),
+       save_path = file.path(base_path, "processed_forcings/obsclim/1deg"))
 
 
 
@@ -220,114 +237,6 @@ region_choice |>
 
 
 
-
-#### ISIMIP3a scale 2 -----
-# use FAO inputs provided by Denisse in September 2023
-
-#### 2. apply the functions above to each FAO -----
-region_choice = c(77, 31, 41, 87, 57, 58, 71, 81, 21, 51, 34, 27, 47, 48, 61, 67, 88) 
-
-for (i in 1:length(region_choice)){
-  message("Processing #", i, " of ", length(region_choice))
-  message("0.25deg")
-  calc_inputs_all_FAO(region_choice[[i]], "0.25deg")
-  message("1deg")
-  calc_inputs_all_FAO(region_choice[[i]], "1deg")
-  
-}
-
-
-
-
-
-
-### check outputs
-
-### using code in dbpm_isimip_3a and function to clacualte inputs stored there 
-# when rinning function above - OK
-# LME 14 - output_obs_all_variables_slope (output_obs_all_variables_slope is the same for spin-ip)
-
-# lat   lon LME   t            sst   sbt    er intercept  slope   sphy    lphy depth     area_m2       expcbot
-# <dbl> <dbl> <chr> <date>     <dbl> <dbl> <dbl>     <dbl>  <dbl>  <dbl>   <dbl> <dbl>       <dbl>         <dbl>
-# 1 -54.5 -64.5 14    1841-01-01  7.95  7.88 0.239    -0.772 -1.00  0.145  0.143    111. 7179721107. 0.000000202  
-# 2 -54.5 -64.5 14    1841-02-01  8.43  8.41 0.245    -0.789 -0.991 0.108  0.120    111. 7179721107. 0.000000154  
-# 3 -54.5 -64.5 14    1841-03-01  8.39  8.38 0.247    -0.862 -0.989 0.0878 0.0994   111. 7179721107. 0.000000106  
-# 4 -54.5 -64.5 14    1841-04-01  7.84  7.86 0.232    -1.16  -1.01  0.0717 0.0650   111. 7179721107. 0.0000000528 
-# 5 -54.5 -64.5 14    1841-05-01  7.16  7.19 0.195    -1.74  -1.05  0.0566 0.0305   111. 7179721107. 0.0000000181 
-# 6 -54.5 -64.5 14    1841-06-01  6.25  6.27 0.159    -2.42  -1.11  0.0414 0.0124   111. 7179721107. 0.00000000733
-
-# # when loading the printed file - OK
-# check<-read.csv("/rd/gem/private/fishmip_inputs/ISIMIP3a/processed_forcings/
-# lme_inputs_gridcell/obsclim/1deg/observed_LME_14.csv")
-# head(check)
-# lat   lon LME          t      sst      sbt        er  intercept      slope
-# 1 -54.5 -64.5  14 1841-01-01 7.948583 7.880984 0.2385617 -0.7724442 -1.0013043
-# 2 -54.5 -64.5  14 1841-02-01 8.433881 8.406563 0.2447559 -0.7890344 -0.9906357
-# 3 -54.5 -64.5  14 1841-03-01 8.389428 8.384884 0.2465563 -0.8622664 -0.9890503
-# 4 -54.5 -64.5  14 1841-04-01 7.841928 7.859843 0.2324489 -1.1557924 -1.0086839
-# 5 -54.5 -64.5  14 1841-05-01 7.162827 7.194753 0.1952542 -1.7380429 -1.0544107
-# 6 -54.5 -64.5  14 1841-06-01 6.245687 6.273799 0.1594469 -2.4159994 -1.1060848
-# sphy       lphy    depth    area_m2      expcbot
-# 1 0.14509845 0.14296427 111.0009 7179721107 2.022832e-07
-# 2 0.10794740 0.12006476 111.0009 7179721107 1.541405e-07
-# 3 0.08777226 0.09939922 111.0009 7179721107 1.063319e-07
-# 4 0.07172815 0.06498957 111.0009 7179721107 5.279879e-08
-# 5 0.05660887 0.03050872 111.0009 7179721107 1.811899e-08
-# 6 0.04137433 0.01239686 111.0009 7179721107 7.334109e-09
-
-# when calculating slope and intercept using the function - OK
-# intercept = GetPPIntSlope(sphy,lphy,mmin=10^-14.25,mmid=10^-10.184,mmax=10^-5.25,
-# depth,output="intercept")
-# slope = GetPPIntSlope(sphy,lphy,mmin=10^-14.25,mmid=10^-10.184,mmax=10^-5.25,
-# depth,output="slope"))
-# GetPPIntSlope(0.14509845,0.14296427,mmin=10^-14.25,mmid=10^-10.184,mmax=10^-5.25,
-# 111.0009,output="intercept") # -0.7724442
-# GetPPIntSlope(0.14509845,0.14296427,mmin=10^-14.25,mmid=10^-10.184,mmax=10^-5.25,
-# 111.0009,output="slope") # -1.001304
-
-# when using code in this repo (copied from dbpm_isimip_3a) 
-# and function to calculate inputs stored HERE - OK values are the same 
-# lat   lon LME   t            sst   sbt    er intercept  slope   sphy    lphy depth     area_m2       expcbot
-# <dbl> <dbl> <chr> <date>     <dbl> <dbl> <dbl>     <dbl>  <dbl>  <dbl>   <dbl> <dbl>       <dbl>         <dbl>
-# 1 -54.5 -64.5 14    1841-01-01  7.95  7.88 0.239    -0.772 -1.00  0.145  0.143    111. 7179721107. 0.000000202  
-# 2 -54.5 -64.5 14    1841-02-01  8.43  8.41 0.245    -0.789 -0.991 0.108  0.120    111. 7179721107. 0.000000154  
-# 3 -54.5 -64.5 14    1841-03-01  8.39  8.38 0.247    -0.862 -0.989 0.0878 0.0994   111. 7179721107. 0.000000106  
-# 4 -54.5 -64.5 14    1841-04-01  7.84  7.86 0.232    -1.16  -1.01  0.0717 0.0650   111. 7179721107. 0.0000000528 
-# 5 -54.5 -64.5 14    1841-05-01  7.16  7.19 0.195    -1.74  -1.05  0.0566 0.0305   111. 7179721107. 0.0000000181 
-# 6 -54.5 -64.5 14    1841-06-01  6.25  6.27 0.159    -2.42  -1.11  0.0414 0.0124   111. 7179721107. 0.00000000733
-
-# check 1960 instead for spin-up time
-
-# printed file using dbpm_isimip_3a
-# head(check |> filter(t >= "1960-01-01", t < "1970-01-01"))
-# lat   lon LME          t      sst      sbt        er  intercept      slope
-# 1 -54.5 -64.5  14 1960-01-01 8.579283 8.525311 0.2226460 -0.8927402 -1.0135689
-# 2 -54.5 -64.5  14 1960-02-01 8.909275 8.869553 0.2415954 -0.7875424 -0.9901062
-# 3 -54.5 -64.5  14 1960-03-01 8.963905 8.961565 0.2330122 -0.9561290 -0.9991341
-# 4 -54.5 -64.5  14 1960-04-01 8.595880 8.623443 0.2113011 -1.3052466 -1.0259838
-# 5 -54.5 -64.5  14 1960-05-01 7.855768 7.881054 0.1818500 -1.8346303 -1.0653755
-# 6 -54.5 -64.5  14 1960-06-01 7.518065 7.550831 0.1516842 -2.4610482 -1.1082789
-# sphy       lphy    depth    area_m2      expcbot
-# 1 0.14789762 0.12676890 111.0009 7179721107 1.727242e-07
-# 2 0.10694323 0.11966546 111.0009 7179721107 1.590143e-07
-# 3 0.09020357 0.09109531 111.0009 7179721107 1.015521e-07
-# 4 0.07720137 0.05746743 111.0009 7179721107 5.236447e-08
-# 5 0.05905584 0.02809974 111.0009 7179721107 2.056590e-08
-# 6 0.03932662 0.01149323 111.0009 7179721107 7.078745e-09
-
-# values caclaulted using the functions above - OK SAME AGAIN... 
-# output_obs_all_variables_slope |> filter(t >= "1960-01-01", t < "1970-01-01")
-# lat   lon LME   t            sst   sbt    er interc…¹  slope   sphy    lphy
-# <dbl> <dbl> <chr> <date>     <dbl> <dbl> <dbl>    <dbl>  <dbl>  <dbl>   <dbl>
-# 1 -54.5 -64.5 14    1960-01-01  8.58  8.53 0.223   -0.893 -1.01  0.148  0.127  
-# 2 -54.5 -64.5 14    1960-02-01  8.91  8.87 0.242   -0.788 -0.990 0.107  0.120  
-# 3 -54.5 -64.5 14    1960-03-01  8.96  8.96 0.233   -0.956 -0.999 0.0902 0.0911 
-# 4 -54.5 -64.5 14    1960-04-01  8.60  8.62 0.211   -1.31  -1.03  0.0772 0.0575 
-# 5 -54.5 -64.5 14    1960-05-01  7.86  7.88 0.182   -1.83  -1.07  0.0591 0.0281 
-# 6 -54.5 -64.5 14    1960-06-01  7.52  7.55 0.152   -2.46  -1.11  0.0393 0.0115 
-
-
-##### END LME grid cell scale -----
 
 
 
@@ -382,155 +291,10 @@ for (i in 1:length(region_choice)){
 
 #### code starting ----
 
-rm(list=ls())
 
-library(RNetCDF) 
-library(reshape2) 
-library(abind) 
-library(tictoc)
 
-#### CN ISMIP63a adapted function -----
 
-getGCM<-function(gcmPath = './inputs/', protocol, gcm = 'IPSL-CM6A-LR', 
-                 savepath, getdepth = T, vers = 2){
-  
-  # # CN trial
-  # gcmPath = "/rd/gem/private/fishmip_inputs/ISIMIP3a/"
-  # protocol = "0.25deg"
-  # gcm = "obsclim"
-  # savepath = "/rd/gem/private/fishmip_inputs/ISIMIP3a/processed_forcings/"
-  # getdepth = T
-  # vers = 3 # see meaning below
-  
-  # getGCM(gcmPath = "/rd/gem/private/fishmip_inputs/ISIMIP3a/", 
-  #        protocol = "0.25deg", 
-  #        gcm = "obsclim", 
-  #        savepath = "/rd/gem/private/fishmip_inputs/ISIMIP3a/processed_forcings/", 
-  #        getdepth = T, 
-  #        vers = 3)
-  
-  phypico_file = list.files(path = paste(gcmPath, gcm, '/', protocol, '/', 
-                                         sep = ''), pattern = '*phypico-vint*', 
-                            full.names = TRUE)
-  phyc_file = list.files(path = paste(gcmPath, gcm, '/', protocol, '/', 
-                                      sep = ''), pattern = '*phyc-vint*', 
-                         full.names = TRUE)
-  to_zb_file = list.files(path = paste(gcmPath, gcm, '/', protocol, '/', 
-                                       sep = ''), pattern = '*_tob_*',
-                          full.names = TRUE)
-  to_zs_file = list.files(path = paste(gcmPath, gcm, '/', protocol, '/', 
-                                       sep = ''), pattern = '*_tos_*', 
-                          full.names = TRUE)
-  
-  # get large phy
-  # checked with Julia 1/09/2022
-  # sphy = phypico-vint_mol_m-2
-  # lphy = phyc-vint_mol_m-2 - phypico-vint_mol_m-2 
-  lphy <- var.get.nc(open.nc(phyc_file), 
-                     'phyc-vint') - var.get.nc(open.nc(phypico_file), 
-                                               'phypico-vint')
-  
-  t <- var.get.nc(open.nc(phypico_file), 'time')
-  lon <- var.get.nc(open.nc(phypico_file), 'lon')
-  lat <- var.get.nc(open.nc(phypico_file), 'lat')
-  
-  # Format lphy
-  dimnames(lphy) <- list(lon=lon,lat=lat,t=t)
-  pp <- melt(lphy)
-  names(pp) <-  c("lon","lat","t","lphy")
-  pp <- pp[!is.na(pp[,"lphy"]),]
-  rm(list = ('lphy'))
-  
-  # sphy
-  sphy <- var.get.nc(open.nc(phypico_file), 'phypico-vint')
-  sphy <- as.vector(sphy)
-  sphy <- sphy[!is.na(sphy)]
-  pp$sphy <- sphy
-  rm(list = ('sphy'))
-  
-  # bottom temperature
-  to_zb <- var.get.nc(open.nc(to_zb_file), 'tob')
-  
-  to_zb <- as.vector(to_zb)
-  to_zb <- to_zb[!is.na(to_zb)]
-  pp$sbt <- to_zb
-  rm(list = ('to_zb'))
-  
-  # Surface temperature
-  to_zs <- var.get.nc(open.nc(to_zs_file), 'tos')
-  
-  to_zs <- as.vector(to_zs)
-  to_zs <- to_zs[!is.na(to_zs)]
-  pp$sst <- to_zs
-  rm(list = ('to_zs'))
-  
-  # Standardise colnames
-  names(pp) <- c("lon", "lat", "t", "lphy", "sphy", "sbt", "sst")
-  
-  if(getdepth == T){
-    # get depth
-    # NOTE: one depth file for gcm(e.g. obsclim)/protocol(e.g. 0.25deg) 
-    #combination
-    depth_nc <- open.nc(list.files(path = paste(gcmPath, gcm, '/', protocol, 
-                                                '/', sep = ''), 
-                                   pattern = 'deptho',
-                                   full.names = TRUE))
-    depth <- var.get.nc(depth_nc, 'deptho') # Depth in metres
-    dimnames(depth) <- list(lon=var.get.nc(depth_nc, 'lon'),
-                            lat=var.get.nc(depth_nc, 'lat'))
-    depth <- melt(depth)
-    names(depth) <- c("lon", "lat", "depth")
-    depth$gridnum <- 1:length(depth[,1])
-    
-    # Remove land values (na and 0 depth)
-    depth <- depth[!is.na(depth[,"depth"]),]
-    depth <- depth[depth[,'depth'] != 0,]
-    
-    ## Save depth
-    depth_save_name <- paste(savepath, gcm, '/', protocol, '/', gcm, "_", 
-                             protocol, "_depth.RData", sep = '')
-    save(depth, file = depth_save_name, version = vers)
-  }
-  
-  ## Save processed forcings
-  print(paste('Now saving forcings for', gcm, protocol, sep = ' '))
-  pp_save_name <- paste(savepath, gcm, '/', protocol, '/', gcm, "_", 
-                        protocol, ".RData", sep = '')
-  save(pp, file = pp_save_name, version = vers) # version = the workspace 
-  #format version to use. 
-  # NULL specifies the current default format (3). 
-  # Version 1 was the default from R 0.99.0 to R 1.3.1 and 
-  # version 2 from R 1.4.0 to 3.5.0. 
-  # Version 3 is supported from R 3.5.0.
-  # "/rd/gem/private/fishmip_inputs/ISIMIP3a/processed_forcings/obsclim/
-  #0.25deg/obsclim_0.25deg.RData"
-  
-  #remove any objects no longer needed 
-  if(getdepth == T){
-    rm(pp, depth)
-  }else{rm(pp)}
-}
 
-#### apply getGCM() to all combo of protocols ----
-
-tic()
-getGCM(gcmPath = "/rd/gem/private/fishmip_inputs/ISIMIP3a/", 
-       protocol = "0.25deg", gcm = "obsclim", 
-       savepath = "/rd/gem/private/fishmip_inputs/ISIMIP3a/processed_forcings/", 
-       getdepth = T, vers = 3)
-toc() # 8.533967 min 
-getGCM(gcmPath = "/rd/gem/private/fishmip_inputs/ISIMIP3a/", 
-       protocol = "0.25deg", gcm = "ctrlclim", 
-       savepath = "/rd/gem/private/fishmip_inputs/ISIMIP3a/processed_forcings/", 
-       getdepth = T, vers = 3)
-getGCM(gcmPath = "/rd/gem/private/fishmip_inputs/ISIMIP3a/", protocol = "1deg", 
-       gcm = "obsclim", 
-       savepath = "/rd/gem/private/fishmip_inputs/ISIMIP3a/processed_forcings/", 
-       getdepth = T, vers = 3)
-getGCM(gcmPath = "/rd/gem/private/fishmip_inputs/ISIMIP3a/", protocol = "1deg",
-       gcm = "ctrlclim",
-       savepath = "/rd/gem/private/fishmip_inputs/ISIMIP3a/processed_forcings/",
-       getdepth = T, vers = 3)
 
 #### CN Calculate spin-up for CMIP63a climate forcings ----
 

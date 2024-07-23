@@ -13,7 +13,9 @@ library(data.table)
 library(parallel)
 library(dtplyr)
 library(janitor)
+library(terra)
 library(lubridate)
+source("dbpm_model_functions.R")
 
 # Reorganising data extracted from GFDL-COBALT2-MOM6 model ----------------
 #This function will transform the data so it appears longer (instead of wide)
@@ -451,3 +453,175 @@ calc_inputs_gridded <- function(file_path_ctrl, file_path_obs, region_choice,
   fwrite(x = spinup, file = out_file_spinup)
 }
 
+
+# Transform spatRaster to data frame --------------------------------------
+ras_to_df <- function(ras){
+  # This function transforms a spatRaster object to a data frame. It uses the
+  # variable name in the raster to label the data frame column containing
+  # the grid cell values
+  # Inputs:
+  # ras (spatRaster) - This raster must have the variable name recorded
+  #
+  # Outputs:
+  # ras_df (data frame) - Contains grid cell values of spatRaster as a data 
+  # frame
+  
+  # Extracting raster layer name
+  variable <- varnames(ras)
+  
+  #Keeping index for layer name
+  names(ras) <- str_extract(names(ras), "\\d{1,3}")
+  
+  ras_df <- ras |> 
+    #Keeping coordinate values
+    as.data.frame(xy = T) |> 
+    pivot_longer(!x:y, names_to = "index", values_to = variable) |> 
+    #Changes indices from characters to integers
+    mutate(index = as.integer(index)) |> 
+    #Removes any special characters
+    clean_names() |> 
+    arrange(x, y)
+  
+  return(ras_df)
+}
+
+
+
+# Merge data frames if coordinates and time are equal ---------------------
+merge_equal <- function(ras_df1, ras_df2){
+  #If coordinates (labelled x, y) and index are the same across data frames, 
+  #then add variable to first dataset
+  # Inputs:
+  # ras_df1 (data frame) - Main data frame to which data will be added
+  # ras_df2 (data frame) - Secondary data frame from which data comes from
+  #
+  # Outputs:
+  # ras_df (data frame) - Contains merged data frame if coordinates and time
+  # are identical
+  if(identical(ras_df1 |> select(x:index),
+               ras_df2 |> select(x:index))){
+    ras_df <- ras_df1 |> 
+      bind_cols(ras_df2 |> select(!x:index))
+    
+  return(ras_df)
+  }else{
+    message("coordinates and time are not identical between data frames.")
+  }
+}
+
+
+# Saving gridded ESM data as data frames ----------------------------------
+getGCM <- function(folder_path, save_path, getdepth = T){
+  # This function transforms gridded ESM data into into csv files and saves 
+  # them to the specified path
+  #
+  # Inputs:
+  # folder_path (character) - Full file path where gridded ESM data is located
+  # save_path (character) - Full file path where transformed ESM data will be
+  # saved
+  # getdepth (boolean) - If TRUE, then depth variable is loaded and saved as 
+  # data frame. Default is TRUE. 
+  #
+  # Outputs:
+  # None - This function saves outputs in specified paths
+  
+  #Ensure save_path exist, otherwise create it
+  if(!dir.exists(save_path)){
+    dir.create(save_path, recursive = T)
+  }
+  
+  #Get file paths for variables of interest
+  files_int <- list.files(folder_path, full.names = TRUE) |> 
+    str_subset("phypico-vint|phyc-vint|tob|tos")
+  
+  #Getting range of years included in dataset from file name
+  yr_range <- str_extract(files_int[1], "\\d{4}_\\d{4}") |> 
+    str_split("_", simplify = T)
+  
+  #Create sequence of dates for each month between year range
+  #To be used to correct dates in data frame
+  yr_range <- data.frame(t = seq(from = ym(paste0(yr_range[1], "-01")),
+                                 to = ym(paste0(yr_range[2], "-12")),
+                                 by = "month")) |> 
+    rowid_to_column("index")
+  
+  #Get scenario
+  scenario <- str_extract(folder_path, "global_inputs/(.*)/\\d{1,3}deg", 
+                          group = 1)
+  
+  #Calculating large phytoplankton (lphy)
+  phyc_ras <- rast(str_subset(files_int, "phyc-"))
+  phypico_ras <- rast(str_subset(files_int, "phypico-"))
+  lphy_ras <- phyc_ras-phypico_ras
+  
+  #Removing raster that is not needed
+  rm(phyc_ras)
+  
+  #Updating variable name
+  varnames(lphy_ras) <- "lphy"
+  varnames(phypico_ras) <- "sphy"
+  
+  #Transforming to data frame
+  lphy_df <- ras_to_df(lphy_ras)
+  sphy_df <- ras_to_df(phypico_ras)
+  
+  #Removing rasters that are not needed
+  rm(phypico_ras, lphy_ras)
+  
+  #Loading TOB and TOS
+  to_zb_df <- rast(str_subset(files_int, "tob_")) |> 
+    ras_to_df()
+  to_zs_df <- rast(str_subset(files_int, "tos_")) |> 
+    ras_to_df()
+  
+  #Merge datasets if they are equal
+  pp <- merge_equal(lphy_df, sphy_df) |> 
+    merge_equal(to_zb_df) |> 
+    merge_equal(to_zs_df)
+  
+  #Removing data frames that are not needed
+  rm(lphy_df, sphy_df, to_zb_df, to_zs_df)
+  
+  #Adding dates
+  pp <- pp |> 
+    left_join(yr_range, join_by(index)) |> 
+    select(!index) |> 
+    #Add scenario
+    mutate(scenario = scenario) |> 
+    #Renaming columns
+    rename("lon" = "x", "lat" = "y", "sbt" = "tob", "sst" = "tos") |> 
+    relocate(t, .after = lat)
+  
+  #Save outputs
+  file_out <- basename(str_subset(files_int, "tob")) |> 
+    str_replace("tob", "all_forcings") |>
+    str_replace(".nc", ".csv")
+  
+  pp |> 
+    fwrite(file.path(save_path, file_out))
+  
+  #Saving depth 
+  if(getdepth == T){
+    #Get path for depth data 
+    depth_filename <- list.files(folder_path, pattern = "deptho", full.names = T)
+    #Load raster
+    depth_df <- rast(depth_filename) |> 
+      #Transform to data frame
+      as.data.frame(xy = T, na.rm = F) |> 
+      rename("lon" = "x", "lat" = "y", "depth" = "deptho") |> 
+      #Add grid cell ID
+      rowid_to_column("gridnum") |> 
+      #Remove any grid cells without data
+      drop_na() |> 
+      #Add scenario
+      mutate(scenario = scenario) |> 
+      relocate(gridnum, .after = depth)
+    
+    #Save depth data frame
+    depth_save_name <- file.path(save_path,
+                                 str_replace(basename(depth_filename), 
+                                             ".nc", ".csv"))
+    depth_df |> 
+      fwrite(depth_save_name)
+  }
+}
