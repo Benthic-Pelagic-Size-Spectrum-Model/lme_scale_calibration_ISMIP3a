@@ -625,3 +625,64 @@ getGCM <- function(folder_path, save_path, getdepth = T){
       fwrite(depth_save_name)
   }
 }
+
+
+# Calculate spinup from gridded ESM data ----------------------------------
+calc_input_spinup_gridcell <- function(base_path, save_path){
+  # This function uses gridded ESM data, creates spinup data and saves 
+  # them to the specified path
+  #
+  # Inputs:
+  # base_path (character) - Full file path where gridded ESM data is located
+  # save_path (character) - Full file path where spinup data will be saved
+  #
+  # Outputs:
+  # None - This function saves outputs in specified paths
+  
+  #Ensure save_path exist, otherwise create it
+  if(!dir.exists(save_path)){
+    dir.create(save_path, recursive = T)
+  }
+  
+  #Get path for file containing all model forcings
+  file_path <- list.files(base_path, "all_forcings", full.names = T)
+  
+  #Load file with all forcings
+  ctrlclim <- fread(file_path)
+  
+  #Load file with depth
+  gridnum_depth <- list.files(base_path, "deptho", full.names = T) |> 
+    fread() |> 
+    select(!scenario)
+  
+  #Merge files
+  ctrlclim <- ctrlclim |>
+    full_join(gridnum_depth, join_by(lon, lat)) |>
+    arrange(t, gridnum)
+  
+  #Remove variable - not needed
+  rm(gridnum_depth)
+  
+  #Calculate spin-up from data between 1961 and 1980
+  spinup <- ctrlclim |>
+    filter(t >= "1961-01-01", t <= "1980-12-01") 
+  
+  spinup <- spinup |>
+    #Repeat six times
+    slice(rep(1:n(), times = 6)) |> 
+    #Relabel dates
+    mutate(year = year(t),
+           month = month(t),
+           i = rep(1:6, each = nrow(spinup)),
+           year = year-(120-(20*(i-1))),
+           t = my(paste(month, year, sep = "-")),
+           scenario = "spinup") |>
+    select(!year:i)
+  
+  #Create file path to save spinup
+  file_out <- file.path(save_path, str_replace(basename(file_path), 
+                                               "all_forcings", "spinup"))
+  #save spin up
+  spinup |> 
+    fwrite(file_out)
+}
