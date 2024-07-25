@@ -8,7 +8,9 @@ library(dtplyr)
 source("supporting_functions.R")
 source("dbpm_model_functions.R")
 
-# Apply calc_inputs_all() function to each FAO region (0.25 degree res) -----
+
+# FAO sectors -------------------------------------------------------------
+## Apply calc_inputs_all() function to each FAO region (0.25 degree res) ----
 file_path_obs <- file.path("/g/data/vf71/fishmip_inputs/ISIMIP3a/fao_inputs",
                            "obsclim/025deg")
 file_path_ctrl <- file.path("/g/data/vf71/fishmip_inputs/ISIMIP3a/fao_inputs", 
@@ -40,7 +42,7 @@ region_choice |>
   map(~calc_inputs_all(file_path_ctrl, file_path_obs, ., out_path_ctrl, 
                        out_path_obs))
 
-# Merging processed inputs into a single file -----------------------------
+## Merging processed inputs into a single file ----------------------------
 combined_FAO_inputs <- list.files(out_path_obs, full.names = TRUE) |> 
   #Note that the amount of cores available will depend on compute size chosen
   mclapply(FUN = fread, mc.cores = 28) |> 
@@ -64,7 +66,7 @@ combined_FAO_inputs <- combined_FAO_inputs |>
   #Removing columns not needed
   select(-c(phyc_vint, phypico_vint))
 
-# Loading effort and catches data -----------------------------------------
+## Loading effort and catches data ----------------------------------------
 effort_file_path <- "/g/data/vf71/fishmip_inputs/ISIMIP3a/DKRZ_EffortFiles"
 
 #Effort data
@@ -104,7 +106,7 @@ DBPM_FAO_effort_catch_input <- effort_FAO |>
 rm(effort_FAO, FAO_catch_input)
 
 
-# Plotting fish and catch data --------------------------------------------
+## Plotting fish and catch data -------------------------------------------
 # Creating plots to ensure data makes sense - The original code was changed
 # slightly to match the original saved image
 
@@ -147,7 +149,7 @@ ggsave("Output/Effort_FAO1_check_DFA.pdf", device = "pdf")
 rm(plot_df)
 
 
-# Calculating intercept and slope -----------------------------------------
+## Calculating intercept and slope ----------------------------------------
 DBPM_FAO_climate_inputs_slope <- combined_FAO_inputs |>
   mutate(area_m2 = total_area_km2*1e6) |> 
   #Remove unused columns and reorder them
@@ -169,7 +171,7 @@ DBPM_FAO_climate_inputs_slope <- combined_FAO_inputs |>
   relocate(all_of(c("er", "intercept", "slope")), .before = sphy)
 
 
-# Saving catch and effort, and inputs data --------------------------------
+## Saving catch and effort, and inputs data -------------------------------
 #Folder where outputs will be stored
 folder_out <- file.path("/g/data/vf71/fishmip_inputs/ISIMIP3a",
                         "processed_forcings/fao_inputs/obsclim/025deg")
@@ -183,8 +185,7 @@ DBPM_FAO_effort_catch_input |>
   fwrite(file.path(folder_out, "DBPM_FAO_effort_catch_input.csv"))
 
 
-
-# Apply calc_inputs_all() function to each FAO region (1 degree res) --------
+## Apply calc_inputs_all() function to each FAO region (1 degree res) -------
 file_path_obs <- file.path("/g/data/vf71/fishmip_inputs/ISIMIP3a/fao_inputs",
                            "obsclim/1deg")
 file_path_ctrl <- file.path("/g/data/vf71/fishmip_inputs/ISIMIP3a/fao_inputs", 
@@ -201,8 +202,7 @@ region_choice |>
                            out_path_obs))
 
 
-
-# ISIMIP3a scale 3 --------------------------------------------------------
+## ISIMIP3a scale 3 -------------------------------------------------------
 #Applying getGCM() function to all experiments and resolutions
 base_path <- "/g/data/vf71/fishmip_inputs/ISIMIP3a"
 
@@ -221,8 +221,7 @@ getGCM(folder_path = file.path(base_path, "global_inputs/obsclim/1deg"),
        save_path = file.path(base_path, "processed_forcings/obsclim/1deg"))
 
 
-
-# Calculate spinup from gridded ctrlclim data -----------------------------
+## Calculate spinup from gridded ctrlclim data ----------------------------
 base_folder <- "/g/data/vf71/fishmip_inputs/ISIMIP3a/processed_forcings"
 
 calc_input_spinup_gridcell(base_path = file.path(base_folder, "ctrlclim/1deg"), 
@@ -232,3 +231,34 @@ calc_input_spinup_gridcell(base_path = file.path(base_folder, "ctrlclim/025deg")
                            save_path = file.path(base_folder, "spinup/025deg"))
 
 
+# LMEs --------------------------------------------------------------------
+## Apply calc_inputs_all() function to each LME (0.25 degree res) ----
+file_path_obs <- file.path("/g/data/vf71/fishmip_inputs/ISIMIP3a/lme_inputs",
+                           "obsclim/025deg")
+file_path_ctrl <- file.path("/g/data/vf71/fishmip_inputs/ISIMIP3a/lme_inputs", 
+                            "ctrlclim/025deg")
+
+region_choice <- 1:66
+
+#Applying function to all chosen regions (gridded outputs)
+#Define paths for gridded outputs
+out_path_obs <- file.path("/g/data/vf71/fishmip_inputs/ISIMIP3a",
+                          "processed_forcings/fao_inputs_gridcell/obsclim", 
+                          "025deg")
+out_path_ctrl <- file.path("/g/data/vf71/fishmip_inputs/ISIMIP3a",
+                           "processed_forcings/fao_inputs_gridcell/ctrlclim", 
+                           "025deg")
+
+region_choice |> 
+  map(~calc_inputs_gridded(file_path_ctrl, file_path_obs, ., out_path_ctrl, 
+                           out_path_obs))
+
+#Applying weighting function to all chosen regions
+#Defining paths for weighted outputs
+out_path_obs <- file.path("/g/data/vf71/fishmip_inputs/ISIMIP3a",
+                          "processed_forcings/lme_inputs/obsclim/025deg")
+out_path_ctrl <- file.path("/g/data/vf71/fishmip_inputs/ISIMIP3a",
+                           "processed_forcings/lme_inputs/ctrlclim/025deg")
+region_choice |> 
+  map(~calc_inputs_all(file_path_ctrl, file_path_obs, ., out_path_ctrl, 
+                       out_path_obs))
