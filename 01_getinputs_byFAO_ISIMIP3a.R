@@ -75,7 +75,7 @@ effort_FAO <- file.path(effort_file_path,
   fread() |> 
   filter(LME == 0) |> 
   as_tibble() |> 
-  # calculate sum of effort by LME/by total area of LME 
+  # calculate sum of effort by FAO rehion/by total area of FAO region
   group_by(Year, fao_area) |> 
   summarize(total_nom_active = sum(NomActive, na.rm = T), 
             .groups = "drop") |> 
@@ -262,3 +262,122 @@ out_path_ctrl <- file.path("/g/data/vf71/fishmip_inputs/ISIMIP3a",
 region_choice |> 
   map(~calc_inputs_all(file_path_ctrl, file_path_obs, ., out_path_ctrl, 
                        out_path_obs))
+
+## Merging processed inputs into a single file ----------------------------
+combined_LME_inputs <- list.files(out_path_obs, full.names = TRUE) |> 
+  #Note that the amount of cores available will depend on compute size chosen
+  mclapply(FUN = fread, mc.cores = 28) |> 
+  rbindlist() |> 
+  as_tibble() |> 
+  #Keep only the ID identifying the LME region
+  mutate(region = as.integer(str_remove(region, "LME_")))
+
+#Getting depth data
+depth <- combined_LME_inputs |> 
+  drop_na(deptho) |> 
+  select(deptho, region)
+
+#Tidying up depth inputs
+combined_LME_inputs <- combined_LME_inputs |> 
+  #Removing depth from combined inputs
+  filter(is.na(deptho)) |> 
+  select(!deptho) |> 
+  left_join(depth, by = join_by("region"))
+
+#Removing variable not needed
+rm(depth)
+
+#Get a list of LME regions and their total area in km2 to calculate effort/m2
+LME_area <- combined_LME_inputs |> 
+  distinct(region, total_area_km2, deptho) |> 
+  as_tibble()
+
+#From original code: Variable names were standardised to use common terminology
+# sphy = phypico-vint_mol_m-2
+# lphy = phyc-vint_mol_m-2 - phypico-vint_mol_m-2 
+combined_LME_inputs <- combined_LME_inputs |> 
+  mutate(sphy = phypico_vint,  lphy = phyc_vint - phypico_vint) |> 
+  #Removing columns not needed
+  select(-c(phyc_vint, phypico_vint))
+
+## Loading effort and catches data ----------------------------------------
+effort_file_path <- "/g/data/vf71/fishmip_inputs/ISIMIP3a/DKRZ_EffortFiles"
+
+#Effort data
+effort_LME <- file.path(effort_file_path,
+                        "effort_isimip3a_histsoc_1841_2010.csv") |> 
+  fread() |> 
+  #Removing LME = 0 because there is no information about area
+  filter(LME > 0) |> 
+  # calculate sum of effort by LME/by total area of LME 
+  group_by(Year, LME) |> 
+  summarize(total_nom_active = sum(NomActive, na.rm = T), 
+            .groups = "drop") |> 
+  ungroup() |>
+  full_join(LME_area, by = c("LME" = "region")) |> 
+  mutate(total_nom_active_area_m2 = total_nom_active/(total_area_km2*1e6))
+
+#Catches data
+LME_catch_input <- list.files(effort_file_path,
+                              "catch-validation_isimip3a_histsoc",
+                              full.names = T) |> 
+  read_csv() |>
+  #Removing LME = 0 because there is no information about area
+  filter(LME > 0) |> 
+  # catch is in tonnes, checked in FishingEffort Rproject
+  mutate(catch_tonnes = Reported+IUU) |> 
+  group_by(Year, LME) |> 
+  summarize(catch_tonnes = sum(catch_tonnes), .groups = "drop") |> 
+  # also Reg advise to exclude discards 
+  ungroup() |> 
+  full_join(LME_area, by = c("LME" = "region")) |> 
+  mutate(catch_tonnes_area_m2 = catch_tonnes/(total_area_km2*1e6))
+
+#Merging catches and effort data
+DBPM_LME_effort_catch_input <- effort_LME |> 
+  full_join(LME_catch_input)
+
+#Removing individual data frames
+rm(effort_LME, LME_catch_input)
+
+
+## Plotting fish and catch data -------------------------------------------
+# Creating plots to ensure data makes sense - The original code was changed
+# slightly to match the original saved image
+
+#Split dataset as items in a list based on FAO area
+plot_df <- DBPM_LME_effort_catch_input |> 
+  group_by(LME) |> 
+  group_split() |> 
+  #Select first LME region
+  first()
+
+#Plotting data
+plot_df |> 
+  ggplot(aes(Year, total_nom_active))+
+  ggtitle(paste("LME #", unique(plot_df$LME), sep = " "))+
+  annotate("rect", xmin = 1841, xmax = 1960, ymin = 0, ymax = Inf, 
+           fill = "#b2e2e2", alpha = 0.4)+ 
+  # projection 66c2a4
+  annotate("rect", xmin = 1961, xmax = 2010, ymin = 0, ymax = Inf, 
+           fill = "#238b45", alpha = 0.4)+ 
+  geom_point(size = 1)+
+  geom_line()+
+  theme_bw()+
+  theme(labs(y = "Total nom active"),
+        text = element_text(size = 11),
+        axis.title.x = element_blank(),
+        plot.title = element_text(size = 11),
+        axis.title.y = element_text(size = 10),
+        axis.text = element_text(size = 9),
+        legend.title = element_text(size = 10), 
+        legend.text = element_text(size = 9),
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(), 
+        legend.key.size = unit(0.1, "cm")) 
+
+#Saving result that matches previous work
+ggsave("Output/Effort_LME1_check_DFA.pdf", device = "pdf")
+
+#Removing variables not in use
+rm(plot_df)
