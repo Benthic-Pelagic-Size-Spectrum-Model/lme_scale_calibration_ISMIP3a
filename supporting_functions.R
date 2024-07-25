@@ -31,33 +31,58 @@ reorganise_gfdl <- function(gfdl_path, area_cell_df, region){
   #df (data frame) - Contains reorganised GFDL data and adds correct grid cell
   #area
   
-  #Load data
-  df <- fread(gfdl_path, header = F) |> 
-    #Transpose data
-    t() |> 
-    #Use first row as column names
-    row_to_names(1) |> 
-    as.data.frame() |> 
-    remove_empty("cols") |> 
-    #Ensure data is numeric
-    mutate(across(everything(), ~as.numeric(.x))) |> 
-    #Reorganise data so values are in a single column
-    pivot_longer(!c(lat,lon), values_to = "value", names_to = "date") |> 
-    #Apply date format
-    mutate(date = lubridate::as_date(date)) |> 
-    #Add correct area of the grid cell
-    left_join(area_cell_df, by = join_by(lat, lon)) |> 
-    #Adding scenario to data
-    mutate(scenario = str_extract(gfdl_path, 
-                                  "(fao|lme)_inputs/(.*)/\\d{1,3}deg", 
-                                  group = 2)) |> 
-    #Remove any empty rows
-    drop_na() |> 
-    #Apply date format to date column
-    mutate(month = lubridate::month(date, label = T), 
-           year = year(date), region = region) |> 
-    #Order by date
-    arrange(date)
+  if(str_detect(gfdl_path, "fao")){
+    #Load data
+    df <- fread(gfdl_path, header = F) |> 
+      #Transpose data
+      t() |> 
+      #Use first row as column names
+      row_to_names(1) |> 
+      as.data.frame() |> 
+      remove_empty("cols") |> 
+      #Ensure data is numeric
+      mutate(across(everything(), ~as.numeric(.x))) |> 
+      #Reorganise data so values are in a single column
+      pivot_longer(!c(lat,lon), values_to = "value", names_to = "date") |> 
+      #Apply date format
+      mutate(date = lubridate::as_date(date)) |> 
+      #Add correct area of the grid cell
+      left_join(area_cell_df, by = join_by(lat, lon)) |> 
+      #Adding scenario to data
+      mutate(scenario = str_extract(gfdl_path, 
+                                    "(fao|lme)_inputs/(.*)/\\d{1,3}deg", 
+                                    group = 2)) |> 
+      #Remove any empty rows
+      drop_na() |> 
+      #Apply date format to date column
+      mutate(month = lubridate::month(date, label = T), 
+             year = year(date), region = region) |> 
+      #Order by date
+      arrange(date)
+  }else{
+    df <- fread(gfdl_path) |> 
+      #Remove area column
+      select(!area_m2) |> 
+      # as.data.frame() |> 
+      remove_empty("cols") |> 
+      #Reorganise data so values are in a single column
+      pivot_longer(!c(lat,lon), values_to = "value", names_to = "date") |> 
+      #Apply date format
+      mutate(date = lubridate::my(date)) |> 
+      #Add correct area of the grid cell
+      left_join(area_cell_df, by = join_by(lat, lon)) |> 
+      #Adding scenario to data
+      mutate(scenario = str_extract(gfdl_path, 
+                                    "(fao|lme)_inputs/(.*)/\\d{1,3}deg", 
+                                    group = 2)) |> 
+      #Remove any empty rows
+      drop_na() |> 
+      #Apply date format to date column
+      mutate(month = lubridate::month(date, label = T), 
+             year = year(date), region = region) |> 
+      #Order by date
+      arrange(date)
+  }
   
   return(df)
 }
@@ -145,21 +170,36 @@ calc_inputs <- function(path_ctrl, path_obs){
     #Rename columns
     rename("lon" = "x", "lat" = "y", "area_m2" = "cellareao")
   
-  #Load ctrlclim data
-  ctrlclim_df <- reorganise_gfdl(path_ctrl, area_frame, region)
-  
-  #Load obsclim data
-  obsclim_df <- reorganise_gfdl(path_obs, area_frame, region)
+  if(variable == "deptho"){
+    obsclim_df <- fread(path_obs) |> 
+      select(!area_m2) |> 
+      mutate(scenario = str_extract(path_obs, 
+                                    "(fao|lme)_inputs/(.*)/\\d{1,3}deg", 
+                                    group = 2)) |> 
+      #Add correct area of the grid cell
+      left_join(area_frame, by = join_by(lat, lon))
+  }else{
+    #Load ctrlclim data
+    ctrlclim_df <- reorganise_gfdl(path_ctrl, area_frame, region)
+    
+    #Load obsclim data
+    obsclim_df <- reorganise_gfdl(path_obs, area_frame, region)
+  }
   
   # Calculate weighted mean for GFDL variables
-  if(variable == "deptho_m"){
+  if(variable == "deptho"){
     # calculate fixed variables - mean depth and area of FAO 
     # shortcut if you need to extract ctrlclim values too for all variables
     weighted_mean_ctrl_final <- weighted_mean_obs_final <- obsclim_df |> 
-      summarise(deptho_m = weighted.mean(value, area_m2),
-                total_area_km2 = sum(area_m2)*1e-6) |> 
+      summarise(weighted_mean = weighted.mean(m, area_m2),
+                total_area_km2 = sum(area_m2)*1e-6,
+                variable_name = "deptho") |> 
       # Add name of region from file path
-      mutate(region = region)
+      mutate(region = region, .before = weighted_mean) |> 
+      mutate(date = NA, year = NA, month = NA, 
+             scenario = "obsclim", .after = region)
+    weighted_mean_ctrl_final <- weighted_mean_ctrl_final |> 
+      mutate(scenario = "ctrlclim")
   }else{
     # ctrlclim
     weighted_mean_ctrl <- weighted_mean_by_area(ctrlclim_df)
@@ -257,7 +297,7 @@ calc_inputs_all <- function(file_path_ctrl, file_path_obs, region_choice,
     dir.create(out_path_obs, recursive = T)
   }
   
-  reg <- output_ctrl_all_variables |> distinct(FAO) |> pull()
+  reg <- output_ctrl_all_variables |> distinct(region) |> pull()
   
   #Create output file name
   out_file_obsclim <- file.path(out_path_obs, paste0("obsclim_spinup_", reg, 
@@ -645,7 +685,7 @@ calc_input_spinup_gridcell <- function(base_path, save_path){
   }
   
   #Get path for file containing all model forcings
-  file_path <- list.files(base_path, "all_forcings", full.names = T)
+  file_path <- list.files(base_path, "all_forcings_", full.names = T)
   
   #Load file with all forcings
   ctrlclim <- fread(file_path)
@@ -665,19 +705,32 @@ calc_input_spinup_gridcell <- function(base_path, save_path){
   
   #Calculate spin-up from data between 1961 and 1980
   spinup <- ctrlclim |>
-    filter(t >= "1961-01-01", t <= "1980-12-01") 
+    filter(t >= "1961-01-01", t <= "1980-12-01") |>
+    mutate(year = year(t),
+           month = month(t),
+           scenario = "spinup") 
+  
+  #Remove variable - not needed
+  rm(ctrlclim)
+  
+  #Calculating year for spinup
+  year_df <- spinup |> 
+    select(year, month) |> 
+    slice(rep(1:n(), times = 6)) |> 
+    #Relabel dates
+    mutate(i = rep(1:6, each = nrow(spinup)),
+           year = year-(120-(20*(i-1))),
+           t = my(paste(month, year, sep = "-"))) |> 
+    pull(t)
   
   spinup <- spinup |>
+    select(!c(year, month)) |> 
     #Repeat six times
     slice(rep(1:n(), times = 6)) |> 
     #Relabel dates
-    mutate(year = year(t),
-           month = month(t),
-           i = rep(1:6, each = nrow(spinup)),
-           year = year-(120-(20*(i-1))),
-           t = my(paste(month, year, sep = "-")),
-           scenario = "spinup") |>
-    select(!year:i)
+    mutate(t = year_df) 
+  
+  rm(year_df)
   
   #Create file path to save spinup
   file_out <- file.path(save_path, str_replace(basename(file_path), 
