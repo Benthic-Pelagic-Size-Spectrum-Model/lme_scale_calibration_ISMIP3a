@@ -1490,7 +1490,7 @@ GetPPIntSlope <- function(sphy, lphy, mmin = 10^-14.25, mmid = 10^-10.184,
   b <- (small-large)/(midsmall-midlarge)
   
   #a is really log10(a), same a when small, midsmall are used
-  a <- large - b*midlarge  
+  a <- large - (b*midlarge)
   # log10(a) will equal to the log10 density of particles at mass = 1 g and at
   # log10 (mass)=0
   # pp<-c(a,b) 

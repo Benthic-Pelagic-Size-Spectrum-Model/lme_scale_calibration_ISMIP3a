@@ -445,5 +445,3 @@ region_choice |>
   map(~calc_inputs_all(file_path_ctrl, file_path_obs, ., out_path_ctrl, 
                        out_path_obs))
 
-
-
