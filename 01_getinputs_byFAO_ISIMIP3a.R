@@ -75,7 +75,7 @@ effort_FAO <- file.path(effort_file_path,
   fread() |> 
   filter(LME == 0) |> 
   as_tibble() |> 
-  # calculate sum of effort by FAO rehion/by total area of FAO region
+  # calculate sum of effort by FAO region/by total area of FAO region
   group_by(Year, fao_area) |> 
   summarize(total_nom_active = sum(NomActive, na.rm = T), 
             .groups = "drop") |> 
@@ -243,10 +243,10 @@ region_choice <- 1:66
 #Applying function to all chosen regions (gridded outputs)
 #Define paths for gridded outputs
 out_path_obs <- file.path("/g/data/vf71/fishmip_inputs/ISIMIP3a",
-                          "processed_forcings/fao_inputs_gridcell/obsclim", 
+                          "processed_forcings/lme_inputs_gridcell/obsclim", 
                           "025deg")
 out_path_ctrl <- file.path("/g/data/vf71/fishmip_inputs/ISIMIP3a",
-                           "processed_forcings/fao_inputs_gridcell/ctrlclim", 
+                           "processed_forcings/lme_inputs_gridcell/ctrlclim", 
                            "025deg")
 
 region_choice |> 
@@ -345,7 +345,7 @@ rm(effort_LME, LME_catch_input)
 # Creating plots to ensure data makes sense - The original code was changed
 # slightly to match the original saved image
 
-#Split dataset as items in a list based on FAO area
+#Split dataset as items in a list based on LME area
 plot_df <- DBPM_LME_effort_catch_input |> 
   group_by(LME) |> 
   group_split() |> 
@@ -381,3 +381,69 @@ ggsave("Output/Effort_LME1_check_DFA.pdf", device = "pdf")
 
 #Removing variables not in use
 rm(plot_df)
+
+
+## Calculating intercept and slope ----------------------------------------
+DBPM_LME_climate_inputs_slope <- combined_LME_inputs |>
+  mutate(area_m2 = total_area_km2*1e6) |> 
+  #Remove unused columns and reorder them
+  select(region, date, tos, tob, sphy, lphy, deptho, area_m2, 
+         expc_bot) |> 
+  # name columns as in "dbpm_model_functions.R" script
+  rename(LME = region, t = date, depth = deptho, sbt = tob, sst = tos, 
+         expcbot = expc_bot) |> 
+  #Calculate slope and intercept
+  mutate(er = getExportRatio(sphy, lphy, sst, depth),
+         er = ifelse(er < 0, 0, ifelse(er > 1, 1, er)),
+         intercept = GetPPIntSlope(sphy, lphy, mmin = 10^-14.25, 
+                                   mmid = 10^-10.184,
+                                   mmax = 10^-5.25, depth, 
+                                   output = "intercept"),
+         slope = GetPPIntSlope(sphy, lphy, mmin = 10^-14.25, 
+                               mmid = 10^-10.184, mmax = 10^-5.25, depth, 
+                               output = "slope")) |> 
+  relocate(all_of(c("er", "intercept", "slope")), .before = sphy)
+
+
+## Saving catch and effort, and inputs data -------------------------------
+#Folder where outputs will be stored
+folder_out <- file.path("/g/data/vf71/fishmip_inputs/ISIMIP3a",
+                        "processed_forcings/lme_inputs/obsclim/025deg")
+
+#Saving DBPM inputs 
+DBPM_LME_climate_inputs_slope |> 
+  fwrite(file.path(folder_out, "DBPM_LME_climate_inputs_slope.csv"))
+
+#Saving catch and effort data 
+DBPM_LME_effort_catch_input |> 
+  fwrite(file.path(folder_out, "DBPM_LME_effort_catch_input.csv"))
+
+
+## Apply calc_inputs_all() function to each LME region (1 degree res) -------
+file_path_obs <- file.path("/g/data/vf71/fishmip_inputs/ISIMIP3a/lme_inputs",
+                           "obsclim/1deg")
+file_path_ctrl <- file.path("/g/data/vf71/fishmip_inputs/ISIMIP3a/lme_inputs", 
+                            "ctrlclim/1deg")
+out_path_obs <- file.path("/g/data/vf71/fishmip_inputs/ISIMIP3a",
+                          "processed_forcings/lme_inputs_gridcell/obsclim/1deg")
+out_path_ctrl <- file.path("/g/data/vf71/fishmip_inputs/ISIMIP3a",
+                           "processed_forcings/lme_inputs_gridcell/ctrlclim", 
+                           "1deg")
+
+#Applying function to all chosen regions
+region_choice |> 
+  map(~calc_inputs_gridded(file_path_ctrl, file_path_obs, ., out_path_ctrl, 
+                           out_path_obs))
+
+#Applying weighting function to all chosen regions
+#Defining paths for weighted outputs
+out_path_obs <- file.path("/g/data/vf71/fishmip_inputs/ISIMIP3a",
+                          "processed_forcings/lme_inputs/obsclim/1deg")
+out_path_ctrl <- file.path("/g/data/vf71/fishmip_inputs/ISIMIP3a",
+                           "processed_forcings/lme_inputs/ctrlclim/1deg")
+region_choice |> 
+  map(~calc_inputs_all(file_path_ctrl, file_path_obs, ., out_path_ctrl, 
+                       out_path_obs))
+
+
+

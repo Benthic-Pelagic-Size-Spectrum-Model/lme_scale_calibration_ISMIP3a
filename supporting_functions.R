@@ -188,7 +188,7 @@ calc_inputs <- function(path_ctrl, path_obs){
   
   # Calculate weighted mean for GFDL variables
   if(variable == "deptho"){
-    # calculate fixed variables - mean depth and area of FAO 
+    # calculate fixed variables - mean depth and area of FAO/LME
     # shortcut if you need to extract ctrlclim values too for all variables
     weighted_mean_ctrl_final <- weighted_mean_obs_final <- obsclim_df |> 
       summarise(weighted_mean = weighted.mean(m, area_m2),
@@ -373,7 +373,7 @@ dbpm_calcs <- function(flatten_list){
   #Outputs:
   #df (data frame) - Containing reorganised gridded GFDL data
   
-  #Check if a "depth" column is included in the dara frame
+  #Check if a "depth" column is included in the data frame
   if(sum(grepl("depth", names(flatten_list))) == 0){
     #If "depth" does not exist, add it
     flatten_list <- flatten_list |> 
@@ -390,7 +390,8 @@ dbpm_calcs <- function(flatten_list){
     #Removing columns not needed
     select(-c(phyc_vint, phypico_vint)) |> 
     # name columns as in "dbpm_model_functions.R" script
-    rename(FAO = region, t = date, sbt = tob, sst = tos, expcbot = expc_bot) |> 
+    rename(t = date, sbt = tob, sst = tos, 
+           expcbot = expc_bot) |> 
     #Calculate slope and intercept
     mutate(er = getExportRatio(sphy, lphy, sst, depth),
            er = ifelse(er < 0, 0, ifelse(er > 1, 1, er)),
@@ -402,7 +403,7 @@ dbpm_calcs <- function(flatten_list){
                                  mmid = 10^-10.184, mmax = 10^-5.25, depth, 
                                  output = "slope")) |> 
     #Reorganise columns following original script
-    relocate("FAO", .before = t) |> 
+    relocate("region", .before = t) |> 
     relocate(all_of(c("sst", "sbt", "er", "intercept", "slope", "sphy", "lphy",
                       "depth", "area_m2", "expcbot", "year", "month")), 
              .after = t) |> 
@@ -477,7 +478,7 @@ calc_inputs_gridded <- function(file_path_ctrl, file_path_obs, region_choice,
   }
   
   #Getting name of region
-  reg <- output_ctrl_all_variables |> distinct(FAO) |> pull()
+  reg <- output_ctrl_all_variables |> distinct(region) |> pull()
   
   #Create output file name
   out_file_obsclim <- file.path(out_path_obs, paste0("obsclim_historical_", 
@@ -643,7 +644,8 @@ getGCM <- function(folder_path, save_path, getdepth = T){
   #Saving depth 
   if(getdepth == T){
     #Get path for depth data 
-    depth_filename <- list.files(folder_path, pattern = "deptho", full.names = T)
+    depth_filename <- list.files(folder_path, pattern = "deptho", 
+                                 full.names = T)
     #Load raster
     depth_df <- rast(depth_filename) |> 
       #Transform to data frame
