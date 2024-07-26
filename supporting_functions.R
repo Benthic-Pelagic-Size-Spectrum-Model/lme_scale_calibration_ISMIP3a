@@ -63,7 +63,6 @@ reorganise_gfdl <- function(gfdl_path, area_cell_df, region){
     df <- fread(gfdl_path) |> 
       #Remove area column
       select(!area_m2) |> 
-      # as.data.frame() |> 
       remove_empty("cols") |> 
       #Reorganise data so values are in a single column
       pivot_longer(!c(lat,lon), values_to = "value", names_to = "date") |> 
@@ -242,6 +241,7 @@ flatten_list_list <- function(list_list, name_pattern, column_values){
   # Outputs:
   # df_flatten (data frame) - Flatten list of lists
   #obsclim GFDL outputs
+  
   #Select data frame within sublist based on name pattern
   df_flatten <- map(list_list, ~.[str_detect(names(.), name_pattern)]) |> 
     #Bind all data frames by row
@@ -250,6 +250,18 @@ flatten_list_list <- function(list_list, name_pattern, column_values){
     pivot_wider(names_from = variable_name, 
                 values_from = all_of(column_values)) |> 
     clean_names()
+  
+  if(sum(str_detect(df_flatten$region, "FAO")) == 0){
+    depth <- df_flatten |> 
+      drop_na(deptho) |> 
+      select(deptho, region, lat, lon)
+    
+    df_flatten <- df_flatten |> 
+      filter(is.na(deptho)) |> 
+      select(!deptho) |> 
+      left_join(depth, by = join_by(lat, lon, region))
+  }
+  
   return(df_flatten)
 }
 
@@ -346,15 +358,39 @@ gridded_inputs <- function(ctrl_files, obs_files){
     #Rename columns
     rename("lon" = "x", "lat" = "y", "area_m2" = "cellareao")
   
-  #Load ctrlclim data
-  ctrlclim_df <- reorganise_gfdl(ctrl_files, area_frame, region) |> 
-    # add name of variable to data frame
-    mutate(variable_name = variable)
   
-  #Load obsclim data
-  obsclim_df <- reorganise_gfdl(obs_files, area_frame, region) |> 
-    # add name of variable to data frame
-    mutate(variable_name = variable)
+  if(variable == "deptho"){
+    obsclim_df <- fread(obs_files) |> 
+      select(!area_m2) |> 
+      rename(value = m) |> 
+      mutate(date = NA, .before = value) |> 
+      #Add correct area of the grid cell
+      left_join(area_frame, by = join_by(lat, lon)) |> 
+      mutate(scenario = str_extract(obs_files, 
+                                    "(fao|lme)_inputs/(.*)/\\d{1,3}deg", 
+                                    group = 2),
+             month = NA, year = NA, region = region, variable_name = "deptho")
+    ctrlclim_df <- fread(ctrl_files) |> 
+      select(!area_m2) |> 
+      rename(value = m) |> 
+      mutate(date = NA, .before = value) |> 
+      #Add correct area of the grid cell
+      left_join(area_frame, by = join_by(lat, lon)) |> 
+      mutate(scenario = str_extract(ctrl_files, 
+                                    "(fao|lme)_inputs/(.*)/\\d{1,3}deg", 
+                                    group = 2),
+             month = NA, year = NA, region = region, variable_name = "deptho")
+  }else{
+    #Load ctrlclim data
+    ctrlclim_df <- reorganise_gfdl(ctrl_files, area_frame, region) |> 
+      # add name of variable to data frame
+      mutate(variable_name = variable)
+    
+    #Load obsclim data
+    obsclim_df <- reorganise_gfdl(obs_files, area_frame, region) |> 
+      # add name of variable to data frame
+      mutate(variable_name = variable)
+  }
   
   return(list(obsclim_df = obsclim_df, 
               ctrlclim_df = ctrlclim_df))
@@ -381,7 +417,7 @@ dbpm_calcs <- function(flatten_list){
   }else{
     #Ensure "depth" column in correctly labelled
     names(flatten_list) <- str_replace(
-      names(flatten_list), "deptho_m", "depth")
+      names(flatten_list), "deptho_m|deptho", "depth")
   }
   
   #Calculate DBPM inputs
