@@ -4,287 +4,149 @@
 # as spatially averaged means to estimate catchability (and if needed other
 # model parameters)
 
-# rm(list=ls())
-library(devtools)
+# library(devtools)
 library(tidyverse)
 library(lubridate)
-library(parallel)
-library(tictoc)
+# library(parallel)
+# library(tictoc)
 library(lhs)
-library(pbapply)
-library(patchwork)
-library(optimParallel)
+# library(pbapply)
+# library(patchwork)
+# library(optimParallel)
 # plots library
-library(rnaturalearth)
-library(sf)
-library(gridExtra)
+# library(rnaturalearth)
+# library(sf)
+# library(gridExtra)
 library(zoo)
 
-# source model script form Github - NOT WORKING, using local
-# source_url(url = "https://github.com/Benthic-Pelagic-Size-Spectrum-Model/
-#dbpm/blob/master/size-based-models/dynamic_sizebased_model_functions.R")
-source(file = "dbpm_model_functions.R")
+# source model script from Github - NOT WORKING, using local
+source("dbpm_model_functions.R")
+
+
+#Testing
+fishing_effort_file <- file.path("/g/data/vf71/fishmip_inputs/ISIMIP3a",
+                                 "processed_forcings/lme_inputs/obsclim/025deg",
+                                 "DBPM_LME_effort_catch_input.csv")
+
+#Non-gridded
+forcing_file <- file.path("/g/data/vf71/fishmip_inputs/ISIMIP3a",
+                          "processed_forcings/lme_inputs/obsclim/025deg", 
+                          "DBPM_LME_climate_inputs_slope.csv")
+
+#Gridded
+forcing_file <- file.path("/g/data/vf71/fishmip_inputs/ISIMIP3a",
+                          "processed_forcings/lme_inputs_gridcell/obsclim",
+                          "025deg") |> 
+  list.files(paste0("LME_", LMEnumber, "_"), full.names = T)
 
 # Select LME and get inputs ready
-get_lme_inputs <- function(LMEnumber = 14, gridded = F, yearly = F){
-  # # trial
-  # LMEnumber=1
-  # gridded=F
-  # yearly=F
+get_lme_inputs <- function(forcing_file, fishing_effort_file, LMEnumber = 14, 
+                           gridded = F, yearly = F){
+  # Climate fishing inputs available via THREDDS:
+  # http://portal.sf.utas.edu.au/thredds/catalog/gem/fishmip/ISIMIP3a/
+  # InputData/DBPM_lme_inputs/obsclim/025deg/catalog.html?dataset=
+  # fishmip/ISIMIP3a/InputData/DBPM_lme_inputs/obsclim/025deg/
+  # DBPM_LME_effort_catch_input.csv
+  lme_fish <- read_csv(fishing_effort_file) |> 
+    # subset data 
+    filter(region == LMEnumber) |> 
+    # use relative effort - for each LME independently - PREFERRED
+    mutate(nom_active_relative = total_nom_active/max(total_nom_active, 
+                                                      na.rm = T),
+           nom_active_area_m2_relative = total_nom_active_area_m2/
+             max(total_nom_active_area_m2, na.rm = T),
+           #Transform km2 to m2
+           area_m2 = total_area_km2*1e6)
   
   if(!gridded){
-    # read climate forcing inputs from THREDDS
-    # lme_clim<-read_csv(file="http://portal.sf.utas.edu.au/thredds/fileServer/
-    # gem/fishmip/ISIMIP3a/InputData/DBPM_lme_inputs/obsclim/0.25deg/
-    # DBPM_LME_climate_inputs_slope.csv")
+    # Climate forcing inputs available via THREDDS:
+    # http://portal.sf.utas.edu.au/thredds/catalog/gem/fishmip/ISIMIP3a/
+    # InputData/DBPM_lme_inputs/obsclim/025deg/catalog.html?dataset=
+    # fishmip/ISIMIP3a/InputData/DBPM_lme_inputs/obsclim/025deg/
+    # DBPM_LME_climate_inputs_slope.csv
   
-    # # trial 
-    # LMEnumber = 1
-    # gridded = F
-    # yearly = F
-    
-    lme_clim <- file.path("/rd/gem/public/fishmip/ISIMIP3a/InputData", 
-                          "DBPM_lme_inputs/obsclim/0.25deg/", 
-                          "DBPM_LME_climate_inputs_slope.csv") |> 
-      read_csv()
-   
-    lme_clim <- subset(lme_clim, LME %in% LMEnumber)
+    lme_clim <- read_csv(forcing_file) |> 
+      filter(region == LMEnumber)
 
-  if(yearly){
-    # option 1: keep monthly time steps but each month value is the yearly 
-    # average 
-    lme_clim <- lme_clim |> 
-      mutate(year = sub("\\-.*", "", t))
-    
-    time <- lme_clim |> 
-      select(t, year) |> 
-      distinct()
-    
-    lme_clim <- lme_clim |>
-      gather(key, value, -c(LME, t, year)) |> 
-      group_by(key, year, LME) |> 
-      summarise(mean = mean(value)) |> 
-      ungroup() |> 
-      spread(key, mean)
-
-    lme_clim <- lme_clim |> 
-      full_join(time) |> 
-      arrange(t)
-    
-    # option 2: do as per global DBPML (builts on option 1): 
-    # use yearly average for January each year
-    # extend the time series to weekly inputs
-    # interpolate missing values (from Jan year 1 to jan year 2 etc) using 
-    # na.omit
-    
-    # for last year you should consider December instead as the run ends in 
-    # Dec 2010
-    # Because these monthly values are yearly avarage, January == December
-
-    # one value each year (yearly average) 
-    lme_clim <- lme_clim |> 
-      # consider only January
-      mutate(month = month(t)) |>  
-      filter(month %in% c(1)) |> 
-      select(-month)
-    
-    final_month <- lme_clim$t[nrow(lme_clim)]
-    
-    # lme_clim<-lme_clim |> 
-    #   mutate(t = as.Date(ifelse(t == final_month, as.Date("2010-12-01"), t)))
-
-    # if above not working, do this instead:
-    lme_clim <- lme_clim |>
-      mutate(t = as.character(t),
-             t = ifelse(t == final_month, "2010-12-01", t),
-             t = as.Date(t))
-    
-    # create a weekly time vector 
-    extend <- data.frame(t = seq(lme_clim$t[1], lme_clim$t[nrow(lme_clim)],
-                                 by="month")) |> 
-      mutate(LME = LMEnumber, year = as.character(year(t)), 
-             area_m2 = unique(lme_clim$area_m2), 
-             depth = unique(lme_clim$depth))
-    
-    # na.approx as in dbpm global
-    lme_clim <- lme_clim |> 
-      select(-t) |> 
-      full_join(extend) |> 
-      arrange(t) |> 
-      mutate(er = na.approx(er), 
-             expcbot = na.approx(expcbot),
-             intercept = na.approx(intercept),
-             lphy = na.approx(lphy),
-             sbt = na.approx(sbt),
-             slope = na.approx(slope),
-             sphy = na.approx(sphy),
-             sst = na.approx(sst))
-  }
-}
-  
-if(gridded){
-  # read climate forcing inputs from gem, here testing on LME14
-  # trial 
-  # CN WARNING the 0.25deg inuts have not been produced yet (27/07/2023) as 
-  #we were focusing on 1deg first  
-  filename = paste0("/rd/gem/private/fishmip_inputs/ISIMIP3a/",
-                    "processed_forcings/lme_inputs_gridcell/obsclim/1deg/",
-                    "observed_LME_", LMEnumber, ".csv")
-  # filename="observed_LME_14.csv"
-  
-  lme_clim <- read_csv(filename)
-
-  # multiple grids mean multiple area_m2 ... 
-  unique(lme_clim$area_m2)
-  # and multiple depths
-  unique(lme_clim$depth)
-    
-  if(yearly){
-    # create a key - this needs to be the final lat/lon/t format
-    key <- lme_clim |> 
-      select(lat, lon, depth, area_m2, t) |> 
-      distinct()
+    if(yearly){
+      # option 1: keep monthly time steps but monthly value is the yearly mean
       
-    # create a second key - this is where you store grid-cell specific and not
-    # time-variant info
-    key2 <- key |> 
-      select(-t) |> 
-      distinct()
+      # Calculating yearly average for all variables
+      lme_clim <- lme_clim |> 
+        mutate(year = year(t)) |> 
+        group_by(year, region) |> 
+        summarise(across(sst:expcbot, \(x) mean(x, na.rm = T))) |> 
+        ungroup()
       
-    # option 1: keep monthly time steps but each month value is the yearly 
-    # average 
-    lme_clim <- lme_clim |> 
-      mutate(year = sub("\\-.*", "", t))
-    
-    time <- lme_clim |> 
-      select(t, year) |> 
-      distinct()
-    
-    lme_clim <- lme_clim |> 
-      gather(key, value, -c(LME, t, year, lat, lon)) |> 
-      group_by(key, year, LME, lat, lon) |> 
-      summarise(mean = mean(value)) |> 
-      ungroup() |> 
-      spread(key, mean)
-      
-    lme_clim <- lme_clim |> 
-      full_join(time) |> 
-      # according to key above 
-      arrange(lat, lon, t) 
-      
-    # option 2: do as per global DBPML (builts on option 1): 
-    # use yearly average for January each year
-    # extend the time series to weekly inputs
-    # interpolate missing values (from Jan year 1 to jan year 2 etc) using
-    # na.omit
-      
-    # for last year you should consider December instead as the run ends in Dec 2010
-    # Because these monthly values are yearly average, January == December
-    
-    # one value for Jan each year (yearly average) 
-    lme_clim <- lme_clim |> 
-      mutate(month = month(t)) |>
-      filter(month %in% c(1)) |> 
-      select(-month)
-    
-    final_month <- lme_clim$t[nrow(lme_clim)]
-    
-    lme_clim <- lme_clim |>
-      mutate(t = as.character(t),
-             t = ifelse(t == final_month, "2010-12-01", t),
-             t = as.Date(t))
-    # check 
-    # lme_clim$t[nrow(lme_clim)]
-      
-    # create a third key - with year instead of t  
-    key3 <- key |> 
-      mutate(year = as.character(year(t))) |> 
-      select(-c(t)) |>
-      distinct()
-    
-    # create a weekly time vector 
-    extend <- data.frame(t = seq(lme_clim$t[1], lme_clim$t[nrow(lme_clim)], 
-                                 by="month")) |> 
-      mutate(LME = LMEnumber, year = as.character(year(t))) |> 
-      full_join(key3) |> 
-      arrange(lat, lon, t)
-      
-    # na.approx as in dbpm global
-    lme_clim <- lme_clim |>
-      # Need to delete t here otherwise the join does not work properly
-      select(-t) |> 
-      full_join(extend) |> 
-      arrange(lat, lon, t) |>
-      group_by(lat, lon, LME, area_m2, depth) |> 
-      summarise(er = na.approx(er), 
-             expcbot = na.approx(expcbot),
-             intercept = na.approx(intercept),
-             lphy = na.approx(lphy),
-             sbt = na.approx(sbt),
-             slope = na.approx(slope),
-             sphy = na.approx(sphy),
-             sst = na.approx(sst)) |> 
-      ungroup()
-    
-    # add t
-    lme_clim <- lme_clim |> 
-      cbind("t" = extend$t)
+      # option 2: do as per global DBPML (builds on option 1): 
+      # uses yearly average and extend the time series to monthly inputs
+      # interpolate missing values using na.approx
+      lme_clim <- lme_clim |> 
+        #Yearly mean is copied 12 times (for each month in a year)
+        slice(rep(1:n(), times = 12)) |> 
+        #Adding month as column
+        mutate(month = rep(1:12, each = nrow(lme_clim)),
+               #Create a date column from year and month columns
+               t = ym(paste(year, month, sep = "-"))) |> 
+        select(!month) |> 
+        arrange(t) |> 
+        #Interpolate any missing values
+        mutate(across(c(sst:lphy, expcbot), ~ na.approx(.x))) |> 
+        mutate(year = as.numeric(year))
     }
-}
-  
-  # read climate fishing inputs from THREDDS
-  #lme_fish<-read_csv(file="http://portal.sf.utas.edu.au/thredds/fileServer/
-  #gem/fishmip/ISIMIP3a/InputData/DBPM_lme_inputs/obsclim/0.25deg/
-  #DBPM_LME_effort_catch_input.csv")
-  lme_fish <- file.path("/rd/gem/public/fishmip/ISIMIP3a/InputData/",
-                        "DBPM_lme_inputs/obsclim/0.25deg/",
-                        "DBPM_LME_effort_catch_input.csv") |> 
-    read_csv()
-  
-  # check dataset to se if you can calcualte relative effort here or need to do 
-  # in 01_getgriddedinputs.R
-  # head(lme_fish)
-  
-  # use relative effort - across all LMEs 
-  #lme_fish$NomActive_area_m2_relative<-lme_fish$NomActive_area_m2/
-  #max(lme_fish$NomActive_area_m2)
-  
-  # subset data 
-  lme_fish <- subset(lme_fish, LME %in% LMEnumber)
-  
-  # # or use relative effort - for each LME independently - PREFERRED
-  # same as below
-  lme_fish$NomActive_relative <- lme_fish$NomActive/max(lme_fish$NomActive) 
-  lme_fish$NomActive_area_m2_relative <- lme_fish$NomActive_area_m2 / 
-    max(lme_fish$NomActive_area_m2)
-  
-  #create monthly inputs for fishing
-  lme_clim$Year <- year(lme_clim$t)
-
-  if(gridded == FALSE){
-    # here we don't have multiple grids - so only 1 (weighted.mean) depth and 
-    # 1 (weighted.mean) area 
-    # which should be the same for lme_clim and lme_fish - NEED TO CHECK 
-    lme_clim <- lme_clim |> 
-      left_join(lme_fish, by = c("Year", "LME", "area_m2"))
-  }else if(gridded == TRUE){
-    # here we have multiple grids - so multiple depth and area
-    # need to remove area and depth before merging
-    # NomActive_area_m2 and catch_tonnes_area_m2 are already /m2 and hence work
-    #at the grid cell level too
-    lme_fish <- lme_fish |> 
-      select(-c(area_m2, deptho_m)) |> 
-      unique()
     
-    lme_clim <- lme_clim |> 
-      left_join(lme_fish, by = c("Year", "LME")) 
+    #Adding effort data
+    lme_clim <- lme_clim |>  
+      left_join(lme_fish, by = c("year", "region", "area_m2"))
   }
+  
+  if(gridded){
+    lme_clim <- read_csv(forcing_file) |> 
+      #Extracting digits identifying region
+      mutate(region = as.numeric(str_extract(region, "\\d{1,2}")))
+      # rename(LME = region) |> 
+      # select(!month:scenario)
+   
+    if(yearly){
+      # option 1: keep monthly time steps but monthly value is the yearly mean
+      # Calculating yearly average for all variables
+      lme_clim <- lme_clim |> 
+        mutate(year = year(t)) |> 
+        group_by(year, region, lat, lon) |> 
+        summarise(across(sst:expcbot, \(x) mean(x, na.rm = T))) |> 
+        ungroup()
+        
+      # option 2: do as per global DBPM (builds on option 1): 
+      # uses yearly average and extend the time series to monthly inputs
+      # interpolate missing values using na.approx
+      lme_clim <- lme_clim |> 
+        #Yearly mean is copied 12 times (for each month in a year)
+        slice(rep(1:n(), times = 12)) |> 
+        #Adding month as column
+        mutate(month = rep(1:12, each = nrow(lme_clim)),
+               #Create a date column from year and month columns
+               t = ym(paste(year, month, sep = "-"))) |> 
+        select(!c(month)) |> 
+        arrange(lat, lon, t) |> 
+        #Interpolate any missing values
+        mutate(across(c(sst:lphy, expcbot), ~ na.approx(.x)))
+    }
     
+    #Adding effort data
+    lme_fish_sub <- lme_fish |>  
+      select(!c(area_m2, deptho)) |>  
+      distinct()
+    
+    lme_clim <- lme_clim |> 
+      left_join(lme_fish_sub, by = c("year", "region"))
+  }
+  
+  # Original comments from line 260
   # View(lme_clim)
   # convert fishing effort and catch per yr (divide values by 12)
 
   # ##### WARNING not sure this is OK Check With Julia.
-  # # Catch and effort are yearly values and here repeated for each months. 
+  # # Catch and effort are yearly values and here repeated for each month. 
   # # Climate inputs are gm2 values (no time dimension, so??) repeated each
   # month.
   # # also here done considering aggregated inputs and runs (gridded = F, 
@@ -307,40 +169,25 @@ if(gridded){
 
   #TO DO HERE: need to add a spin-up to these inputs prior to 1841 - 100 yrs 
   #at first value
-  return (lme_clim)
+  return(lme_clim)
 }
 
 
 # Function to run model
 run_model <- function(vals = X, input = lme_input, withinput = T){
-  # # CN trial
-  # vals = vals
-  # input=input
-  # withinput=T
-  f.u <- as.numeric(vals[1])
-  f.v <- as.numeric(vals[2])
-  f.minu <-as.numeric(vals[3])
-  f.minv <- as.numeric(vals[4])
-  search_vol <- as.numeric(vals[5])
-   
-  # set up params
-  params <- sizeparam(equilibrium = FALSE, dx = 0.1, 
-                      xmin.consumer.u = -3,
-                      xmin.consumer.v = -3,
-                      tmax = length(input$sst)/12,
-                      tstepspryr = 12, 
-                      search_vol = search_vol,
-                      fmort.u = f.u,
-                      fminx.u = f.minu, 
-                      fmort.v = f.v, 
-                      fminx.v = f.minv,
-                      depth = mean(input$depth),
-                      er = input$er,
-                      pp = input$intercept,
-                      slope = input$slope,
-                      sst = input$sst,
-                      sft = input$sbt,
-                      use.init = FALSE,
+  #Ensure all columns are numeric
+  vals <- vals |> 
+    mutate(across(everything(), ~as.numeric(.x)))
+  
+  # set up parameters
+  params <- sizeparam(equilibrium = FALSE, dx = 0.1, xmin.consumer.u = -3,
+                      xmin.consumer.v = -3, tmax = nrow(input)/12,
+                      tstepspryr = 12, search_vol = vals$search.vol,
+                      fmort.u = vals$f.u, fminx.u = vals$f.minu, 
+                      fmort.v = vals$f.v, fminx.v = vals$f.minv, 
+                      depth = mean(input$depth, na.rm = F), er = input$er,
+                      pp = input$intercept, slope = input$slope, 
+                      sst = input$sst, sft = input$sbt, use.init = FALSE,
                       effort = input$NomActive_area_m2_relative)
   
   # run model through time
@@ -359,31 +206,33 @@ run_model <- function(vals = X, input = lme_input, withinput = T){
   #filename=paste("dbpm_calibration_LMEnumber_catchability.rds"))
   
   if(withinput == T){
-  # JB:  changed inputs to  m2 so no need to divide by depth here
-  # also added 1:params$Neq to same 2040 time steps instead of 2041
-  input$TotalUbiomass <- apply(result_set$U[params$ref:params$Nx, 
-                                            1:params$Neq] * 
-                                 params$dx*10^params$x[params$ref:params$Nx], 
-                               2, sum)#*min(params$depth,100)
-  input$TotalUbiomass 
+    lims_ubio <- result_set$params$ref:result_set$params$Nx
+    # JB:  changed inputs to m2 so no need to divide by depth here
+    # added 1:params$Neq to same 2040 time steps instead of 2041
+    time_steps <- 1:params$Neq
+    
+    input$TotalUbiomass <- apply(result_set$U[lims_ubio, time_steps] * 
+                                   params$dx*10^params$x[lims_ubio], 
+                                 2, sum)#*min(params$depth,100)
+    
+    lims_vbio <- result_set$params$ref.det:result_set$params$Nx
+    input$TotalVbiomass <- apply(result_set$V[lims_vbio, time_steps] * 
+                                   params$dx*10^params$x[lims_vbio],
+                                 2, sum)#*min(params$depth,100)
+    
+    input$TotalW <- result_set$W[time_steps]#*min(params$depth,100)
+    
+    #sum catches (currently in grams per m3 per year, across size classes) 
+    # keep as grams per m2, then be sure to convert observed from tonnes per m2
+    # per year to g.^-m2.^-yr (for each month)
+    
+    input$TotalUcatch <- apply(result_set$Y.u[, time_steps]*params$dx, 2, sum)
+    #*min(params$depth,100)
+    input$TotalVcatch <- apply(result_set$Y.v[, time_steps]*params$dx, 2, sum)
+    #*min(params$depth,100)
+    input$Totalcatch <- input$TotalUcatch + input$TotalVcatch
   
-  input$TotalVbiomass <- apply(result_set$V[params$ref.det:params$Nx, 
-                                            1:params$Neq] * 
-                                 params$dx*10^params$x[params$ref.det:params$Nx],
-                               2, sum)#*min(params$depth,100)
-  input$TotalW <- result_set$W[1:params$Neq]#*min(params$depth,100)
-  
-  #sum catches (currently in grams per m3 per year, across size classes) 
-  # keep as grams per m2, then be sure to convert observed from tonnes per m2
-  # per year to g.^-m2.^-yr (for each month)
-  
-  input$TotalUcatch <- apply(result_set$Y.u[, 1:params$Neq]*params$dx, 2, sum)
-  #*min(params$depth,100)
-  input$TotalVcatch <- apply(result_set$Y.v[, 1:params$Neq]*params$dx, 2, sum)
-  #*min(params$depth,100)
-  input$Totalcatch <- input$TotalUcatch + input$TotalVcatch
-  
-  return(input)
+   return(input)
   }
   
   if(withinput == F){
