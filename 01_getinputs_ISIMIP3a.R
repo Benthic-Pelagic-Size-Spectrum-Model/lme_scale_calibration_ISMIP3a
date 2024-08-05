@@ -44,6 +44,8 @@ region_choice |>
 
 ## Merging processed inputs into a single file ----------------------------
 combined_FAO_inputs <- list.files(out_path_obs, full.names = TRUE) |> 
+  #Ignoring files containing "DBPM" in their file name
+  str_subset("DBPM", negate = T) |> 
   #Note that the amount of cores available will depend on compute size chosen
   mclapply(FUN = fread, mc.cores = 28) |> 
   rbindlist() |> 
@@ -80,7 +82,8 @@ effort_FAO <- file.path(effort_file_path,
   summarize(total_nom_active = sum(NomActive, na.rm = T), 
             .groups = "drop") |> 
   ungroup() |>
-  full_join(FAO_area, by = c("fao_area" = "region")) |> 
+  rename(year = Year, region = fao_area) |> 
+  full_join(FAO_area, by = "region") |> 
   mutate(total_nom_active_area_m2 = total_nom_active/(total_area_km2*1e6))
 
 #Catches data
@@ -95,7 +98,8 @@ FAO_catch_input <- list.files(effort_file_path,
   summarize(catch_tonnes = sum(catch_tonnes), .groups = "drop") |> 
   # also Reg advise to exclude discards 
   ungroup() |> 
-  full_join(FAO_area, by = c("fao_area" = "region")) |> 
+  rename(year = Year, region = fao_area) |> 
+  full_join(FAO_area, by = "region") |> 
   mutate(catch_tonnes_area_m2 = catch_tonnes/(total_area_km2*1e6))
 
 #Merging catches and effort data
@@ -112,7 +116,7 @@ rm(effort_FAO, FAO_catch_input)
 
 #Split dataset as items in a list based on FAO area
 plot_df <- DBPM_FAO_effort_catch_input |> 
-  group_by(fao_area) |> 
+  group_by(region) |> 
   group_split() |> 
   #Select first FAO region
   first()
@@ -120,7 +124,7 @@ plot_df <- DBPM_FAO_effort_catch_input |>
 #Plotting data
 plot_df |> 
   ggplot(aes(Year, total_nom_active))+
-  ggtitle(paste("FAO region #", unique(plot_df$fao_area), sep = " "))+
+  ggtitle(paste("FAO region #", unique(plot_df$region), sep = " "))+
   # spin-up edf8fb
   annotate("rect", xmin = 1841, xmax = 1960, ymin = 0, ymax = Inf, 
            fill = "#b2e2e2", alpha = 0.4)+ 
@@ -156,7 +160,7 @@ DBPM_FAO_climate_inputs_slope <- combined_FAO_inputs |>
   select(region, date, tos, tob, sphy, lphy, deptho_m, area_m2, 
          expc_bot) |> 
   # name columns as in "dbpm_model_functions.R" script
-  rename(FAO = region, t = date, depth = deptho_m, sbt = tob, sst = tos, 
+  rename(t = date, depth = deptho_m, sbt = tob, sst = tos, 
          expcbot = expc_bot) |> 
   #Calculate slope and intercept
   mutate(er = getExportRatio(sphy, lphy, sst, depth),
@@ -265,6 +269,8 @@ region_choice |>
 
 ## Merging processed inputs into a single file ----------------------------
 combined_LME_inputs <- list.files(out_path_obs, full.names = TRUE) |> 
+  #Ignoring files containing "DBPM" in their file name
+  str_subset("DBPM", negate = T) |> 
   #Note that the amount of cores available will depend on compute size chosen
   mclapply(FUN = fread, mc.cores = 28) |> 
   rbindlist() |> 
@@ -314,7 +320,8 @@ effort_LME <- file.path(effort_file_path,
   summarize(total_nom_active = sum(NomActive, na.rm = T), 
             .groups = "drop") |> 
   ungroup() |>
-  full_join(LME_area, by = c("LME" = "region")) |> 
+  rename(year = Year, region = LME) |> 
+  full_join(LME_area, by = "region") |> 
   mutate(total_nom_active_area_m2 = total_nom_active/(total_area_km2*1e6))
 
 #Catches data
@@ -330,7 +337,8 @@ LME_catch_input <- list.files(effort_file_path,
   summarize(catch_tonnes = sum(catch_tonnes), .groups = "drop") |> 
   # also Reg advise to exclude discards 
   ungroup() |> 
-  full_join(LME_area, by = c("LME" = "region")) |> 
+  rename(year = Year, region = LME) |> 
+  full_join(LME_area, by = "region") |> 
   mutate(catch_tonnes_area_m2 = catch_tonnes/(total_area_km2*1e6))
 
 #Merging catches and effort data
@@ -347,7 +355,7 @@ rm(effort_LME, LME_catch_input)
 
 #Split dataset as items in a list based on LME area
 plot_df <- DBPM_LME_effort_catch_input |> 
-  group_by(LME) |> 
+  group_by(region) |> 
   group_split() |> 
   #Select first LME region
   first()
@@ -355,7 +363,7 @@ plot_df <- DBPM_LME_effort_catch_input |>
 #Plotting data
 plot_df |> 
   ggplot(aes(Year, total_nom_active))+
-  ggtitle(paste("LME #", unique(plot_df$LME), sep = " "))+
+  ggtitle(paste("LME #", unique(plot_df$region), sep = " "))+
   annotate("rect", xmin = 1841, xmax = 1960, ymin = 0, ymax = Inf, 
            fill = "#b2e2e2", alpha = 0.4)+ 
   # projection 66c2a4
@@ -390,8 +398,7 @@ DBPM_LME_climate_inputs_slope <- combined_LME_inputs |>
   select(region, date, tos, tob, sphy, lphy, deptho, area_m2, 
          expc_bot) |> 
   # name columns as in "dbpm_model_functions.R" script
-  rename(LME = region, t = date, depth = deptho, sbt = tob, sst = tos, 
-         expcbot = expc_bot) |> 
+  rename(t = date, depth = deptho, sbt = tob, sst = tos, expcbot = expc_bot) |> 
   #Calculate slope and intercept
   mutate(er = getExportRatio(sphy, lphy, sst, depth),
          er = ifelse(er < 0, 0, ifelse(er > 1, 1, er)),
