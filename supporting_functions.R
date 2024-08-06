@@ -370,6 +370,7 @@ gridded_inputs <- function(ctrl_files, obs_files){
                                     "(fao|lme)_inputs/(.*)/\\d{1,3}deg", 
                                     group = 2),
              month = NA, year = NA, region = region, variable_name = "deptho")
+    
     ctrlclim_df <- fread(ctrl_files) |> 
       select(!area_m2) |> 
       rename(value = m) |> 
@@ -504,6 +505,15 @@ calc_inputs_gridded <- function(file_path_ctrl, file_path_obs, region_choice,
            scenario = "spinup") |>
     select(!i)
   
+  #Add spinup to obsclim and ctrlclim
+  output_ctrl_all_variables <- spinup |> 
+    bind_rows(output_ctrl_all_variables) |> 
+    arrange(t)
+  
+  output_obs_all_variables <- spinup |> 
+    bind_rows(output_obs_all_variables) |> 
+    arrange(t)
+  
   
   #Check if output folder provided exist, if not, create them
   if(!dir.exists(out_path_ctrl)){
@@ -521,13 +531,10 @@ calc_inputs_gridded <- function(file_path_ctrl, file_path_obs, region_choice,
                                                      reg, "_all_inputs.csv")) 
   out_file_ctrlclim <- file.path(out_path_ctrl, paste0("ctrlclim_historical_", 
                                                        reg, "_all_inputs.csv"))
-  out_file_spinup <- file.path(out_path_ctrl, paste0("ctrlclim_spinup_", 
-                                                     reg, "_all_inputs.csv"))
   
   #Saving data frames containing all data: spinup + obsclim/ctrlclim
   fwrite(x = output_obs_all_variables, file = out_file_obsclim)
   fwrite(x = output_ctrl_all_variables, file = out_file_ctrlclim)
-  fwrite(x = spinup, file = out_file_spinup)
 }
 
 
