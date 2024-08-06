@@ -4,12 +4,15 @@
 # as spatially averaged means to estimate catchability (and if needed other
 # model parameters)
 
-# library(devtools)
+
 library(tidyverse)
 library(lubridate)
+library(zoo)
+library(lhs)
+
+# library(devtools)
 # library(parallel)
 # library(tictoc)
-library(lhs)
 # library(pbapply)
 # library(patchwork)
 # library(optimParallel)
@@ -17,7 +20,7 @@ library(lhs)
 # library(rnaturalearth)
 # library(sf)
 # library(gridExtra)
-library(zoo)
+
 
 # source model script from Github - NOT WORKING, using local
 source("dbpm_model_functions.R")
@@ -34,14 +37,27 @@ forcing_file <- file.path("/g/data/vf71/fishmip_inputs/ISIMIP3a",
                           "DBPM_LME_climate_inputs_slope.csv")
 
 #Gridded
-forcing_file <- file.path("/g/data/vf71/fishmip_inputs/ISIMIP3a",
+gridded_forcing <- file.path("/g/data/vf71/fishmip_inputs/ISIMIP3a",
                           "processed_forcings/lme_inputs_gridcell/obsclim",
-                          "025deg") |> 
-  list.files(paste0("LME_", LMEnumber, "_"), full.names = T)
+                          "1deg")
+  
 
 # Select LME and get inputs ready
-get_lme_inputs <- function(forcing_file, fishing_effort_file, LMEnumber = 14, 
-                           gridded = F, yearly = F){
+get_lme_inputs <- function(forcing_file = NULL, gridded_forcing = NULL, 
+                           fishing_effort_file, LMEnumber, yearly = F){
+  #Inputs:
+  #forcing_file (character) - Full path to forcing file. This must be 
+  #non-gridded data
+  #gridded_forcing (character) - Full path to folder containing gridded forcing
+  #files
+  #fishing_effort_file (character) - Full path to fishing effort file
+  #LMEnumber (numeric) - Unique ID identifying an LME
+  #yearly (boolean) - Default is FALSE. If set to TRUE, it will return yearly
+  #means for all forcing variables
+  #
+  #Output:
+  #lme_clim (data frame) - Forcing data to be used in model calibration
+  
   # Climate fishing inputs available via THREDDS:
   # http://portal.sf.utas.edu.au/thredds/catalog/gem/fishmip/ISIMIP3a/
   # InputData/DBPM_lme_inputs/obsclim/025deg/catalog.html?dataset=
@@ -54,11 +70,9 @@ get_lme_inputs <- function(forcing_file, fishing_effort_file, LMEnumber = 14,
     mutate(nom_active_relative = total_nom_active/max(total_nom_active, 
                                                       na.rm = T),
            nom_active_area_m2_relative = total_nom_active_area_m2/
-             max(total_nom_active_area_m2, na.rm = T),
-           #Transform km2 to m2
-           area_m2 = total_area_km2*1e6)
+             max(total_nom_active_area_m2, na.rm = T))
   
-  if(!gridded){
+  if(!is.null(forcing_file)){
     # Climate forcing inputs available via THREDDS:
     # http://portal.sf.utas.edu.au/thredds/catalog/gem/fishmip/ISIMIP3a/
     # InputData/DBPM_lme_inputs/obsclim/025deg/catalog.html?dataset=
@@ -97,15 +111,16 @@ get_lme_inputs <- function(forcing_file, fishing_effort_file, LMEnumber = 14,
     
     #Adding effort data
     lme_clim <- lme_clim |>  
-      left_join(lme_fish, by = c("year", "region", "area_m2"))
+      mutate(year = as.numeric(year(t))) |> 
+      left_join(lme_fish, by = c("year", "region"))
   }
   
-  if(gridded){
-    lme_clim <- read_csv(forcing_file) |> 
+  else if(!is.null(gridded_forcing)){
+    lme_clim <- list.files(gridded_forcing, 
+                           paste0("LME_", LMEnumber, "_"), full.names = T) |> 
+      read_csv() |> 
       #Extracting digits identifying region
       mutate(region = as.numeric(str_extract(region, "\\d{1,2}")))
-      # rename(LME = region) |> 
-      # select(!month:scenario)
    
     if(yearly){
       # option 1: keep monthly time steps but monthly value is the yearly mean
@@ -134,7 +149,7 @@ get_lme_inputs <- function(forcing_file, fishing_effort_file, LMEnumber = 14,
     
     #Adding effort data
     lme_fish_sub <- lme_fish |>  
-      select(!c(area_m2, deptho)) |>  
+      select(!deptho) |>  
       distinct()
     
     lme_clim <- lme_clim |> 
