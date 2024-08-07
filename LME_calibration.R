@@ -251,15 +251,17 @@ run_model <- function(vals = X, input = lme_input, withinput = T){
 
 # Error function
 getError <- function(lhs_params = X, lme_forcings = lme_input, 
-                     figure_folder = NULL){
+                     corr = F, figure_folder = NULL){
   #Inputs:
   #lhs_params (data frame) - Contains LHS parameters as columns and it must 
   #have a single row
   #lme_forcings (data frame) - Forcing data produced by `get_lme_inputs` 
   #function
+  #corr (boolean) - Default is FALSE. If set to TRUE, it will calculate the
+  #correlation between predicted and observed values
   #figure_folder (character) - Optional. If provided, it must be the full path
   #to the folder where figures comparing observed and predicted data will be 
-  #stored.
+  #stored
   #
   #Output:
   #rmse (numeric) - RMSE value between observed and predicted catch
@@ -284,6 +286,19 @@ getError <- function(lhs_params = X, lme_forcings = lme_input,
   count <- sum(!is.na(error_calc$squared_error))
   rmse <- sqrt(sum_se/count)
   
+  if(corr){
+    #Calculate correlation between observed and predicted catches
+    best_corr <- cor(error_calc$mean_obs_catch_yr, 
+                     error_calc$mean_total_catch_yr, use = "complete.obs")
+    #Get number of rows with NA values
+    best_nas <- sum(is.na(out$mean_total_catch_yr))
+    
+    #Adding information to data frame
+    error_calc <- error_calc |> 
+      mutate(cor = best_corr,
+             catchNA = best_nas)
+  }
+  
   #If a path to save figures is provided, create figures and save 
   if(!is.null(figure_folder)){
     if(!dir.exists(figure_folder)){
@@ -296,8 +311,7 @@ getError <- function(lhs_params = X, lme_forcings = lme_input,
       scale_x_continuous(breaks = seq(min(error_calc$year), 
                                       max(error_calc$year), by = 10))+
       theme_classic()+ 
-      theme(axis.text.x = element_text(colour = "grey20", size = 12),
-            axis.text.y = element_text(colour = "grey20", size = 12),
+      theme(axis.text = element_text(colour = "grey20", size = 12),
             text = element_text(size = 15))+
       labs(x = "Year", y = bquote("Total catch (g*"~yr^-1*"*"*m^-2*")"))
     
@@ -307,8 +321,7 @@ getError <- function(lhs_params = X, lme_forcings = lme_input,
                  aes(x = mean_total_catch_yr, y = mean_obs_catch_yr))+
       geom_abline(slope = 1, intercept = 0)+
       theme_classic()+
-      theme(axis.text.x = element_text(colour = "grey20", size = 12),
-            axis.text.y = element_text(colour = "grey20", size = 12),
+      theme(axis.text = element_text(colour = "grey20", size = 12),
             text = element_text(size = 15))+
       labs(x = "Predicted", y = "Observed")
     
