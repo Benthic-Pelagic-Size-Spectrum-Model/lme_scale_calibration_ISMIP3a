@@ -1,20 +1,22 @@
-# JLB - 21/12/2022
-# This function reads in LME-scale time-series inputs (climate and fishing) 
-# pre-processed 
-# as spatially averaged means to estimate catchability (and if needed other
-# model parameters)
+###############################################################################
+# Library of functions developed originally by JLB on 21/12/2022
+#
+# Functions were updated by Denisse Fierro Arcos so they can be used with data
+# produced by updated `01_getinputs_ISIMIP3a.R` script.
+#
+# Date of update: 2024-08-06
 
-
+# Loading libraries
 library(tidyverse)
 library(lubridate)
 library(zoo)
 library(lhs)
+library(pbapply)
+library(patchwork)
 
 # library(devtools)
 # library(parallel)
 # library(tictoc)
-# library(pbapply)
-# library(patchwork)
 # library(optimParallel)
 # plots library
 # library(rnaturalearth)
@@ -42,7 +44,10 @@ gridded_forcing <- file.path("/g/data/vf71/fishmip_inputs/ISIMIP3a",
                           "1deg")
   
 
-# Select LME and get inputs ready
+# This function reads in LME-scale time-series inputs (climate and fishing) 
+# pre-processed 
+# as spatially averaged means to estimate catchability (and if needed other
+# model parameters)
 get_lme_inputs <- function(forcing_file = NULL, gridded_forcing = NULL, 
                            fishing_effort_file, LMEnumber, yearly = F){
   #Inputs:
@@ -153,7 +158,8 @@ get_lme_inputs <- function(forcing_file = NULL, gridded_forcing = NULL,
       distinct()
     
     lme_clim <- lme_clim |> 
-      left_join(lme_fish_sub, by = c("year", "region"))
+      left_join(lme_fish_sub, by = c("year", "region")) |> 
+      arrange(lat, lon)
   }
   
   # Original comments from line 260
@@ -190,24 +196,36 @@ get_lme_inputs <- function(forcing_file = NULL, gridded_forcing = NULL,
 
 # Function to run model
 run_model <- function(vals = X, input = lme_input, withinput = T){
-  #Ensure all columns are numeric
-  vals <- vals |> 
-    mutate(across(everything(), ~as.numeric(.x)))
+  #Inputs:
+  #vals (named numeric vector) - Single column with named rows containing LHS
+  #parameters
+  #input (data frame) - Forcing data produced by `get_lme_inputs` function
+  #withinput (boolean) - Default is TRUE. ????
+  #
+  #Output:
+  #If withinput set to TRUE:
+  #input (data frame) - ????
+  #If withinput set to FALSE:
+  #result_set (data frame) - ???
+  
+  #Ensuring values are numeric
+  if(!is.numeric(vals)){
+    stop("Values provided in the 'vals' parameter must be numeric.")
+  }
   
   # set up parameters
   params <- sizeparam(equilibrium = FALSE, dx = 0.1, xmin.consumer.u = -3,
                       xmin.consumer.v = -3, tmax = nrow(input)/12,
-                      tstepspryr = 12, search_vol = vals$search.vol,
-                      fmort.u = vals$f.u, fminx.u = vals$f.minu, 
-                      fmort.v = vals$f.v, fminx.v = vals$f.minv, 
+                      tstepspryr = 12, search_vol = vals["search.vol"],
+                      fmort.u = vals["f.u"], fminx.u = vals["f.minu"], 
+                      fmort.v = vals["f.v"], fminx.v = vals["f.minv"], 
                       depth = mean(input$depth, na.rm = F), er = input$er,
                       pp = input$intercept, slope = input$slope, 
                       sst = input$sst, sft = input$sbt, use.init = FALSE,
-                      effort = input$NomActive_area_m2_relative)
+                      effort = input$nom_active_area_m2_relative)
   
   # run model through time
   # TO DO IN SIZEMODEL CODE: make fishing function like one in model template
-  
   result_set <- sizemodel(params) 
   
   # # CN CHECK 
@@ -220,7 +238,7 @@ run_model <- function(vals = X, input = lme_input, withinput = T){
   # saveRDS(result_set,
   #filename=paste("dbpm_calibration_LMEnumber_catchability.rds"))
   
-  if(withinput == T){
+  if(withinput){
     lims_ubio <- result_set$params$ref:result_set$params$Nx
     # JB:  changed inputs to m2 so no need to divide by depth here
     # added 1:params$Neq to same 2040 time steps instead of 2041
@@ -248,138 +266,162 @@ run_model <- function(vals = X, input = lme_input, withinput = T){
     input$Totalcatch <- input$TotalUcatch + input$TotalVcatch
   
    return(input)
-  }
-  
-  if(withinput == F){
+    
+  }else{
     return(result_set)
   }
 }
 
 
 # Error function
-getError <- function(vals = X, input = lme_input, lme = NULL){
-  # # trial
-  # vals = sim
-  # input=lme_input
-  # lme = 1
-
-  # if(!is.null(lme)) input<-get_lme_inputs(LMEnumber=lme)
+getError <- function(lhs_params = X, lme_forcings = lme_input, 
+                     figure_folder = NULL){
+  #Inputs:
+  #lhs_params (data frame) - Contains LHS parameters as columns and it must 
+  #have a single row
+  #lme_forcings (data frame) - Forcing data produced by `get_lme_inputs` 
+  #function
+  #figure_folder (character) - Optional. If provided, it must be the full path
+  #to the folder where figures comparing observed and predicted data will be 
+  #stored.
+  #
+  #Output:
+  #rmse (numeric) - RMSE value between observed and predicted catch
   
-  result <- run_model(vals, input)
-
-  ## aggregate by year (mean to conserve units)
-  out <- result |> 
-    group_by(Year) |> 
-    filter(Year > "1949") |> 0
-    summarise(TotalCatchPerYr = mean(Totalcatch),
-              ObsCatchPerYr = mean(catch_tonnes_area_m2, na.rm = T))
-
-  ## convert units
-  # CN from tonnes to g
-  out$ObsCatchPerYr <- out$ObsCatchPerYr*1e6
-
-  ## calculate and output error, convert observed from tonnes to grams (per m2
-  # per yr)
-  out$squared_error <- (out$ObsCatchPerYr- out$TotalCatchPerYr)^2
-
-  rmse <- sqrt(sum(out$squared_error, na.rm = T) / 
-                 sum(!is.na(out$squared_error)))
+  #Running model for specific LME
+  result <- run_model(lhs_params, lme_forcings)
+  
+  #Aggregate data by year (mean to conserve units)
+  error_calc <- result |> 
+    filter(year > 1949) |> 
+    group_by(year) |> 
+    summarise(mean_total_catch_yr = mean(Totalcatch, na.rm = T),
+              mean_obs_catch_yr = mean(catch_tonnes_area_m2, na.rm = T)) |> 
+    #Converting units from tonnes to g
+    mutate(mean_obs_catch_yr = mean_obs_catch_yr*1e6,
+           #calculate and output error 
+           #convert from tonnes to grams (m^-2*yr^-1)
+           squared_error = (mean_obs_catch_yr-mean_total_catch_yr)^2)
+  
+  #Calculate RMSE
+  sum_se <- sum(error_calc$squared_error, na.rm = T)
+  count <- sum(!is.na(error_calc$squared_error))
+  rmse <- sqrt(sum_se/count)
+  
+  #If a path to save figures is provided, create figures and save 
+  if(!is.null(figure_folder)){
+    if(!dir.exists(figure_folder)){
+      dir.create(figure_folder)
+    }
+    #Plotting predicted and observed catches over time
+    p1 <- ggplot()+
+      geom_line(data = error_calc, aes(x = year, y = mean_total_catch_yr))+
+      geom_point(data = error_calc, aes(x = year, y = mean_obs_catch_yr))+
+      scale_x_continuous(breaks = seq(min(error_calc$year), 
+                                      max(error_calc$year), by = 10))+
+      theme_classic()+ 
+      theme(axis.text.x = element_text(colour = "grey20", size = 12),
+            axis.text.y = element_text(colour = "grey20", size = 12),
+            text = element_text(size = 15))+
+      labs(x = "Year", y = bquote("Total catch (g*"~yr^-1*"*"*m^-2*")"))
+    
+    #Plotting predicted vs observed catches
+    p2 <- ggplot()+
+      geom_point(data = error_calc, 
+                 aes(x = mean_total_catch_yr, y = mean_obs_catch_yr))+
+      geom_abline(slope = 1, intercept = 0)+
+      theme_classic()+
+      theme(axis.text.x = element_text(colour = "grey20", size = 12),
+            axis.text.y = element_text(colour = "grey20", size = 12),
+            text = element_text(size = 15))+
+      labs(x = "Predicted", y = "Observed")
+    
+    #Creating a single plot
+    p3 <- p1+p2+
+      plot_annotation(title = paste0("LME #", unique(lme_forcings$region)),
+                      theme = theme(plot.title = element_text(size = 16, 
+                                                              hjust = 0.5)))
+    
+    #Creating path to save figure
+    f_out <- file.path(figure_folder,
+                       paste0("dbpm_pred_obs_catches_LME_", 
+                              unique(lme_forcings$region), ".png"))
+    
+    #Saving composite figure
+    ggsave(filename = f_out, plot = p3, width = 15, height = 10)
+  }
+  
+  #Return RMSE
   return(rmse)
 }
 
 
-######## Carry out LHS param search
 
+######## Carry out LHS param search
 # now could try again with lhs instead of the regular grid of parameters
-LHSsearch <- function(X = LME, iter = 1, search_vol = "estimated"){
-  # # trial
-  # X = 1
-  # iter = 100
-  # search_vol=0.64 # not estimated 
-  LMEnum = X
-  set.seed(1234)
-  # num "individual runs"
-  num_iter = iter
-  sim <- data.frame(randomLHS(num_iter, 5))
-  # rows are iterations, columns are specific parameters
-  colnames(sim) <- c("f.u", "f.v", "f.minu", "f.minv", "search.vol")
-  # adjust range of mi size params, others go form 0-1
-  sim[, "f.minu"]<- sim[, "f.minu"]*2
-  sim[, "f.minv"]<- sim[, "f.minv"]*2
+LHSsearch <- function(LMEnum = LME, num_iter = 1, search_vol = "estimated",
+                      forcing_file = NULL, gridded_forcing = NULL, 
+                      fishing_effort_file){
+  #Inputs:
+  #LMEnum (numeric) - Unique ID identifying LME
+  #num_iter (numeric) - Number of individual runs. Default is 1.
+  #search_vol (???) - ???
+  #Output:
+  #bestvals (???) - ????
   
-  # adjust range of search vol, others go form 0-1
-  # runif(n=iter, min=0.064, max=1.0)
-  sim[, "search.vol"] <- sim[, "search.vol"]+0.001 
+  #Making function reproducible
+  set.seed(1234)
+  
+  #Construct a hypercube with random numbers
+  #num_iter defines number of rows in hypercube
+  #columns represent five specific parameters needed
+  sim <- data.frame(randomLHS(num_iter, 5))
+  colnames(sim) <- c("f.u", "f.v", "f.minu", "f.minv", "search.vol")
+  
+  #Adjust range of mi size params, others go from 0-1
+  sim <- sim |> 
+    mutate(f.minu = f.minu*2, 
+           f.minv = f.minv*2,
+           # adjust range of search vol, others go from 0-1
+           search.vol = search.vol+0.001)
+  # runif(n=iter, min=0.064, max=1.0))
   
   if(is.numeric(search_vol)){
-    sim[, "search.vol"]<- search_vol
-    # use below to select a constant value for search.vol
-    # sim[,"search.vol"]<- 0.2
+    sim <- sim |> 
+      mutate(search.vol = search_vol)
   }
   
-  lme_input <- get_lme_inputs(LMEnumber = LMEnum)
+  # use below to select a constant value for search.vol
+  # sim[,"search.vol"]<- 0.2
+  if(!is.null(forcing_file)){
+    lme_input <- get_lme_inputs(forcing_file = forcing_file, 
+                                fishing_effort_file = fishing_effort_file, 
+                                LMEnumber = LMEnum)
+  }
+  if(!is.null(gridded_forcing)){
+    lme_input <- get_lme_inputs(gridded_forcing = gridded_forcing, 
+                                fishing_effort_file = fishing_effort_file, 
+                                LMEnumber = LMEnum)
+  }
   
-  # # check average and gridded inputs are the same in terms of effort 
+  # # check averaged and gridded inputs are the same in terms of effort 
   # lme_input[,c(2,15,16)]
   # lme_input_gridded<-get_lme_inputs(LMEnumber=LMEnum, gridded=T)
   # lme_input_gridded[,c(4,16,17)]
-   
-  # cl <- makeCluster(6)
-  # #setDefaultCluster(cl = cl)
-  # clusterExport(cl, varlist = c("LMEnum","lme_input","sim","iter"),
-  # envir=environment())
-  # clusterEvalQ(cl, {
-  #   source("LME_calibration.R")
-  #    })
-  # 
-
-  # in pbapply setting cl = 6 calls mcapply to set up cluster (so dont need 
-  # above stuff)
-  sim$rmse <- pbapply(sim, 1, getError, input = lme_input, cl = 6)
   
-  #stopCluster(cl)
-
+  # in pbapply setting cl = 6 calls mcapply to set up cluster 
+  sim$rmse <- pbapply(sim, 1, getError, lme_forcings = lme_input, cl = 6)
+  
   #X<-readRDS(file = "lhs_res_LME42_b.RDS")
+  
   # check this time param set with lowest error
-  findmin <- which(sim$rmse == min(sim$rmse, na.rm = T))
-  bestvals <- sim[findmin, ]
-  print(bestvals[c(1:6)])
-  # 
-  # # check run
-  # out<-run_model(bestvals[c(1:4)],input=lme_input)
-  # ## aggregate by year (mean to conserve units)
-  # out <- out |> group_by(Year) |> filter(Year > "1949") |> 
-  #summarise(TotalCatchPerYr=mean(Totalcatch),
-  #ObsCatchPerYr=mean(catch_tonnes_area_m2,na.rm=T))
-  # out$ObsCatchPerYr<-out$ObsCatchPerYr*1e6
-  # 
-  # p1<-ggplot() +
-  #   geom_line(data = out, aes(x = Year, y = TotalCatchPerYr)) +
-  #   geom_point(data = out, aes(x = Year, y = ObsCatchPerYr)) +
-  #   theme_classic() + theme(axis.text.x = element_text(colour="grey20", 
-  #size=12, angle=90, hjust=.5, vjust=.5),
-  #                           axis.text.y = element_text(colour="grey20", 
-  #size=12),
-  #                           text=element_text(size=16)) + 
-  #   labs(x = 'Year',
-  #        y = 'Grams per year per m2') 
-  # 
-  # p2<-ggplot() +
-  #   geom_point(data = out, aes(x = TotalCatchPerYr, y = ObsCatchPerYr)) +
-  #   geom_abline(slope=1,intercept=0) +
-  #   theme_classic() + theme(axis.text.x = element_text(colour="grey20", 
-  #size=12, angle=90, hjust=.5, vjust=.5),
-  #                           axis.text.y = element_text(colour="grey20", 
-  #size=12),
-  #                           text=element_text(size=16)) + 
-  #   labs(x = 'Predicted',
-  #        y = 'Observed',title=paste("LME ",LMEnum,sep=""))
-  # 
-  # p3<-p1+p2
-  # 
-  # ggsave(paste("dbpm_LME",LMEnum,".png",sep=""), width=15, height=10)
-  # 
-  # 
+  bestvals <- sim |> 
+    filter(rmse == min(rmse, na.rm = T)) |> 
+    mutate(region = LMEnum)
+  
+  #Print row with lowest RMSE
+  print(bestvals)
+  
   return(bestvals)
 }
 
