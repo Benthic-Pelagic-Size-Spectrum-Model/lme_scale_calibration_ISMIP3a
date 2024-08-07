@@ -13,36 +13,12 @@ library(zoo)
 library(lhs)
 library(pbapply)
 library(patchwork)
-
-# library(devtools)
-# library(parallel)
-# library(tictoc)
-# library(optimParallel)
-# plots library
-# library(rnaturalearth)
-# library(sf)
-# library(gridExtra)
-
-
-# source model script from Github - NOT WORKING, using local
 source("dbpm_model_functions.R")
 
+# library(parallel)
+# library(optimParallel)
+# library(gridExtra)
 
-#Testing
-fishing_effort_file <- file.path("/g/data/vf71/fishmip_inputs/ISIMIP3a",
-                                 "processed_forcings/lme_inputs/obsclim/025deg",
-                                 "DBPM_LME_effort_catch_input.csv")
-
-#Non-gridded
-forcing_file <- file.path("/g/data/vf71/fishmip_inputs/ISIMIP3a",
-                          "processed_forcings/lme_inputs/obsclim/025deg", 
-                          "DBPM_LME_climate_inputs_slope.csv")
-
-#Gridded
-gridded_forcing <- file.path("/g/data/vf71/fishmip_inputs/ISIMIP3a",
-                          "processed_forcings/lme_inputs_gridcell/obsclim",
-                          "1deg")
-  
 
 # This function reads in LME-scale time-series inputs (climate and fishing) 
 # pre-processed 
@@ -356,18 +332,26 @@ getError <- function(lhs_params = X, lme_forcings = lme_input,
 }
 
 
-
 ######## Carry out LHS param search
 # now could try again with lhs instead of the regular grid of parameters
 LHSsearch <- function(LMEnum = LME, num_iter = 1, search_vol = "estimated",
                       forcing_file = NULL, gridded_forcing = NULL, 
-                      fishing_effort_file){
+                      fishing_effort_file, figure_folder = NULL){
   #Inputs:
   #LMEnum (numeric) - Unique ID identifying LME
   #num_iter (numeric) - Number of individual runs. Default is 1.
-  #search_vol (???) - ???
+  #search_vol (???) - Default is "estimated". ???
+  #forcing_file (character) - Full path to forcing file. This must be 
+  #non-gridded data
+  #gridded_forcing (character) - Full path to folder containing gridded forcing
+  #files
+  #fishing_effort_file (character) - Full path to fishing effort file
+  #figure_folder (character) - Optional. If provided, it must be the full path
+  #to the folder where figures comparing observed and predicted data will be 
+  #stored.
   #Output:
-  #bestvals (???) - ????
+  #bestvals (data frame) - Contains the values for LHS parameters that resulted
+  #in the best performing model based on RMSE values
   
   #Making function reproducible
   set.seed(1234)
@@ -410,9 +394,8 @@ LHSsearch <- function(LMEnum = LME, num_iter = 1, search_vol = "estimated",
   # lme_input_gridded[,c(4,16,17)]
   
   # in pbapply setting cl = 6 calls mcapply to set up cluster 
-  sim$rmse <- pbapply(sim, 1, getError, lme_forcings = lme_input, cl = 6)
-  
-  #X<-readRDS(file = "lhs_res_LME42_b.RDS")
+  sim$rmse <- pbapply(sim, 1, getError, lme_forcings = lme_input, figure_folder,
+                      cl = 6)
   
   # check this time param set with lowest error
   bestvals <- sim |> 
@@ -431,20 +414,17 @@ LHSsearch <- function(LMEnum = LME, num_iter = 1, search_vol = "estimated",
 run_model_timestep <- function(input = lme_inputs_igrid, 
                                vals = unlist(bestvals_LMEs[14, ]), U.initial,
                                V.initial, W.initial){
-  f.u <- as.numeric(vals[1])
-  f.v <- as.numeric(vals[2])
-  f.minu <- as.numeric(vals[3])
-  f.minv <- as.numeric(vals[4])
   
   # set up params for each month, across grid cells
   params <- sizeparam(equilibrium = FALSE, dx = 0.1, xmin.consumer.u = -3,
                       xmin.consumer.v = -3, tmax = 1/12, tstepspryr = 12,
-                      search_vol = 0.64, fmort.u = f.u, fminx.u = f.minu,
-                      fmort.v = f.v, fminx.v = f.minv, depth = input["depth"],
+                      search_vol = 0.64, fmort.u = vals["f.u"], 
+                      fminx.u = vals["f.minu"], fmort.v = vals["f.v"], 
+                      fminx.v = vals["f.minv"],  depth = input["depth"],
                       er = input["er"], pp = input["intercept"], 
                       slope = input["slope"], sst = input["sst"], 
                       sft = input["sbt"], use.init = TRUE,
-                      effort = input["NomActive_area_m2"], 
+                      effort = input["total_nom_active_area_m2"], 
                       U.initial = U.initial, V.initial = V.initial,
                       W.initial = W.initial)
   
@@ -524,35 +504,38 @@ getGriddedOutputs <- function(input = lme_inputs_grid, results = grid_results,
 ### fastOptim to set up and run optimisations in parallel
 fastOptim <- function(lme, vary, errorFun = getError, spareCores = 1,
                       libraries = c("optimParallel")){
+  library(parallel)
+  library(optimParallel)
+  
   # get input
   lme_input <- get_lme_inputs(LMEnumber = lme)
   
   # set up workers
   # keep some spare core
-  noCores <- parallel::detectCores()-spareCores 
+  noCores <- detectCores()-spareCores 
   if(noCores < 1){
     stop("You should allow at least one core for this operation.")
   }
-  cl <- parallel::makeCluster(noCores, setup_timeout = 0.5)
-  parallel::setDefaultCluster(cl = cl)
-  parallel::clusterExport(cl, 
-                          varlist = c("cl", "libraries", "lme_input"),
-                          envir=environment())
-  parallel::clusterEvalQ(cl, {
+  cl <- makeCluster(noCores, setup_timeout = 0.5)
+  setDefaultCluster(cl = cl)
+  clusterExport(cl, varlist = c("cl", "libraries", "lme_input"),
+                envir=environment())
+  clusterEvalQ(cl, {
     for(item in 1:length(libraries)){
       library(libraries[item], character.only = T)
     }
   })
-  parallel::clusterEvalQ(cl, source("LME_calibration.R"))
   
-  optim_result <- optimParallel::optimParallel(par = vary, fn = errorFun,
-                                               method = "L-BFGS-B",
-                                               lower = rep(0, length(vary)),
-                                               upper = rep(2, length(vary)),
-                                               parallel = list(loginfo = TRUE,
-                                                               forward = TRUE), 
-                                               input = lme_input)
-  parallel::stopCluster(cl)
+  clusterEvalQ(cl, source("LME_calibration.R"))
+  
+  optim_result <- optimParallel(par = vary, fn = errorFun,
+                                method = "L-BFGS-B",
+                                lower = rep(0, length(vary)),
+                                upper = rep(2, length(vary)),
+                                parallel = list(loginfo = TRUE,
+                                                forward = TRUE), 
+                                input = lme_input)
+  stopCluster(cl)
   return(optim_result$par)
 }
 
