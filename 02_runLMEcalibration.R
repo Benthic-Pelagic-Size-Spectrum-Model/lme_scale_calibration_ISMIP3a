@@ -1,5 +1,4 @@
-###### Run LHS search for each lme to get an initial rough guess for 
-# fishing parameters
+###### Run LHS search for each LME to get best values for fishing parameters
 # lmenum=66
 # LMEs<-data.frame(LMEnum=1:lmenum,f.u=rep(0,lmenum),f.v=rep(0,lmenum),
 #f.minu=rep(0,lmenum),f.minv=rep(0,lmenum),rmse=rep(0,lmenum))
@@ -7,23 +6,39 @@
 # saveRDS(LMEs,"bestvals_LMEs.RDS")
 
 source("LME_calibration.R")
-library(tictoc)
-library(parallel)
+# library(tictoc)
+# library(parallel)
+library(dplyr)
 library(pbapply)
 
 # faster using pbsapply, in the LHSsearch pbapply has cl=6 which uses cluster 
 #to run in parallel, but here it is run sequentially if cl is not specified.
-lmenum <- 66  
+lmes <- 1:66
 no_iter <- 100
 # other option is to specify a value for search_vol 
 search_vol <- "estimated" 
-no_cores <- parallel::detectCores() - 1
-tic()
-lmes <- t(pbapply::pbsapply(X = 1:lmenum, LHSsearch, iter = no_iter, 
-                            search_vol = search_vol)) 
-toc()
+
+#Fishing effort file location
+fishing_effort_file <- file.path("/g/data/vf71/fishmip_inputs/ISIMIP3a",
+                                 "processed_forcings/lme_inputs/obsclim/025deg",
+                                 "DBPM_LME_effort_catch_input.csv")
+#Non-gridded data
+forcing_file <- file.path("/g/data/vf71/fishmip_inputs/ISIMIP3a",
+                          "processed_forcings/lme_inputs/obsclim/025deg", 
+                          "DBPM_LME_climate_inputs_slope.csv")
+#Gridded data
+gridded_forcing <- file.path("/g/data/vf71/fishmip_inputs/ISIMIP3a",
+                             "processed_forcings/lme_inputs_gridcell/obsclim",
+                             "025deg")
+
+lmes <- t(pbsapply(X = lmes, LHSsearch, num_iter = no_iter, 
+                   search_vol = search_vol, forcing_file = forcing_file, 
+                   gridded_forcing = NULL, 
+                   fishing_effort_file = fishing_effort_file, 
+                   figure_folder = NULL))
+
 saveRDS(lmes, paste0("Output/bestvals_LMEs_searchvol_", search_vol, "_iter_",
-                     no_iter, ".RDS"))
+                     no_iter, "_DFA.RDS"))
 
 # WARNINGS: 
 # 2. some LME (e.g. LME 4) do not run because the model called by LHSsearch 
@@ -35,8 +50,8 @@ saveRDS(lmes, paste0("Output/bestvals_LMEs_searchvol_", search_vol, "_iter_",
 # F.mort estimated in LHSsearch can only go to 1, 
 # so increase effort in get_lme_inputs() by 
 # using relative effort (effort_m2/max(effort_m2), with the highest value 
-# been 1)  
-# relative effort for each LME - not working wellif search_vol = 0.064 as 
+# being 1)  
+# relative effort for each LME - not working well if search_vol = 0.064 as 
 # catches remain low  
 # doing this also means that effort is equal across LMEs (from 1 to close to 0
 # in each LME)
@@ -59,9 +74,10 @@ bestvals <- data.frame(readRDS(paste0("Output/bestvals_LMEs_searchvol_",
                                       search_vol, "_iter_", no_iter, ".RDS")))
 
 # add column for correlation:
-bestvals$cor <- rep(0, lmenum)
-# add column for NA catches:
-bestvals$catchNA <- rep(0, lmenum)
+bestvals <- bestvals |> 
+  mutate(cor = 0,
+         # add column for NA catches
+         catchNA = 0)
 
 pdf(paste0("Output/CalibrationPlots_searchvol_", search_vol, "_iter_", 
            no_iter, ".pdf"), height = 6, width = 8)
