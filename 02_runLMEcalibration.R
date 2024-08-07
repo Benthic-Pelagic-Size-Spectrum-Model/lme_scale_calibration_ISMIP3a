@@ -1,19 +1,13 @@
 ###### Run LHS search for each LME to get best values for fishing parameters
-# lmenum=66
-# LMEs<-data.frame(LMEnum=1:lmenum,f.u=rep(0,lmenum),f.v=rep(0,lmenum),
-#f.minu=rep(0,lmenum),f.minv=rep(0,lmenum),rmse=rep(0,lmenum))
-# for (i in 1:lmenum) LMEs[i,c(2:6)]<-LHSsearch(LMEs[i,1],iter=100)
-# saveRDS(LMEs,"bestvals_LMEs.RDS")
 
 source("LME_calibration.R")
-# library(tictoc)
 # library(parallel)
 library(dplyr)
 library(pbapply)
+library(readr)
 
 # faster using pbsapply, in the LHSsearch pbapply has cl=6 which uses cluster 
 #to run in parallel, but here it is run sequentially if cl is not specified.
-lmes <- 1:66
 no_iter <- 100
 # other option is to specify a value for search_vol 
 search_vol <- "estimated" 
@@ -31,14 +25,20 @@ gridded_forcing <- file.path("/g/data/vf71/fishmip_inputs/ISIMIP3a",
                              "processed_forcings/lme_inputs_gridcell/obsclim",
                              "025deg")
 
-lmes <- t(pbsapply(X = lmes, LHSsearch, num_iter = no_iter, 
-                   search_vol = search_vol, forcing_file = forcing_file, 
-                   gridded_forcing = NULL, 
-                   fishing_effort_file = fishing_effort_file, 
-                   figure_folder = NULL))
+#Searching best values for fishing parameters for all LMEs
+lmes_best_params <- t(pbsapply(X = 1:66, LHSsearch, num_iter = no_iter, 
+                               search_vol = search_vol, 
+                               forcing_file = forcing_file, 
+                               gridded_forcing = NULL, 
+                               fishing_effort_file = fishing_effort_file, 
+                               figure_folder = NULL))
 
-saveRDS(lmes, paste0("Output/bestvals_LMEs_searchvol_", search_vol, "_iter_",
-                     no_iter, "_DFA.RDS"))
+#File path for file where parameters will be stored
+file_out <- file.path("Output", 
+                      paste0("best-fishing-parameters_LMEs_searchvol_", 
+                             search_vol, "_numb-iter_", no_iter, ".csv"))
+#Saving data frame
+write_csv(lmes_best_params, file_out)
 
 # WARNINGS: 
 # 2. some LME (e.g. LME 4) do not run because the model called by LHSsearch 
@@ -65,93 +65,37 @@ saveRDS(lmes, paste0("Output/bestvals_LMEs_searchvol_", search_vol, "_iter_",
 # now estimating search vol + relative effort for each LME + iter = 100 (but 
 # will need to increase to 1000 at least)
 
-############### Make plots
+
+### Creating plots with best values for fishing parameters -------------
 
 #### Check other model performance indicators using the above estimates
 #bestvals<-data.frame(readRDS("bestvals_LMEs.RDS")) # these bestvalues don't 
 #give the CalibrationPlot 
-bestvals <- data.frame(readRDS(paste0("Output/bestvals_LMEs_searchvol_", 
-                                      search_vol, "_iter_", no_iter, ".RDS")))
 
-# add column for correlation:
-bestvals <- bestvals |> 
-  mutate(cor = 0,
-         # add column for NA catches
-         catchNA = 0)
+#Load best fishing parameters
+bestvals <- read_csv(file_out)
 
-pdf(paste0("Output/CalibrationPlots_searchvol_", search_vol, "_iter_", 
-           no_iter, ".pdf"), height = 6, width = 8)
+#Create empty data frame to store results
+bestvals_fit <- data.frame()
 
-for(i in 1:66){
-  # # trial 
-  # i = 1
-
-  ### has the function above worked for all LMEs?
-  # run only if the function above produced bestvalues
-  if(length(unlist(bestvals[i, c(1:5)])) > 0){ 
-  lme_input <- get_lme_inputs(LMEnumber = i, gridded = F, yearly = F)
-  # try with highest possible values of Fmort to see if catch are in line with
-  # observed
-  out <- run_model(vals = unlist(bestvals[i, 1:5]), input = lme_input, 
-                   withinput = T)
-   
-  ### CN this is copy-paste from getError(): 
-  ## aggregate by year (mean to conserve units)
-  out <- out |> 
-    group_by(Year) |> 
-    filter(Year > "1949") |> 
-    summarise(TotalCatchPerYr = mean(Totalcatch),
-              ObsCatchPerYr = mean(catch_tonnes_area_m2, na.rm=T))
-  # convert units
-  out$ObsCatchPerYr <- out$ObsCatchPerYr*1e6
+#Getting correlation values for each LME
+for(i in bestvals$region){
+  #Get forcing data for each LME
+  lme_input <- get_lme_inputs(forcing_file = forcing_file, 
+                 fishing_effort_file = fishing_effort_file, 
+                 LMEnumber = LMEnum)
   
-  # bestvals$rmse[i]<-sqrt(sum(out$squared_error,na.rm=T)/
-  #sum(!is.na(out$squared_error)))
-  
-  bestvals$cor[i] <- cor(out$ObsCatchPerYr, out$TotalCatchPerYr,
-                         use = "complete.obs")
-  bestvals$catchNA[i] <- sum(is.na(out$TotalCatchPerYr))
-  
-  p1 <- ggplot() +
-    geom_line(data = out, aes(x = Year, y = TotalCatchPerYr)) +
-    geom_point(data = out, aes(x = Year, y = ObsCatchPerYr)) +
-    theme_classic() + 
-    theme(axis.text.x = element_text(colour = "grey20", size = 12, angle = 90,
-                                     hjust = 0.5, vjust = 0.5),
-          axis.text.y = element_text(colour = "grey20", size = 12),
-          text = element_text(size = 16)) + 
-    labs(x = "Year", y = "Grams per m2 per year") 
-  
-  modelled <- ggplot() +
-    geom_line(data = out, aes(x = Year, y = TotalCatchPerYr)) +
-    theme_classic() +
-    theme(axis.text.x = element_text(colour = "grey20", size = 12, angle = 90,
-                                     hjust = 0.5, vjust = 0.5),
-          axis.text.y = element_text(colour = "grey20", size = 12),
-          text = element_text(size = 16)) + 
-    labs(x = "Year", y = "Grams per m2 per year") 
-  
-  p2 <- ggplot() +
-    geom_point(data = out, aes(x = TotalCatchPerYr, y = ObsCatchPerYr)) +
-    geom_abline(slope = 1, intercept = 0) +
-    theme_classic() + 
-    theme(axis.text.x = element_text(colour = "grey20", size = 12, angle = 90,
-                                     hjust = 0.5, vjust = 0.5),
-          axis.text.y = element_text(colour = "grey20", size = 12),
-          text = element_text(size = 16)) + 
-    labs(x = "Predicted", y = "Observed", title = paste0("LME ", i))
-  
-  p3 <- p1+p2
-  
-  print(p3)
-  }
-  # end of if(unlist ...)
+  #Calculate errors and correlations with tuned fishing parameters and save
+  #plots
+  out_folder <- file.path("Output", paste0("bestvals_LMEs_iter_", no_iter))
+  out <- getError(lhs_params = unlist(bestvals[i,]), lme_forcings = lme_input, 
+                  corr = T, figure_folder = out_folder)
+  #Adding results to data frame created above
+  bestvals_fit <- bestvals_fit |> 
+    bind_rows(out)
 }
 
 
-dev.off()
-# saveRDS(bestvals,paste0("Output/bestvals_LMEs_cor_searchvol_", 
-# search_vol,"_iter_",no_iter,".RDS"))
 
 #### TO DO: Check other model performance indicators using the above estimates
 
