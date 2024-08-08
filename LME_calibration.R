@@ -7,17 +7,19 @@
 # Date of update: 2024-08-06
 
 # Loading libraries
-library(tidyverse)
+# library(tidyverse)
+library(dplyr)
+library(readr)
+library(stringr)
+library(ggplot2)
 library(lubridate)
 library(zoo)
 library(lhs)
 library(pbapply)
 library(patchwork)
-library(parallel)
-library(optimParallel)
+# library(parallel)
+# library(optimParallel)
 source("dbpm_model_functions.R")
-
-
 # library(gridExtra)
 
 
@@ -578,7 +580,7 @@ fastOptim <- function(LMEnum, vary, fishing_effort_file, forcing_file = NULL,
   cl <- makeCluster(noCores, setup_timeout = 0.5)
   setDefaultCluster(cl = cl)
   clusterExport(cl, varlist = c("cl", "libraries", "lme_input"),
-                envir=environment())
+                envir = environment())
   clusterEvalQ(cl, {
     for(item in 1:length(libraries)){
       library(libraries[item], character.only = T)
@@ -597,6 +599,7 @@ fastOptim <- function(LMEnum, vary, fishing_effort_file, forcing_file = NULL,
                                 lme_forcings = lme_input, corr = corr, 
                                 figure_folder = figure_folder)
   stopCluster(cl)
+  
   return(optim_result$par)
 }
 
