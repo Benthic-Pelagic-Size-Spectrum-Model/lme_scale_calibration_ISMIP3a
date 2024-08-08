@@ -422,14 +422,14 @@ plot_global_raster <- function(df_to_plot, variable_to_plot, decade_to_plot){
   # decade_to_plot = 2010
   df <- df_to_plot |> 
     select(all_of(c("lat", "lon", variable_to_plot, "decade"))) |>  
-    rename("variable" = variable_to_plot)
-    unique() |> 
+    rename("variable" = variable_to_plot) |> 
+    # unique() |> 
     filter(decade == decade_to_plot) |> 
     select(!decade) 
   
   p1 <- df |> 
     ggplot(aes(lon, lat, fill = variable))+
-    geom_raster()
+    geom_tile()
 
   name <- paste0(LME_path, "global_", variable_to_plot, decade_to_plot, "map",
                  ".pdf")
