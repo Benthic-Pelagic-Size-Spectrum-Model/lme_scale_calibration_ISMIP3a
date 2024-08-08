@@ -13,10 +13,11 @@ library(zoo)
 library(lhs)
 library(pbapply)
 library(patchwork)
+library(parallel)
+library(optimParallel)
 source("dbpm_model_functions.R")
 
-# library(parallel)
-# library(optimParallel)
+
 # library(gridExtra)
 
 
@@ -540,13 +541,33 @@ getGriddedOutputs <- function(input = lme_inputs_grid, results = grid_results,
 }
   
 ### fastOptim to set up and run optimisations in parallel
-fastOptim <- function(lme, vary, errorFun = getError, spareCores = 1,
-                      libraries = c("optimParallel")){
-  library(parallel)
-  library(optimParallel)
+fastOptim <- function(LMEnum, vary, fishing_effort_file, forcing_file = NULL, 
+                      gridded_forcing = NULL, errorFun = getError, ...,
+                      spareCores = 1, libraries = c("optimParallel")){
   
-  # get input
-  lme_input <- get_lme_inputs(LMEnumber = lme)
+  # get inputs for LME
+  if(!is.null(forcing_file)){
+    lme_input <- get_lme_inputs(forcing_file = forcing_file, 
+                                fishing_effort_file = fishing_effort_file, 
+                                LMEnumber = LMEnum)
+  }
+  if(!is.null(gridded_forcing)){
+    lme_input <- get_lme_inputs(gridded_forcing = gridded_forcing, 
+                                fishing_effort_file = fishing_effort_file, 
+                                LMEnumber = LMEnum)
+  }
+  
+  args <- list(...)
+  if("corr" %in% names(args)){
+    corr <- args$corr
+  }else{
+    corr <- F
+  }
+  if("figure_folder" %in% names(args)){
+    figure_folder <- args$figure_folder
+  }else{
+    figure_folder <- NULL
+  }
   
   # set up workers
   # keep some spare core
@@ -568,16 +589,15 @@ fastOptim <- function(lme, vary, errorFun = getError, spareCores = 1,
   
   optim_result <- optimParallel(par = vary, fn = errorFun,
                                 method = "L-BFGS-B",
-                                lower = rep(0, length(vary)),
+                                lower = rep(1e5, length(vary)),
                                 upper = rep(2, length(vary)),
                                 parallel = list(loginfo = TRUE,
+                                                cl = cl,
                                                 forward = TRUE), 
-                                input = lme_input)
+                                lme_forcings = lme_input, corr = corr, 
+                                figure_folder = figure_folder)
   stopCluster(cl)
   return(optim_result$par)
 }
-
-
-
 
 
