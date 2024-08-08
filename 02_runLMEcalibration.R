@@ -1,7 +1,6 @@
 ###### Run LHS search for each LME to get best values for fishing parameters
 
 source("LME_calibration.R")
-# library(parallel)
 library(dplyr)
 library(pbapply)
 library(readr)
@@ -117,66 +116,6 @@ bestvals <- bestvals |>
 # OTHER : mse, rpi - hipsey et al metrics for total catch and for disaggregated
 # benthic ad pelagic catch
 
-#### TO DO: Refine estimates by running optimParallel across LMEs using 
-# "bestvals" as initial values.
-
-# library(optimParallel)
-#  set up workers
-# noCores <- parallel::detectCores() - 1 # keep some spare core
-# cl <- parallel::makeCluster(noCores, setup_timeout = 0.5)
-# setDefaultCluster(cl = cl)
-# clusterExport(cl, varlist = "cl",envir=environment())
-# clusterEvalQ(cl, {
-#   library(optimParallel)
-#   source("LME_calibration.R")
-# })
-# 
-# LMEnum=22
-# lme_input<-get_lme_inputs(LMEnumber=LMEnum)
-# optim_out<- optimParallel::optimParallel(par=as.numeric(bestvals[LMEnum,
-# c(2:5)]),getError, input=lme_input, LMEnumber=LMEnum)
-# stopCluster(cl)
-# 
-# 
-# ########## to save all error estimates:
-# 
-# # # set up parameter set to run initial simulations
-# # set.seed(1234)
-# # 
-# # # num "individual runs"
-# # num_iter=100
-# # simset <- data.frame(randomLHS(num_iter, 4))
-# # # rows are iterations, columns are specific parameters
-# # colnames(simset )<-c("f.u","f.v","f.minu","f.minv")
-# # # adjust range of mi size params, others go form 0-1
-# # simset [,"f.minu"]<-simset [,"f.minu"]*2
-# # simset [,"f.minv"]<-simset [,"f.minv"]*2
-# # 
-# # LMEnumber=c(1:66)
-# # 
-# # simset<-expand_grid(LMEnumber,simset)
-# # 
-# # simset$rmse<-0
-# # 
-# # #  set up workers for parallel runs
-# # noCores <- parallel::detectCores() - 1 # keep some spare core
-# # cl <- parallel::makeCluster(noCores, setup_timeout = 0.5)
-# # setDefaultCluster(cl = cl)
-# # clusterExport(cl, varlist = "cl",envir=environment())
-# # clusterEvalQ(cl, {
-# #   library(optimParallel)
-# #   source("LME_calibration.R")
-# # })
-# # 
-# # # run model and output error term for each row (in parallel)
-# # simset$rmse<-pbapply(X=simset[,c(1:5)],1,getError,cl=cl)
-# # 
-# # stopCluster(cl)
-# # 
-# # #save the file
-# # saveRDS(simset,"simset_LMEs.RDS")
-# 
-
 # Use optimParallel to get better "bestvals" for LMES that do not have good 
 #enough fit to data
 
@@ -184,7 +123,13 @@ bestvals <- bestvals |>
 # tic()
 # for (i in 1:dim(bestvals[refine,])[1]){
 #   vals<-unlist(bestvals[refine,][i,1:5])
-#   optim_result<-fastOptim(lme=refine[i],vary=vals)
+  # optim_result<-fastOptim(LMEnum=refine[i],vary=vals, 
+  #                         fishing_effort_file = fishing_effort_file, 
+  #                         forcing_file = forcing_file, gridded_forcing = NULL,
+  #                         errorFun = getError, corr = T, 
+  #                         figure_folder = NULL)
+
+
 #   bestvals[refine,][i,1:5]<-unlist(optim_result$par)[1:5]
 #   bestvals[refine,][i,6]<-unlist(optim_result$value)
 #   print(i)
@@ -218,15 +163,12 @@ file_out <- file.path("Output",
                       paste0("refined-fishing-parameters_LMEs_searchvol_", 
                              search_vol, "_numb-iter_", no_iter, "-1000.csv"))
 
-#Save results in a single file together with all other regions
+# then we need to put these together with the other "bestvals", and save 
+# results in a single file
 bestvals |> 
   filter(cor > 0.5 | rmse < 0.5 | catchNA < 0) |> 
   bind_rows(refined) |> 
   write_csv(file_out)
 
-## then need to put these back with  the other "bestvals".
 
-# test_lme4<-LHSsearch(4,iter=100)
-# vals<-unlist(bestvals[3,1:5])
-# newvals<-fastOptim(lme=2,unlist(vals),getError)
 
