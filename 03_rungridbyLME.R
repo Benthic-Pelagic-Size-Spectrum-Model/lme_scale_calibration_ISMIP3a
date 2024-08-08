@@ -19,13 +19,8 @@
 #From /rd/gem/private/fishmip_inputs/ISIMIP3a/fishmip_regions/FAO-LME_masks
 
 # library(tictoc)
-# library(raster)
-# library(terra)
 library(tidyverse)
 library(data.table)
-
-select <- dplyr::select
-summarise <- dplyr::summarise
 
 # also calls dbpm_model_functions.R
 source("LME_calibration.R") 
@@ -51,8 +46,9 @@ gridded_forcing <- file.path("/g/data/vf71/fishmip_inputs/ISIMIP3a",
 no_iter <- 100
 search_vol <- "estimated" 
 version <- "refined-fishing-parameters"
-vals <- data.frame(readRDS(paste0("Output/", version, "_LMEs_searchvol_", 
-                                  search_vol, "_numb-iter_", no_iter, ".csv")))
+vals <- file.path("Output", paste0(version, "_LMEs_searchvol_", search_vol, 
+                                   "_numb-iter_", no_iter, ".csv")) |> 
+  read_csv()
 
 # run only LMEs with a good correlation/error and all catches 
 LMEnumber <- vals |> 
@@ -424,28 +420,21 @@ plot_global_raster <- function(df_to_plot, variable_to_plot, decade_to_plot){
   # # trial 
   # variable_to_plot = "biomass_year"
   # decade_to_plot = 2010
-  raster_to_plot <- df_to_plot |> 
-    select(lat, lon, eval(variable_to_plot), decade) |>  
+  df <- df_to_plot |> 
+    select(all_of(c("lat", "lon", variable_to_plot, "decade"))) |>  
+    rename("variable" = variable_to_plot)
     unique() |> 
     filter(decade == decade_to_plot) |> 
-    select(lon, lat, eval(variable_to_plot)) |> 
-    # order is key for raster function below   
-    relocate(lon, lat, eval(variable_to_plot)) |> 
-    rasterFromXYZ()
+    select(!decade) 
+  
+  p1 <- df |> 
+    ggplot(aes(lon, lat, fill = variable))+
+    geom_raster()
 
   name <- paste0(LME_path, "global_", variable_to_plot, decade_to_plot, "map",
                  ".pdf")
-  pdf(name)
-  plot(raster_to_plot)
-  dev.off()
   
-  # easier to check but needs to be deleted
-  name <- paste0("/home/dbpm/lme_scale_calibration_ISMIP3a/Output/", "global_",
-                 variable_to_plot, "_", decade_to_plot, "_map", ".pdf") 
-  pdf(name)
-  plot(raster_to_plot)
-  dev.off()
-  
+  ggsave(name, p1, device = "pdf")
 }
 
 plot_global_raster(df_to_plot = df_to_plot, variable_to_plot = "biomass_year", 
