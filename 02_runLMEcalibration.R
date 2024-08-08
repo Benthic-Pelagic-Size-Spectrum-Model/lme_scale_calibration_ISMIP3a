@@ -4,6 +4,8 @@ source("LME_calibration.R")
 library(dplyr)
 library(pbapply)
 library(readr)
+library(purrr)
+library(data.table)
 
 # faster using pbsapply, in the LHSsearch pbapply has cl=6 which uses cluster 
 #to run in parallel, but here it is run sequentially if cl is not specified.
@@ -37,8 +39,15 @@ lmes_best_params <- t(pbsapply(X = 1:66, LHSsearch, num_iter = no_iter,
 file_out <- file.path("Output", 
                       paste0("best-fishing-parameters_LMEs_searchvol_", 
                              search_vol, "_numb-iter_", no_iter, ".csv"))
+
+#Stacking files before saving
+bestvals <- list.files("Output/best_fish_vals", full.names = T) |> 
+  map(~fread(.)) |> 
+  map_df(~bind_rows(.)) |> 
+  arrange(region)
+  
 #Saving data frame
-write_csv(lmes_best_params, file_out)
+write_csv(bestvals, file_out)
 
 # WARNINGS: 
 # 2. some LME (e.g. LME 4) do not run because the model called by LHSsearch 
