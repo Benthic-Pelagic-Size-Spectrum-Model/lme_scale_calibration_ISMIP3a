@@ -281,22 +281,19 @@ getError <- function(lhs_params = X, lme_forcings = lme_input,
            #convert from tonnes to grams (m^-2*yr^-1)
            squared_error = (mean_obs_catch_yr-mean_total_catch_yr)^2)
   
-  #Calculate RMSE
+  #Calculate RMSE 
   sum_se <- sum(error_calc$squared_error, na.rm = T)
   count <- sum(!is.na(error_calc$squared_error))
   rmse <- sqrt(sum_se/count)
   
   if(corr){
     #Calculate correlation between observed and predicted catches
-    best_corr <- cor(error_calc$mean_obs_catch_yr, 
-                     error_calc$mean_total_catch_yr, use = "complete.obs")
-    #Get number of rows with NA values
-    best_nas <- sum(is.na(out$mean_total_catch_yr))
-    
-    #Adding information to data frame
-    error_calc <- error_calc |> 
-      mutate(cor = best_corr,
-             catchNA = best_nas)
+    corr_nas <- data.frame(cor = cor(error_calc$mean_obs_catch_yr, 
+                                     error_calc$mean_total_catch_yr, 
+                                     use = "complete.obs"),
+                           #Get number of rows with NA values
+                           catchNA = sum(is.na(error_calc$mean_total_catch_yr)),
+                           region = unique(lme_forcings$region))
   }
   
   #If a path to save figures is provided, create figures and save 
@@ -340,8 +337,13 @@ getError <- function(lhs_params = X, lme_forcings = lme_input,
     ggsave(filename = f_out, plot = p3, width = 15, height = 10)
   }
   
-  #Return RMSE
-  return(rmse)
+  if(!corr){
+    #Return RMSE
+    return(rmse)
+  }
+  if(corr){
+    return(corr_nas)
+  }
 }
 
 
@@ -349,7 +351,8 @@ getError <- function(lhs_params = X, lme_forcings = lme_input,
 # now could try again with lhs instead of the regular grid of parameters
 LHSsearch <- function(LMEnum = LME, num_iter = 1, search_vol = "estimated",
                       forcing_file = NULL, gridded_forcing = NULL, 
-                      fishing_effort_file, figure_folder = NULL){
+                      fishing_effort_file, corr = F, figure_folder = NULL,
+                      best_val_folder = NULL){
   #Inputs:
   #LMEnum (numeric) - Unique ID identifying LME
   #num_iter (numeric) - Number of individual runs. Default is 1.
@@ -359,9 +362,14 @@ LHSsearch <- function(LMEnum = LME, num_iter = 1, search_vol = "estimated",
   #gridded_forcing (character) - Full path to folder containing gridded forcing
   #files
   #fishing_effort_file (character) - Full path to fishing effort file
+  #corr (boolean) - Default is FALSE. If set to TRUE, it will calculate the
+  #correlation between predicted and observed values
   #figure_folder (character) - Optional. If provided, it must be the full path
   #to the folder where figures comparing observed and predicted data will be 
-  #stored.
+  #stored
+  #best_val_folder (character) - Optional. If provided, it muste be the full
+  #path to the folder where LHS search results will be saved
+  #
   #Output:
   #bestvals (data frame) - Contains the values for LHS parameters that resulted
   #in the best performing model based on RMSE values
@@ -407,8 +415,8 @@ LHSsearch <- function(LMEnum = LME, num_iter = 1, search_vol = "estimated",
   # lme_input_gridded[,c(4,16,17)]
   
   # in pbapply setting cl = 6 calls mcapply to set up cluster 
-  sim$rmse <- pbapply(sim, 1, getError, lme_forcings = lme_input, figure_folder,
-                      cl = 6)
+  sim$rmse <- pbapply(sim, 1, getError, lme_forcings = lme_input, corr,
+                      figure_folder, cl = 6)
   
   # check this time param set with lowest error
   bestvals <- sim |> 
@@ -417,6 +425,23 @@ LHSsearch <- function(LMEnum = LME, num_iter = 1, search_vol = "estimated",
   
   #Print row with lowest RMSE
   print(bestvals)
+  
+  #If folder to save values is provided - Save results
+  if(!is.null(best_val_folder)){
+    #Ensure folder exists
+    if(!dir.exists(best_val_folder)){
+      dir.create(best_val_folder)
+    }
+    
+    #File path to save output
+    fout <- file.path(best_val_folder, 
+                      paste0("best-fishing-parameters_LME_", LMEnum,
+                             "_searchvol_", search_vol, "_numb-iter_", 
+                             num_iter, ".csv"))
+    #Save output
+    bestvals |> 
+      write_csv(fout)
+  }
   
   return(bestvals)
 }
