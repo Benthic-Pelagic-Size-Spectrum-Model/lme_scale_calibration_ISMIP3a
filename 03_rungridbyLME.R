@@ -15,11 +15,12 @@
 #' 
 
 #### set environment ----
+#LME in Southern Ocean is called Antarctica (ID merged 147) LME 61
+#From /rd/gem/private/fishmip_inputs/ISIMIP3a/fishmip_regions/FAO-LME_masks
 
-rm(list=ls())
-
-library(tictoc)
-library(raster)
+# library(tictoc)
+# library(raster)
+# library(terra)
 library(tidyverse)
 library(data.table)
 
@@ -30,32 +31,48 @@ summarise <- dplyr::summarise
 source("LME_calibration.R") 
 source("Plotting_functions_DBPM.R")
 
-LME_path <- "/rd/gem/private/fishmip_outputs/ISIMIP3a/DBPM/obsclim/"
+LME_path <- "/g/data/vf71/fishmip_outputs/ISIMIP3a/DBPM/obsclim"
+#Fishing effort file location
+fishing_effort_file <- file.path("/g/data/vf71/fishmip_inputs/ISIMIP3a",
+                                 "processed_forcings/lme_inputs/obsclim/025deg",
+                                 "DBPM_LME_effort_catch_input.csv")
+#Non-gridded data
+forcing_file <- file.path("/g/data/vf71/fishmip_inputs/ISIMIP3a",
+                          "processed_forcings/lme_inputs/obsclim/025deg", 
+                          "DBPM_LME_climate_inputs_slope.csv")
+
+#Gridded data
+gridded_forcing <- file.path("/g/data/vf71/fishmip_inputs/ISIMIP3a",
+                             "processed_forcings/lme_inputs_gridcell/obsclim",
+                             "025deg")
+
 
 # get the latest best values based on iterations and search_vol
-no_iter = 100
-search_vol = "estimated" 
-version = "refined_"
-vals <- data.frame(readRDS(paste0("Output/", version, 
-                                  "bestvals_LMEs_cor_searchvol_", 
-                                  search_vol, "_iter_", no_iter, ".RDS")))
+no_iter <- 100
+search_vol <- "estimated" 
+version <- "refined-fishing-parameters"
+vals <- data.frame(readRDS(paste0("Output/", version, "_LMEs_searchvol_", 
+                                  search_vol, "_numb-iter_", no_iter, ".csv")))
 
 # run only LMEs with a good correlation/error and all catches 
-LMEnumber <- which(vals$cor > 0.5 & vals$rmse < 0.5 & vals$catchNA == 0) 
+LMEnumber <- vals |> 
+  filter(cor > 0.5 & rmse < 0.5 & catchNA == 0) |> 
+  pull(region)
 
 #### run gridded model by LME ----
 #### MOVE TO FUNCTION CODE
-rungridbyLME <- function(LMEnumber = 14, yearly = FALSE,  f.effort = TRUE, 
+rungridbyLME <- function(LMEnumber = 14, forcing_file, gridded_forcing, 
+                         fishing_effort_file, yearly = FALSE, f.effort = TRUE, 
                          vals = vals){
-  # # CN trial
-  # LMEnumber = 61
-  # yearly = FALSE
-  # f.effort = TRUE
-  # vals = vals
-  LME_path_full <- paste0(LME_path, "/rd/gem/private/fishmip_outputs/ISIMIP3a/",
-                          "DBPM/obsclim/LME_", LMEnumber, "_output")
   
-  if(!file.exists(LME_path_full)){
+  #Ensuring values are numeric
+  if(!is.numeric(vals)){
+    stop("Values provided in the 'vals' parameter must be numeric.")
+  }
+  
+  LME_path_full <- file.path(LME_path, paste0("LME_", LMEnumber, "_output"))
+  
+  if(!dir.exists(LME_path_full)){
     dir.create(LME_path_full)
   }
   
@@ -67,12 +84,10 @@ rungridbyLME <- function(LMEnumber = 14, yearly = FALSE,  f.effort = TRUE,
   # as per values below. 
   
   # get initial values from LME-scale results
-  lme_input_init <- get_lme_inputs(LMEnumber = LMEnumber, gridded = F, 
-                                   yearly = F)
+  lme_input_init <- get_lme_inputs(forcing_file = forcing_file, 
+                                   fishing_effort_file = fishing_effort_file, 
+                                   LMEnumber = LMEnumber)
   
-  # # vals <- readRDS("bestvals_LMEs.RDS")
-  # vals <- readRDS("Output/bestvals_LMEs_iter_10.RDS")
-  # 
   # # run model using time-averaged inputs
   # WARNING - check: replace with fake best values that work
   # initial_results<-run_model(vals=c(0.1,0.5,1,1), # vals[LMEnumber,], 
@@ -89,29 +104,38 @@ rungridbyLME <- function(LMEnumber = 14, yearly = FALSE,  f.effort = TRUE,
   V.initial <- rowMeans(initial_results$V[, 240:1440])
   W.initial <- mean(initial_results$W[240:1440])
   
+  #### why is this being subsetted above? -----
+  #Is it selecting the time between 1861 and 1960? 
+  #We could identify indexes from the `lme_input_init` because at the moment
+  #this includes 1860-12-01
+  #
+  # ind <- which(lme_input_init$Year >= 1860 & lme_input_init$Year <= 1960)
+  # U.initial <- rowMeans(initial_results$U[, ind])
+  # V.initial <- rowMeans(initial_results$V[, ind])
+  # W.initial <- mean(initial_results$W[ind])
+  #######################
+
+  
   # plot to check initial values
   # plotsizespectrum(initial_results,params=initial_results$params,
   #                  itime=240:1440,
   #                  timeaveraged = TRUE)
   
   # get gridded inputs and run through all grid cells one timestep at a time
-  
-  ### corrected for gridded = F, now need to correct for gridded = T - CHECKED 
   # also need to check yearly = TRUE or comment it to avoid use - thus far not
   # used. 
-  lme_inputs_grid <- get_lme_inputs(LMEnumber = LMEnumber,  gridded = T, 
-                                    yearly = yearly)[,c("lat", "lon", "LME", 
-                                                        "t", "sst", "sbt", 
-                                                        "er", "intercept", 
-                                                        "slope", "depth",
-                                                        "NomActive_area_m2_relative")]
-  time <- unique(lme_inputs_grid$t)
-  grid_results <- vector("list", length(time))
+  lme_inputs_grid <- get_lme_inputs(gridded_forcing = gridded_forcing, 
+                                    fishing_effort_file = fishing_effort_file, 
+                                    LMEnumber = LMEnumber, yearly = yearly) |> 
+    select(c("lat", "lon", "region", "t", "sst", "sbt", "er", "intercept", 
+             "slope", "depth", "nom_active_area_m2_relative"))
   
-  # #### WARNING - more chcks here, er in particular
+  grid_results <- vector("list", nrow(lme_input_init))
+  
+  # #### WARNING - more checks here, er in particular
   # # CN: check that aggregated inputs match gridded inputs - similar...
-  # # in one I calculated values using weihgted inputs across grid cells, 
-  # in the other I caclaulted values for each grid cell
+  # # in one I calculated values using weighted inputs across grid cells, 
+  # in the other I calculated values for each grid cell
   # unique(lme_input_init$Year)
   # a<-lme_input_init |>
   #   group_by(Year) |>
@@ -137,79 +161,76 @@ rungridbyLME <- function(LMEnumber = 14, yearly = FALSE,  f.effort = TRUE,
   #             depth = mean(depth), 
   #             NomActive_area_m2 = mean(NomActive_area_m2, na.rm = T)) |>
   #   filter(Year >= 1950)
-  # 
-  
-  ##### reorganise outputs storage for later
-  ntime <- length(time)
-  # ngrid<-dim(subset(lme_inputs_grid,t==time[1]))[1]
-  params <- initial_results$params
+  #
   
   ###################### TEST GRIDDED MODEL
-  lme_inputs_grid$cell <- paste(lme_inputs_grid$lat, lme_inputs_grid$lon,
-                                sep = "_")
+  spinFunc <- function(df, name_col){
+    #Creating a 100 years stable spinup before 1841
+    dates <- seq(as.Date("1741-01-01"), as.Date("1840-12-01"), by = "month")
+    
+    #Select variables of interest
+    sub_df <- df |>
+      select(all_of(c("lat", "lon", "t", name_col))) |> 
+      rename("value" = name_col)
+    
+    #Calculate mean per grid cell for the first year
+    spinup <- sub_df |> 
+      filter(year(t) == min(year(t))) |> 
+      group_by(lat, lon) |> 
+      summarise(value = mean(value)) |> 
+      ungroup()
+    
+    #Repeat 1200 months (100 years)
+    df_out <- spinup |> 
+      slice(rep(1:n(), times = length(dates))) |> 
+      mutate(t = rep(dates, each = nrow(spinup))) |> 
+      #Add original data
+      bind_rows(sub_df) |> 
+      arrange(t, lat, lon) |> 
+      #Rearrnage data
+      pivot_wider(id_cols = lat:lon, names_from = t, values_from = value) |> 
+      selec(!lat:lon) |> 
+      data.matrix()
+    
+    return(df_out)
+  }
   
   depth_grid <- lme_inputs_grid |>
-    pivot_wider(id_cols = cell, names_from = t, values_from = depth)
+    filter(t == min(t)) |> 
+    pivot_wider(id_cols = lat:lon, names_from = t, values_from = depth) |> 
+    select(!lat:lon) |> 
+    data.matrix()
   
-  er_grid <- lme_inputs_grid |>
-    pivot_wider(id_cols = cell, names_from = t, values_from = er)
+  er_grid <- spinFunc(lme_inputs_grid, name_col = "er")
   
-  intercept_grid <- lme_inputs_grid |>
-    pivot_wider(id_cols = cell, names_from = t, values_from = intercept)
+  intercept_grid <- spinFunc(lme_inputs_grid, name_col = "intercept")
   
-  slope_grid <- lme_inputs_grid |>
-    pivot_wider(id_cols = cell, names_from = t, values_from = slope)
+  slope_grid <- spinFunc(lme_inputs_grid, name_col = "slope")
   
-  sst_grid <- lme_inputs_grid |>
-    pivot_wider(id_cols = cell, names_from = t, values_from = sst)
+  sst_grid <- spinFunc(lme_inputs_grid, name_col = "sst")
   
-  sbt_grid <- lme_inputs_grid |>
-    pivot_wider(id_cols = cell, names_from = t, values_from = sbt)
+  sbt_grid <- spinFunc(lme_inputs_grid, name_col = "sbt")
   
-  effort_grid <- lme_inputs_grid |>
-    pivot_wider(id_cols = cell, names_from = t, 
-                values_from = NomActive_area_m2_relative)
-  
-  ## Creating a 100 years stable spinup before 1841
-  spinFunc <- function(var_name){
-    dates <- seq(as.Date("1741-01-01"), as.Date("1840-12-01"), by = "month")
-    var_pre <- array(NA, dim = c(dim(var_name)[1], length(dates)),
-                     dimnames = list(dimnames(var_name)[[1]],
-                                     as.character(dates)))
-    var_pre[, 1:ncol(var_pre)] <- apply(var_name[, -1][, 1:12], 1, mean)
-    var_name <- cbind(var_name[, 1], var_pre, var_name[, -1])
-  }
-  
-  er_grid <- spinFunc(er_grid)
-  intercept_grid <- spinFunc(intercept_grid)
-  slope_grid <- spinFunc(slope_grid)
-  sst_grid <- spinFunc(sst_grid)
-  sbt_grid <- spinFunc(sbt_grid)
-  effort_grid <- spinFunc(effort_grid)
-  
-  # adjusting cells to be 3240 values per cells (100 more years)(not used but 
-  # could be useful)
-  # cell <- lme_inputs_grid$cell
-  # for(iCell in unique(cell)){
-  #   pos <- which(cell == iCell)
-  #   end <- pos[length(pos)]
-  #   cell <- c(cell[1:end],rep(iCell,1200),cell[(end+1):length(cell)])
-  # }
-  # cell <- cell[1:(length(cell)-2)] #the code above produces a NA with the 
-  # last cell
+  effort_grid <- spinFunc(lme_inputs_grid, 
+                          name_col = "nom_active_area_m2_relative")
   
   if(f.effort){
-    f.u <- as.numeric(vals[LMEnumber, 1])
-    f.v <- as.numeric(vals[LMEnumber, 2])
-    f.minu <- as.numeric(vals[LMEnumber, 3])
-    f.minv <- as.numeric(vals[LMEnumber, 4])
+    f.u <- vals["f.u"]
+    f.v <- vals["f.v"]
+    f.minu <- vals["f.minu"]
+    f.minv <- vals["f.minv"]
   }else{ 
-    f.u <- f.v <- 0 
-    f.minu <- f.minv <- 0 
+    f.u <- f.v <- f.minu <- f.minv <- 0 
   }
   
-  search_vol <- as.numeric(vals[LMEnumber, 5])
-
+  #Get years in original data
+  tmax <- lme_input_init |>
+    distinct(year(t)) |> 
+    count() |> 
+    pull(n)
+  #Adding 100 years of spinup
+  tmax <- tmax+100
+  
   # Making values constant through time
   # er_grid[,3:dim(er_grid)[2]] <- er_grid[,2]
   # intercept_grid[,3:dim(intercept_grid)[2]] <- intercept_grid[,2]
@@ -221,39 +242,24 @@ rungridbyLME <- function(LMEnumber = 14, yearly = FALSE,  f.effort = TRUE,
   # needs to match runLMEcalibration (LME_calibration.R/run_model())
   
   # set up params for each month, across grid cells
-  gridded_params <- sizeparam(equilibrium = FALSE, 
-                              dx = 0.1, 
-                              xmin.consumer.u = -3,
-                              xmin.consumer.v = -3,
-                              tmax = dim(er_grid[,-1])[2]/12, 
-                              tstepspryr = 12,
-                              search_vol = search_vol, 
-                              fmort.u = f.u,
-                              fminx.u = f.minu, 
-                              fmort.v = f.v, 
-                              fminx.v = f.minv,
-                              depth = data.matrix(depth_grid[, -1][, 1]), 
-                              er = data.matrix(er_grid[, -1]),
-                              pp = data.matrix(intercept_grid[, -1]),
-                              slope = data.matrix(slope_grid[, -1]), 
-                              sst = data.matrix(sst_grid[, -1]),
-                              sft = data.matrix(sbt_grid[, -1]), 
-                              use.init = TRUE,
-                              effort = data.matrix(effort_grid[,-1]),
-                              U.initial = U.initial,
-                              V.initial = V.initial,
-                              W.initial = W.initial,
-                              Ngrid = dim(depth_grid)[1])      
+  gridded_params <- sizeparam(equilibrium = FALSE, dx = 0.1, 
+                              xmin.consumer.u = -3, xmin.consumer.v = -3,
+                              tmax = tmax, tstepspryr = 12,
+                              search_vol = vals["search.vol"], fmort.u = f.u,
+                              fminx.u = f.minu, fmort.v = f.v, fminx.v = f.minv,
+                              depth = depth_grid, 
+                              er = er_grid, pp = intercept_grid, 
+                              slope = slope_grid, sst = sst_grid, 
+                              sft = sbt_grid, use.init = TRUE,
+                              effort = effort_grid, U.initial = U.initial,
+                              V.initial = V.initial, W.initial = W.initial,
+                              Ngrid = nrow(depth_grid))
   
   # run model  for full time period across all grid cells
-  tic()
-  grid_results<-gridded_sizemodel(gridded_params, ERSEM.det.input = F,
-                                  temp.effect = T, eps = 1e-5, 
-                                  output = "aggregated", use.init = TRUE,
-                                  burnin.len)
-  toc()# 65.50608 min 
-  
-  #### Arrivata qui with LME 61 - works OK
+  grid_results <- gridded_sizemodel(gridded_params, ERSEM.det.input = F,
+                                    temp.effect = T, eps = 1e-5, 
+                                    output = "aggregated", use.init = TRUE,
+                                    burnin.len)
   
   #### TEST 3 - OK working 
   # LME 1
@@ -266,30 +272,24 @@ rungridbyLME <- function(LMEnumber = 14, yearly = FALSE,  f.effort = TRUE,
   
   # removing the stable spinup section to have matching dimensions with the code
   # WARNING  move to plotting function for now as need to figure out catch trend
-  grid_results$U <- grid_results$U[, , 1201:3241]
-  grid_results$V <- grid_results$V[, , 1201:3241]
-  grid_results$Y.u <- grid_results$Y.u[, , 1201:3241]
-  grid_results$Y.v <- grid_results$Y.v[, , 1201:3241]
+  dates_name <- ymd(names(er_grid))
+  ind <- which(x >= "1841-01-01")
+  
+  grid_results$U <- grid_results$U[, , ind]
+  grid_results$V <- grid_results$V[, , ind]
+  grid_results$Y.u <- grid_results$Y.u[, , ind]
+  grid_results$Y.v <- grid_results$Y.v[, , ind]
   # moved to plotting function as needed there
   # gridded_params$Neq <- 2040
   
   # save results from run
-  saveRDS(grid_results, paste0(LME_path_full, "/grid_results.rds"))
+  write_csv(grid_results, file.path(LME_path_full, "grid_results.csv"))
+  
   # save inputs and params object needed for plotting 
   save(lme_input_init, lme_inputs_grid, gridded_params, 
-       file = paste0(LME_path_full, "/grid_results_inputs_params.RData"))
-  
+       file = file.path(LME_path_full, "grid_results_inputs_params.RData"))
 }
 
-## TEST 
-
-# tic()
-# rungridbyLME(LMEnumber = 1, 
-#              yearly = FALSE, # for get_lme_inputs()
-#              f.effort = TRUE, # for rungridbyLME()
-#              vals = vals)
-# toc() 
-# 
 # plotgridbyLME(LMEnumber = 1)
 
 ## RUN all LMEs 
@@ -408,16 +408,16 @@ getGriddedOutputs_decade <- function(LME_path, LMEnumber){
 # for now run first LMEs that worked 
 trial <- LMEnumber[1:40] 
 tic()
-a <- mclapply(trial, function(x){
-  getGriddedOutputs_decade(LME_path, LMEnumber = x), 
-  mc.cores = detectCores()-5})
+a <- mclapply(trial, function(x) getGriddedOutputs_decade(LME_path, 
+                                                          LMEnumber = x), 
+              mc.cores = detectCores()-5)
 toc() # 81 sec 6 LMEs.  
 
 # get all files and put them together
 file_list <- list.files(path = LME_path, pattern = "toCheckMap", 
                         recursive = TRUE, full.name = TRUE)
-df_to_plot <- rbindlist(mclapply(file_list, function(x){
-  fread(x), mc.cores = detectCores()-5}))
+df_to_plot <- rbindlist(mclapply(file_list, function(x) fread(x), 
+                                 mc.cores = detectCores()-5))
 
 ### all LMEs togetehr and plot 
 plot_global_raster <- function(df_to_plot, variable_to_plot, decade_to_plot){
