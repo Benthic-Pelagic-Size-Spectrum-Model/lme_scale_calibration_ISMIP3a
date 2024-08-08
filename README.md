@@ -23,7 +23,7 @@ Although you could run all scripts included here in your local machine, you will
 2. ACCESS-OM2-025 (horizontal resolution: $0.25^{\circ}$)  
 3. ACCESS-OM2-01 (horizontal resolution: $0.1^{\circ}$)
 
-Outputs from GFDL-MOM6-COBALT2 are originally available at the [Inter-Sectoral Impact Model Intercomparison Project (ISIMIP)](The Inter-Sectoral Impact Model Intercomparison Project) as netCDF files. We extracted data for each LME and transformed files to csv format, which are available at the [National Computational Infrastructure (NCI)](https://nci.org.au/). Outputs from both resolutions of the ACCESS-OM2 model are available at NCI.  
+Outputs from GFDL-MOM6-COBALT2 are originally available at the [Inter-Sectoral Impact Model Intercomparison Project (ISIMIP)](https://www.isimip.org/) as netCDF files. We extracted data for each LME and transformed files to csv format, which are available at the [National Computational Infrastructure (NCI)](https://nci.org.au/). Outputs from both resolutions of the ACCESS-OM2 model are available at NCI.  
   
 The scripts in this repository were developed in NCI's Gadi, so the easiest way to run these script is to clone this repository to Gadi. However, to do this you will need an NCI account, which are only available for researchers with an email address from an Australian institution. You can still run these scripts locally, but you will need to download the environmental data from the [ISIMIP Data Portal](https://data.isimip.org/search/tree/ISIMIP3a/InputData/climate/ocean/gfdl-mom6-cobalt2/) and the [NCI Data Catalogue](https://dx.doi.org/10.25914/608097cb3433f).  
   
