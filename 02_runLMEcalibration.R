@@ -3,12 +3,12 @@
 source("LME_calibration.R")
 library(dplyr)
 library(pbapply)
-library(readr)
+library(parallel)
 library(purrr)
 library(data.table)
 
-# faster using pbsapply, in the LHSsearch pbapply has cl=6 which uses cluster 
-#to run in parallel, but here it is run sequentially if cl is not specified.
+# faster using pbsapply, in the LHSsearch pbapply has cl=12 which uses cluster 
+# to run in parallel, but here it is run sequentially if cl is not specified.
 no_iter <- 100
 # other option is to specify a value for search_vol 
 search_vol <- "estimated" 
@@ -47,7 +47,7 @@ bestvals <- list.files("Output/best_fish_vals", full.names = T) |>
   arrange(region)
   
 #Saving data frame
-write_csv(bestvals, file_out)
+fread(bestvals, file_out)
 
 # WARNINGS: 
 # 2. some LME (e.g. LME 4) do not run because the model called by LHSsearch 
@@ -76,40 +76,34 @@ write_csv(bestvals, file_out)
 
 
 ### Creating plots with best values for fishing parameters -------------
+#Calculate errors and correlations with tuned fishing parameters and save
+#plots
 
 #### Check other model performance indicators using the above estimates
 #bestvals<-data.frame(readRDS("bestvals_LMEs.RDS")) # these bestvalues don't 
 #give the CalibrationPlot 
 
 #Load best fishing parameters
-bestvals <- read_csv(file_out)
+bestvals <- fread(file_out)
 
-#Create empty data frame to store results
-bestvals_fit <- data.frame()
+#Path to folder where figures will be stored
+figure_folder <- file.path("Output", paste0("bestvals_LMEs_iter_", no_iter))
 
-#Getting correlation values for each LME
-for(i in bestvals$region){
-  #Get forcing data for each LME
-  lme_input <- get_lme_inputs(forcing_file = forcing_file, 
-                              fishing_effort_file = fishing_effort_file, 
-                              LMEnumber = LMEnum)
-  
-  #Calculate errors and correlations with tuned fishing parameters and save
-  #plots
-  out_folder <- file.path("Output", paste0("bestvals_LMEs_iter_", no_iter))
-  out <- getError(lhs_params = unlist(bestvals[i,]), lme_forcings = lme_input, 
-                  corr = T, figure_folder = out_folder)
-  #Adding results to data frame created above
-  bestvals_fit <- bestvals_fit |> 
-    bind_rows(out)
-  
-  #Saving results at every step
-  bestvals_fit |> 
-    write_csv("Output/bestvals_corr_na-vals.csv")
-}
+bestvals_fit <- pbapply(bestvals, 1, corr_calib_plots, forcing_file, 
+                        fishing_effort_file, figure_folder = figure_folder, 
+                        cl = (detectCores()-4))
 
-bestvals <- bestvals |> 
-  left_join(bestvals_fit, by = join_by(region))
+#Adding correlation to fishing parameter data frame
+bestvals_fit <- bestvals_fit |> 
+  bind_rows() |> 
+  right_join(bestvals, by = join_by(region)) |> 
+  relocate(c(region, cor, catchNA), .after = rmse)
+
+#Saving results
+bestvals_fit |> 
+  fwrite(file.path(figure_folder, 
+                   paste0("best-fishing-parameters_LMEs_searchvol_", 
+                          search_vol, "_numb-iter_", no_iter, ".csv")))
 
 
 #### TO DO: Check other model performance indicators using the above estimates
@@ -145,27 +139,35 @@ bestvals <- bestvals |>
 # }
 # toc()
 
-to_be_refined <- bestvals |> 
+to_be_refined <- bestvals_fit |> 
   filter(cor < 0.5 | rmse > 0.5 | catchNA > 0)
 
-for(i in 1:nrow(to_be_refined)){
-  result <- LHSsearch(LMEnum = to_be_refined$region[[i]], num_iter = 1000, 
-                      search_vol = "estimated", forcing_file = forcing_file, 
-                      gridded_forcing = NULL, 
-                      fishing_effort_file = fishing_effort_file, corr = F, 
-                      figure_folder = NULL, 
-                      best_val_folder = "Output/optimised_fish_vals")
-  
-  #Print message 
-  print(paste0("LHS refined search completed for LME #", 
-               to_be_refined$region[[i]]))
-}
+f_out <- "Output/best_fish_vals/optimised_underperforming_LMEs"
+refined_best_params <- t(pbsapply(X = to_be_refined$region, LHSsearch, 
+                                  num_iter = 1000, search_vol = "estimated", 
+                                  forcing_file = forcing_file, 
+                                  gridded_forcing = NULL, 
+                                  fishing_effort_file = fishing_effort_file, 
+                                  corr = F, figure_folder = NULL, 
+                                  best_val_folder = f_out))
+
+# for(i in 1:nrow(to_be_refined)){
+#   result <- LHSsearch(LMEnum = to_be_refined$region[[i]], num_iter = 1000, 
+#                       search_vol = "estimated", forcing_file = forcing_file, 
+#                       gridded_forcing = NULL, 
+#                       fishing_effort_file = fishing_effort_file, corr = F, 
+#                       figure_folder = NULL, 
+#                       best_val_folder = "Output/optimised_fish_vals")
+#   
+#   #Print message 
+#   print(paste0("LHS refined search completed for LME #", 
+#                to_be_refined$region[[i]]))
+# }
 
 #Load all files with refined fishing parameters for under-performing regions
-refined <- list.files("Output/optimised_fish_vals", full.names = T) |> 
-  map(~read_csv(.)) |> 
+refined_best_params <- list.files(f_out, full.names = T) |> 
+  map(~fread(.)) |> 
   map_df(~bind_rows(.)) 
-
 
 #File path for file where parameters will be stored
 file_out <- file.path("Output", 
@@ -177,7 +179,7 @@ file_out <- file.path("Output",
 bestvals |> 
   filter(cor > 0.5 | rmse < 0.5 | catchNA < 0) |> 
   bind_rows(refined) |> 
-  write_csv(file_out)
+  fwrite(file_out)
 
 
 
