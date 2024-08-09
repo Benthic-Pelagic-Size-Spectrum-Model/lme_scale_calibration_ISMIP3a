@@ -24,6 +24,7 @@ library(data.table)
 
 # also calls dbpm_model_functions.R
 source("LME_calibration.R") 
+source("supporting_functions.R") 
 source("Plotting_functions_DBPM.R")
 
 LME_path <- "/g/data/vf71/fishmip_outputs/ISIMIP3a/DBPM/obsclim"
@@ -41,14 +42,13 @@ gridded_forcing <- file.path("/g/data/vf71/fishmip_inputs/ISIMIP3a",
                              "processed_forcings/lme_inputs_gridcell/obsclim",
                              "025deg")
 
-
 # get the latest best values based on iterations and search_vol
 no_iter <- 100
 search_vol <- "estimated" 
 version <- "refined-fishing-parameters"
 vals <- file.path("Output", paste0(version, "_LMEs_searchvol_", search_vol, 
                                    "_numb-iter_", no_iter, ".csv")) |> 
-  read_csv()
+  fread()
 
 # run only LMEs with a good correlation/error and all catches 
 LMEnumber <- vals |> 
@@ -57,7 +57,7 @@ LMEnumber <- vals |>
 
 #### run gridded model by LME ----
 #### MOVE TO FUNCTION CODE
-rungridbyLME <- function(LMEnumber = 14, forcing_file, gridded_forcing, 
+rungridbyLME <- function(LMEnumber, forcing_file, gridded_forcing, 
                          fishing_effort_file, yearly = FALSE, f.effort = TRUE, 
                          vals = vals){
   
@@ -160,36 +160,6 @@ rungridbyLME <- function(LMEnumber = 14, forcing_file, gridded_forcing,
   #
   
   ###################### TEST GRIDDED MODEL
-  spinFunc <- function(df, name_col){
-    #Creating a 100 years stable spinup before 1841
-    dates <- seq(as.Date("1741-01-01"), as.Date("1840-12-01"), by = "month")
-    
-    #Select variables of interest
-    sub_df <- df |>
-      select(all_of(c("lat", "lon", "t", name_col))) |> 
-      rename("value" = name_col)
-    
-    #Calculate mean per grid cell for the first year
-    spinup <- sub_df |> 
-      filter(year(t) == min(year(t))) |> 
-      group_by(lat, lon) |> 
-      summarise(value = mean(value)) |> 
-      ungroup()
-    
-    #Repeat 1200 months (100 years)
-    df_out <- spinup |> 
-      slice(rep(1:n(), times = length(dates))) |> 
-      mutate(t = rep(dates, each = nrow(spinup))) |> 
-      #Add original data
-      bind_rows(sub_df) |> 
-      arrange(t, lat, lon) |> 
-      #Rearrnage data
-      pivot_wider(id_cols = lat:lon, names_from = t, values_from = value) |> 
-      selec(!lat:lon) |> 
-      data.matrix()
-    
-    return(df_out)
-  }
   
   depth_grid <- lme_inputs_grid |>
     filter(t == min(t)) |> 
@@ -197,17 +167,17 @@ rungridbyLME <- function(LMEnumber = 14, forcing_file, gridded_forcing,
     select(!lat:lon) |> 
     data.matrix()
   
-  er_grid <- spinFunc(lme_inputs_grid, name_col = "er")
+  er_grid <- stable_spinup(lme_inputs_grid, name_col = "er")
   
-  intercept_grid <- spinFunc(lme_inputs_grid, name_col = "intercept")
+  intercept_grid <- stable_spinup(lme_inputs_grid, name_col = "intercept")
   
-  slope_grid <- spinFunc(lme_inputs_grid, name_col = "slope")
+  slope_grid <- stable_spinup(lme_inputs_grid, name_col = "slope")
   
-  sst_grid <- spinFunc(lme_inputs_grid, name_col = "sst")
+  sst_grid <- stable_spinup(lme_inputs_grid, name_col = "sst")
   
-  sbt_grid <- spinFunc(lme_inputs_grid, name_col = "sbt")
+  sbt_grid <- stable_spinup(lme_inputs_grid, name_col = "sbt")
   
-  effort_grid <- spinFunc(lme_inputs_grid, 
+  effort_grid <- stable_spinup(lme_inputs_grid, 
                           name_col = "nom_active_area_m2_relative")
   
   if(f.effort){
@@ -279,14 +249,13 @@ rungridbyLME <- function(LMEnumber = 14, forcing_file, gridded_forcing,
   # gridded_params$Neq <- 2040
   
   # save results from run
-  write_csv(grid_results, file.path(LME_path_full, "grid_results.csv"))
+  fwrite(grid_results, file.path(LME_path_full, "grid_results.csv"))
   
   # save inputs and params object needed for plotting 
   save(lme_input_init, lme_inputs_grid, gridded_params, 
        file = file.path(LME_path_full, "grid_results_inputs_params.RData"))
 }
 
-# plotgridbyLME(LMEnumber = 1)
 
 ## RUN all LMEs 
 
@@ -321,7 +290,7 @@ toc()
 
 # STACK at LME 61 
 
-#### plot gridded and averadged output by LME ----
+#### plot gridded and averaged output by LME ----
 
 LMEnumber <- LMEnumber[1:40]
 
@@ -339,7 +308,7 @@ toc()
 # wth the final aim of aggregating all outputs to plot global map 
 
 #### MOVE TO FUNCTION CODE
-##### POSSIBLY WORTH DOING ALL PLOTS CALCUALTIONS HERE AS THE MOST EXPENSIVE
+##### POSSIBLY WORTH DOING ALL PLOTS CALCULATIONS HERE AS THE MOST EXPENSIVE
 # ACTION IS TO LOAD THE OUTPUTS - SO BETTER DOING IT ONLY ONCE ... 
 # COMBINED WITH PLOTTING FUNCTION ABOVE... 
 getGriddedOutputs_decade <- function(LME_path, LMEnumber){
