@@ -3,13 +3,12 @@ This repository contains all code necessary to process inputs used by DBPM. Foll
   
 Two additional DBPM experiments forced by ACCESS-OM2-025 (horizontal resolution: $0.25^{\circ}$) and ACCESS-OM2-01 (horizontal resolution: $0.10^{\circ}$).  
   
-**STEPS:**  
-Step 1. Get input data (environmental and fishing data): [`01_getinputsISIMIP3A.R`]("01_getinputsISIMIP3A.R")  
+## Step 1. Get input (environmental and fishing) data: [`01_getinputsISIMIP3A.R`]("https://github.com/Benthic-Pelagic-Size-Spectrum-Model/lme_scale_calibration_ISMIP3a/blob/main/01_getinputs_ISIMIP3a.R")  
 - This script gets environmental and fishing data for the region of interest  
 - You can choose any [FAO Major Fishing Areas](https://www.fao.org/fishery/en/area/search) or [Large Marine Ecosystems (LMEs)](https://worldoceanreview.com/en/wor-5/improving-coastal-protection/the-art-of-coastal-management/large-marine-ecosystems/)  
 - Input data will be formatted ready to be used with modelling functions  
   
-Step 1. LME-scale calibration: `runLMEcalibration.RDS`  
+## Step 2. LME-scale calibration: `runLMEcalibration.RDS`  
 - this script estimates fishing mortality parameters (catchability and selectivities for each functional group)  
 - need to check and adjust search volume parameter  
 - creates `CalibrationPlots.pdf`, use this to visually inspect fits to catch data  
