@@ -3,22 +3,22 @@ This repository contains all code necessary to process inputs used by DBPM. Foll
   
 Two additional DBPM experiments forced by ACCESS-OM2-025 (horizontal resolution: $0.25^{\circ}$) and ACCESS-OM2-01 (horizontal resolution: $0.10^{\circ}$).  
   
-## Step 1. Get input (environmental and fishing) data: [`01_getinputsISIMIP3A.R`]("https://github.com/Benthic-Pelagic-Size-Spectrum-Model/lme_scale_calibration_ISMIP3a/blob/main/01_getinputs_ISIMIP3a.R")  
-- This script gets environmental and fishing data for the region of interest  
+## Step 1. Get input (environmental and fishing) data 
+- Script [`01_getinputsISIMIP3A.R`]("https://github.com/Benthic-Pelagic-Size-Spectrum-Model/lme_scale_calibration_ISMIP3a/blob/main/01_getinputs_ISIMIP3a.R") gets environmental and fishing data for the region of interest  
 - You can choose any [FAO Major Fishing Areas](https://www.fao.org/fishery/en/area/search) or [Large Marine Ecosystems (LMEs)](https://worldoceanreview.com/en/wor-5/improving-coastal-protection/the-art-of-coastal-management/large-marine-ecosystems/)  
 - Input data will be formatted ready to be used with modelling functions  
   
-## Step 2. LME-scale calibration: `runLMEcalibration.RDS`  
-- this script estimates fishing mortality parameters (catchability and selectivities for each functional group)  
-- need to check and adjust search volume parameter  
-- creates `CalibrationPlots.pdf`, use this to visually inspect fits to catch data  
+## Step 2. LME-scale calibration  
+- Script [`02_runLMEcalibration.R`](https://github.com/Benthic-Pelagic-Size-Spectrum-Model/lme_scale_calibration_ISMIP3a/blob/main/02_runLMEcalibration.R) estimates fishing mortality parameters (catchability and selectivities for each functional group)    
+- Checks and adjusts search volume parameter  
+- Creates and saves calibration plots as in PDF format  
+- Plots can be used to visually inspect fit of predicted catch to observed catch data  
   
-Step 2. For each LME run model with and without fishing  
-- Initial tests carried out with LME 14  
-- Takes parameter estimates from Step 1 to create initial values by re-running the LME scale inputs  
-- Get inputs for `gridded_sizemodel()` and runs for LME  
-- Produces diagnostic plots for each LME
-
+## Step 3. Running DBPM model (with and without fishing)
+- Script [`03_rungridbyLME.R
+`](https://github.com/Benthic-Pelagic-Size-Spectrum-Model/lme_scale_calibration_ISMIP3a/blob/main/03_rungridbyLME.R) takes parameters estimated in **step 2** to create initial values by re-running the LME scale inputs  
+- Gets inputs for `gridded_sizemodel()` and runs for LME  
+- Produces diagnostic plots for each LME  
 
 # Running this repository
 Although you could run all scripts included here in your local machine, you will need access to the environmental data to run them. The environmental data comes from three sources:  
