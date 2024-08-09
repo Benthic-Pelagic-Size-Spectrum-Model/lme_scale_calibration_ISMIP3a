@@ -151,19 +151,6 @@ refined_best_params <- t(pbsapply(X = to_be_refined$region, LHSsearch,
                                   corr = F, figure_folder = NULL, 
                                   best_val_folder = f_out))
 
-# for(i in 1:nrow(to_be_refined)){
-#   result <- LHSsearch(LMEnum = to_be_refined$region[[i]], num_iter = 1000, 
-#                       search_vol = "estimated", forcing_file = forcing_file, 
-#                       gridded_forcing = NULL, 
-#                       fishing_effort_file = fishing_effort_file, corr = F, 
-#                       figure_folder = NULL, 
-#                       best_val_folder = "Output/optimised_fish_vals")
-#   
-#   #Print message 
-#   print(paste0("LHS refined search completed for LME #", 
-#                to_be_refined$region[[i]]))
-# }
-
 #Load all files with refined fishing parameters for under-performing regions
 refined_best_params <- list.files(f_out, full.names = T) |> 
   map(~fread(.)) |> 
