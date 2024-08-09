@@ -7,9 +7,8 @@
 # Date of update: 2024-08-06
 
 # Loading libraries
-# library(tidyverse)
 library(dplyr)
-library(readr)
+library(data.table)
 library(stringr)
 library(ggplot2)
 library(lubridate)
@@ -17,7 +16,7 @@ library(zoo)
 library(lhs)
 library(pbapply)
 library(patchwork)
-# library(parallel)
+library(parallel)
 # library(optimParallel)
 source("dbpm_model_functions.R")
 # library(gridExtra)
@@ -47,14 +46,13 @@ get_lme_inputs <- function(forcing_file = NULL, gridded_forcing = NULL,
   # InputData/DBPM_lme_inputs/obsclim/025deg/catalog.html?dataset=
   # fishmip/ISIMIP3a/InputData/DBPM_lme_inputs/obsclim/025deg/
   # DBPM_LME_effort_catch_input.csv
-  lme_fish <- read_csv(fishing_effort_file) |> 
-    # subset data 
+  
+  lme_fish <- fread(fishing_effort_file) |> 
+    #Subset data for LME of interest
     filter(region == LMEnumber) |> 
-    # use relative effort - for each LME independently - PREFERRED
-    mutate(nom_active_relative = total_nom_active/max(total_nom_active, 
-                                                      na.rm = T),
+    mutate(nom_active_relative = total_nom_active/max(total_nom_active),
            nom_active_area_m2_relative = total_nom_active_area_m2/
-             max(total_nom_active_area_m2, na.rm = T))
+                           max(total_nom_active_area_m2))
   
   if(!is.null(forcing_file)){
     # Climate forcing inputs available via THREDDS:
@@ -62,10 +60,10 @@ get_lme_inputs <- function(forcing_file = NULL, gridded_forcing = NULL,
     # InputData/DBPM_lme_inputs/obsclim/025deg/catalog.html?dataset=
     # fishmip/ISIMIP3a/InputData/DBPM_lme_inputs/obsclim/025deg/
     # DBPM_LME_climate_inputs_slope.csv
-  
-    lme_clim <- read_csv(forcing_file) |> 
+    
+    lme_clim <- fread(forcing_file) |> 
       filter(region == LMEnumber)
-
+    
     if(yearly){
       # option 1: keep monthly time steps but monthly value is the yearly mean
       
@@ -102,7 +100,7 @@ get_lme_inputs <- function(forcing_file = NULL, gridded_forcing = NULL,
   else if(!is.null(gridded_forcing)){
     lme_clim <- list.files(gridded_forcing, 
                            paste0("LME_", LMEnumber, "_"), full.names = T) |> 
-      read_csv() |> 
+      fread() |> 
       #Extracting digits identifying region
       mutate(region = as.numeric(str_extract(region, "\\d{1,2}")))
    
@@ -198,7 +196,7 @@ run_model <- function(vals = X, input = lme_input, withinput = T){
                       tstepspryr = 12, search_vol = vals["search.vol"],
                       fmort.u = vals["f.u"], fminx.u = vals["f.minu"], 
                       fmort.v = vals["f.v"], fminx.v = vals["f.minv"], 
-                      depth = mean(input$depth, na.rm = F), er = input$er,
+                      depth = mean(input$depth), er = input$er,
                       pp = input$intercept, slope = input$slope, 
                       sst = input$sst, sft = input$sbt, use.init = FALSE,
                       effort = input$nom_active_area_m2_relative)
@@ -276,7 +274,7 @@ getError <- function(lhs_params = X, lme_forcings = lme_input,
   error_calc <- result |> 
     filter(year > 1949) |> 
     group_by(year) |> 
-    summarise(mean_total_catch_yr = mean(Totalcatch, na.rm = T),
+    summarise(mean_total_catch_yr = mean(Totalcatch),
               mean_obs_catch_yr = mean(catch_tonnes_area_m2, na.rm = T)) |> 
     #Converting units from tonnes to g
     mutate(mean_obs_catch_yr = mean_obs_catch_yr*1e6,
@@ -419,7 +417,7 @@ LHSsearch <- function(LMEnum = LME, num_iter = 1, search_vol = "estimated",
   
   # in pbapply setting cl = 6 calls mcapply to set up cluster 
   sim$rmse <- pbapply(sim, 1, getError, lme_forcings = lme_input, corr,
-                      figure_folder, cl = 6)
+                      figure_folder, cl = 12)
   
   # check this time param set with lowest error
   bestvals <- sim |> 
@@ -443,12 +441,42 @@ LHSsearch <- function(LMEnum = LME, num_iter = 1, search_vol = "estimated",
                              num_iter, ".csv"))
     #Save output
     bestvals |> 
-      write_csv(fout)
+      fwrite(fout)
   }
   
   return(bestvals)
 }
 
+
+# Correlation and calibration plots
+corr_calib_plots <- function(fishing_params, forcing_file, 
+                              fishing_effort_file, figure_folder = NULL){
+  #Inputs:
+  #fishing_params (named numeric vector) - Single column with named rows 
+  #containing LHS parameters
+  #forcing_file (character) - Full path to forcing file. This must be 
+  #non-gridded data
+  #fishing_effort_file (character) - Full path to fishing effort file
+  #figure_folder (character) - Optional. If provided, it must be the full path
+  #to the folder where figures comparing observed and predicted data will be 
+  #stored
+  #
+  #Output:
+  #corr_nas (data.frame) - Contains the correlation between predicted and
+  #observed values
+  
+  #Get forcing data
+  lme_input <- get_lme_inputs(forcing_file = forcing_file, 
+                              fishing_effort_file = fishing_effort_file, 
+                              LMEnumber = fishing_params["region"])
+  
+  #Calculate correlations with tuned fishing parameters and save plots
+  corr_nas <- getError(lhs_params = fishing_params, lme_forcings = lme_input, 
+                  corr = T, figure_folder)
+  
+  return(corr_nas)
+}
+  
 
 # Function to run model for each LME with gridded inputs, after 
 # run_LME_calibration
