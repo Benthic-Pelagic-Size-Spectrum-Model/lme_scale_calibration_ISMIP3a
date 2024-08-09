@@ -165,7 +165,7 @@ calc_inputs <- function(path_ctrl, path_obs){
                            paste0(str_extract(file_name_ctrl, 
                                               "_\\d{2}arcmin_"), ".*csv$"),
                            full.names = T) |> 
-    read_csv() |> 
+    fread() |> 
     #Rename columns
     rename("lon" = "x", "lat" = "y", "area_m2" = "cellareao")
   
@@ -354,7 +354,7 @@ gridded_inputs <- function(ctrl_files, obs_files){
                            paste0(str_extract(file_name_ctrl, 
                                               "_\\d{2}arcmin_"), ".*csv$"),
                            full.names = T) |> 
-    read_csv() |> 
+    fread() |> 
     #Rename columns
     rename("lon" = "x", "lat" = "y", "area_m2" = "cellareao")
   
@@ -783,4 +783,48 @@ calc_input_spinup_gridcell <- function(base_path, save_path){
   #save spin up
   spinup |> 
     fwrite(file_out)
+}
+
+
+# Calculating stable spinup -----------------------------------------------
+stable_spinup <- function(df, name_col){
+  # This function calculates input variables for a stable spinup between 1741 
+  # and 1840
+  #
+  # Inputs:
+  # df (data frame) - Contains input variables from 1841
+  # name_col (character) - Name of the variable for which to calculate spinup
+  #
+  # Outputs:
+  # df_out (data frame) - Contains the input variable original data plus the
+  # spinup period
+  
+  #Creating a 100 years stable spinup before 1841
+  dates <- seq(as.Date("1741-01-01"), as.Date("1840-12-01"), by = "month")
+  
+  #Select variables of interest
+  sub_df <- df |>
+    select(all_of(c("lat", "lon", "t", name_col))) |> 
+    rename("value" = name_col)
+  
+  #Calculate mean per grid cell for the first year
+  spinup <- sub_df |> 
+    filter(year(t) == min(year(t))) |> 
+    group_by(lat, lon) |> 
+    summarise(value = mean(value)) |> 
+    ungroup()
+  
+  #Repeat 1200 months (100 years)
+  df_out <- spinup |> 
+    slice(rep(1:n(), times = length(dates))) |> 
+    mutate(t = rep(dates, each = nrow(spinup))) |> 
+    #Add original data
+    bind_rows(sub_df) |> 
+    arrange(t, lat, lon) |> 
+    #Rearrnage data
+    pivot_wider(id_cols = lat:lon, names_from = t, values_from = value) |> 
+    selec(!lat:lon) |> 
+    data.matrix()
+  
+  return(df_out)
 }
