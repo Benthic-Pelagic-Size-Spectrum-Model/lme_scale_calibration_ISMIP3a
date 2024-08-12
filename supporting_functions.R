@@ -787,44 +787,124 @@ calc_input_spinup_gridcell <- function(base_path, save_path){
 
 
 # Calculating stable spinup -----------------------------------------------
-stable_spinup <- function(df, name_col){
+stable_spinup <- function(df, name_col, base_out = NULL){
   # This function calculates input variables for a stable spinup between 1741 
   # and 1840
   #
   # Inputs:
   # df (data frame) - Contains input variables from 1841
   # name_col (character) - Name of the variable for which to calculate spinup
+  # base_out (character) - Optional. If provided, the function does not return
+  # anything, but gridded data with stable spinup is saved using the path to
+  # the folder as a base for naming outputs
   #
   # Outputs:
   # df_out (data frame) - Contains the input variable original data plus the
   # spinup period
   
-  #Creating a 100 years stable spinup before 1841
-  dates <- seq(as.Date("1741-01-01"), as.Date("1840-12-01"), by = "month")
+  #If variable of interest is depth, simply return values for first time step
+  if(name_col == "depth"){
+    df_out <- df |> 
+      filter(t == min(t)) |> 
+      select(all_of(c("lat", "lon", "t", name_col))) |> 
+      pivot_wider(id_cols = lat:lon , names_from = t, 
+                  values_from = name_col) |> 
+      arrange(lat, lon)
+  }else{
+    #Creating a 100 years stable spinup before 1841
+    dates <- seq(as.Date("1741-01-01"), as.Date("1840-12-01"), by = "month")
+    
+    #Select variables of interest
+    sub_df <- df |>
+      select(all_of(c("lat", "lon", "t", name_col))) |> 
+      rename("value" = name_col) |> 
+      #Ensure date has date format
+      mutate(t = date(t))
+    
+    #Calculate mean per grid cell for the first year
+    spinup <- sub_df |> 
+      filter(year(t) == min(year(t))) |> 
+      group_by(lat, lon) |> 
+      summarise(value = mean(value)) |> 
+      ungroup()
+    
+    #Repeat 1200 months (100 years)
+    df_out <- spinup |> 
+      slice(rep(1:n(), times = length(dates))) |> 
+      mutate(t = rep(dates, each = nrow(spinup)), .before = value) |> 
+      #Add original data
+      bind_rows(sub_df) |> 
+      arrange(t, lat, lon) |> 
+      #Rearrange data
+      pivot_wider(id_cols = lat:lon, names_from = t, values_from = value)
+  }
   
-  #Select variables of interest
-  sub_df <- df |>
-    select(all_of(c("lat", "lon", "t", name_col))) |> 
-    rename("value" = name_col)
-  
-  #Calculate mean per grid cell for the first year
-  spinup <- sub_df |> 
-    filter(year(t) == min(year(t))) |> 
-    group_by(lat, lon) |> 
-    summarise(value = mean(value)) |> 
-    ungroup()
-  
-  #Repeat 1200 months (100 years)
-  df_out <- spinup |> 
-    slice(rep(1:n(), times = length(dates))) |> 
-    mutate(t = rep(dates, each = nrow(spinup))) |> 
-    #Add original data
-    bind_rows(sub_df) |> 
-    arrange(t, lat, lon) |> 
-    #Rearrnage data
-    pivot_wider(id_cols = lat:lon, names_from = t, values_from = value) |> 
-    selec(!lat:lon) |> 
-    data.matrix()
-  
-  return(df_out)
+  #If base_out is provided, save data
+  if(!is.null(base_out)){
+    if(!dir.exists(dirname(base_out))){
+      dir.create(dirname(base_out))
+    }
+    f_out <- str_replace(base_out, "all_inputs.csv", paste0(name_col, ".csv"))
+    df_out |> 
+      mutate(var_name = name_col, .after = "lon") |> 
+      fwrite(f_out)
+  }else{
+    #If base_out is not given, then return value
+    df_out <- df_out |> 
+      select(!lat:lon) |>
+      data.matrix()
+    return(df_out)
+  }
 }
+
+
+# Preparing gridded inputs ------------------------------------------------
+# This function get gridded input variables for the region of interest and 
+# calculates a stable spinup between 1741 and 1840 
+gridded_stable_spinup <- function(gridded_forcing, fishing_effort_file,
+                                  LMEnumber, yearly = F, file_out = NULL){
+  #Inputs:
+  #gridded_forcing (character) - Full path to folder containing gridded forcing
+  #files
+  #fishing_effort_file (character) - Full path to fishing effort file
+  #LMEnumber (numeric) - Unique ID identifying an LME
+  #yearly (boolean) - Default is FALSE. If set to TRUE, it will return yearly
+  #means for all forcing variables
+  #file_out (character) - Optional. If provided, the function does not return
+  #anything, but gridded data with stable spinup is returned.
+  #
+  #Output:
+  #If file_out is set to NULL:
+  #lme_clim (data frame) - Forcing data to be used in model calibration from
+  #1741 to 2010
+  #
+  #If file_out is not NULL:
+  #Nothing is returned, but lme_clim (data frame) is saved to file_out
+  
+  # get gridded inputs and run through all grid cells one timestep at a time
+  lme_inputs_grid <- get_lme_inputs(gridded_forcing = gridded_forcing, 
+                                    fishing_effort_file = fishing_effort_file, 
+                                    LMEnumber = LMEnumber, yearly = yearly,
+                                    file_out = file_out)
+  
+  # List of variables to be processed
+  vars_int <- c("sst", "sbt", "er", "intercept", "slope", "depth", 
+    "nom_active_area_m2_relative") 
+  
+  # Create base file path to be used to save variable
+  if(!is.null(file_out)){
+    base_out <- file.path(dirname(file_out), basename(gridded_forcing))
+    
+    gridded_spinup <- vars_int |> 
+      map(~stable_spinup(df, ., base_out))
+  }else{
+    #Otherwise return variables in a named list
+    gridded_spinup <- vars_int |> 
+      map(~stable_spinup(df, ., ))
+    
+    names(gridded_spinup) <- vars_int
+    
+    return(gridded_spinup) 
+  }
+}
+  
