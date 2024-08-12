@@ -27,7 +27,8 @@ source("dbpm_model_functions.R")
 # as spatially averaged means to estimate catchability (and if needed other
 # model parameters)
 get_lme_inputs <- function(forcing_file = NULL, gridded_forcing = NULL, 
-                           fishing_effort_file, LMEnumber, yearly = F){
+                           fishing_effort_file, LMEnumber, yearly = F,
+                           file_out = NULL){
   #Inputs:
   #forcing_file (character) - Full path to forcing file. This must be 
   #non-gridded data
@@ -37,6 +38,8 @@ get_lme_inputs <- function(forcing_file = NULL, gridded_forcing = NULL,
   #LMEnumber (numeric) - Unique ID identifying an LME
   #yearly (boolean) - Default is FALSE. If set to TRUE, it will return yearly
   #means for all forcing variables
+  #file_out (character) - Optional. If provided, the function does not return
+  #anything, but gridded data with stable spinup is returned.
   #
   #Output:
   #lme_clim (data frame) - Forcing data to be used in model calibration
@@ -167,6 +170,14 @@ get_lme_inputs <- function(forcing_file = NULL, gridded_forcing = NULL,
 
   #TO DO HERE: need to add a spin-up to these inputs prior to 1841 - 100 yrs 
   #at first value
+  if(!is.null(file_out)){
+    if(!dir.exists(dirname(file_out))){
+      dir.create(dirname(file_out))
+    }
+    lme_clim |> 
+      fwrite(file_out)
+  }
+  
   return(lme_clim)
 }
 
