@@ -14,6 +14,15 @@
 #' 
 #' 
 
+
+###############################################################################
+# Library of functions developed originally by Ryan/Julia/Cami in 2022-2023
+#
+# Functions were updated by Denisse Fierro Arcos 
+# Date of update: 2024-08-08
+
+
+
 #### set environment ----
 #LME in Southern Ocean is called Antarctica (ID merged 147) LME 61
 #From /rd/gem/private/fishmip_inputs/ISIMIP3a/fishmip_regions/FAO-LME_masks
@@ -27,7 +36,27 @@ source("LME_calibration.R")
 source("supporting_functions.R") 
 source("Plotting_functions_DBPM.R")
 
+
+
 LME_path <- "/g/data/vf71/fishmip_outputs/ISIMIP3a/DBPM/obsclim"
+
+
+# lme_inputs_grid <- get_lme_inputs(gridded_forcing = gridded_forcing, 
+#                                   fishing_effort_file = fishing_effort_file, 
+#                                   LMEnumber = LMEnumber, yearly = yearly)
+
+# get initial values from LME-scale results
+lme_input_init <- get_lme_inputs(forcing_file = forcing_file, 
+                                 fishing_effort_file = fishing_effort_file, 
+                                 LMEnumber = LMEnumber, 
+                                 file_out = PATH_TO_OUTPUT)
+
+#Gridded input data including stable spinup
+#LME_path needs to include the LME info !!!!!!!!!!!!!!!
+gridded_stable_spinup(gridded_forcing, fishing_effort_file, LMEnumber, 
+                      yearly = F, file_out = PATH_TO_OUTPUT) 
+
+
 #Fishing effort file location
 fishing_effort_file <- file.path("/g/data/vf71/fishmip_inputs/ISIMIP3a",
                                  "processed_forcings/lme_inputs/obsclim/025deg",
@@ -80,9 +109,7 @@ rungridbyLME <- function(LMEnumber, forcing_file, gridded_forcing,
   # as per values below. 
   
   # get initial values from LME-scale results
-  lme_input_init <- get_lme_inputs(forcing_file = forcing_file, 
-                                   fishing_effort_file = fishing_effort_file, 
-                                   LMEnumber = LMEnumber)
+  lme_input_init <- fread(PATH_TO_OUTPUT)
   
   # # run model using time-averaged inputs
   # WARNING - check: replace with fake best values that work
@@ -120,11 +147,26 @@ rungridbyLME <- function(LMEnumber, forcing_file, gridded_forcing,
   # get gridded inputs and run through all grid cells one timestep at a time
   # also need to check yearly = TRUE or comment it to avoid use - thus far not
   # used. 
-  lme_inputs_grid <- get_lme_inputs(gridded_forcing = gridded_forcing, 
-                                    fishing_effort_file = fishing_effort_file, 
-                                    LMEnumber = LMEnumber, yearly = yearly) |> 
-    select(c("lat", "lon", "region", "t", "sst", "sbt", "er", "intercept", 
-             "slope", "depth", "nom_active_area_m2_relative"))
+  
+  #Getting name of files to be used as gridded inputs
+  gridded_files_all <- list.files(LME_path_full, pattern = "clim_",
+                                   full.names = T) |> 
+    #Read files, but ignore coordinates
+    map(~fread(., drop = c("lat", "lon"))) |>
+    bind_rows() |> 
+    #Group by variable name
+    group_by(var_name)
+  
+  grid_inputs_stable <- gridded_files_all |> 
+    group_split(.keep = F) |> 
+    #Remove empty columns
+    map(~janitor::remove_empty(., "cols")) |> 
+    #Turn to data matrix
+    map(~data.matrix(.))
+  
+  #Add names to list elements
+  names(grid_inputs_stable) <- group_keys(gridded_files_all) |> 
+    pull(var_name)
   
   grid_results <- vector("list", nrow(lme_input_init))
   
@@ -160,26 +202,6 @@ rungridbyLME <- function(LMEnumber, forcing_file, gridded_forcing,
   #
   
   ###################### TEST GRIDDED MODEL
-  
-  depth_grid <- lme_inputs_grid |>
-    filter(t == min(t)) |> 
-    pivot_wider(id_cols = lat:lon, names_from = t, values_from = depth) |> 
-    select(!lat:lon) |> 
-    data.matrix()
-  
-  er_grid <- stable_spinup(lme_inputs_grid, name_col = "er")
-  
-  intercept_grid <- stable_spinup(lme_inputs_grid, name_col = "intercept")
-  
-  slope_grid <- stable_spinup(lme_inputs_grid, name_col = "slope")
-  
-  sst_grid <- stable_spinup(lme_inputs_grid, name_col = "sst")
-  
-  sbt_grid <- stable_spinup(lme_inputs_grid, name_col = "sbt")
-  
-  effort_grid <- stable_spinup(lme_inputs_grid, 
-                          name_col = "nom_active_area_m2_relative")
-  
   if(f.effort){
     f.u <- vals["f.u"]
     f.v <- vals["f.v"]
@@ -213,13 +235,15 @@ rungridbyLME <- function(LMEnumber, forcing_file, gridded_forcing,
                               tmax = tmax, tstepspryr = 12,
                               search_vol = vals["search.vol"], fmort.u = f.u,
                               fminx.u = f.minu, fmort.v = f.v, fminx.v = f.minv,
-                              depth = depth_grid, 
-                              er = er_grid, pp = intercept_grid, 
-                              slope = slope_grid, sst = sst_grid, 
-                              sft = sbt_grid, use.init = TRUE,
-                              effort = effort_grid, U.initial = U.initial,
-                              V.initial = V.initial, W.initial = W.initial,
-                              Ngrid = nrow(depth_grid))
+                              depth = grid_inputs_stable$depth, 
+                              er = grid_inputs_stable$er, 
+                              pp = grid_inputs_stable$intercept, 
+                              slope = grid_inputs_stable$slope, 
+                              sst = grid_inputs_stable$sst, 
+                              sft = grid_inputs_stable$sbt, use.init = TRUE,
+                              effort = grid_inputs_stable$nom_active_area_m2_relative, 
+                              U.initial = U.initial, V.initial = V.initial, 
+                              W.initial = W.initial, Ngrid = nrow(depth_grid))
   
   # run model  for full time period across all grid cells
   grid_results <- gridded_sizemodel(gridded_params, ERSEM.det.input = F,
@@ -252,7 +276,7 @@ rungridbyLME <- function(LMEnumber, forcing_file, gridded_forcing,
   fwrite(grid_results, file.path(LME_path_full, "grid_results.csv"))
   
   # save inputs and params object needed for plotting 
-  save(lme_input_init, lme_inputs_grid, gridded_params, 
+  save(gridded_params, 
        file = file.path(LME_path_full, "grid_results_inputs_params.RData"))
 }
 
