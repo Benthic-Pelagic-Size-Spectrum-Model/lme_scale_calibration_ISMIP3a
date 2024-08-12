@@ -566,14 +566,11 @@ stable_spinup <- function(df, name_col, base_out = NULL){
 # calculates a stable spinup between 1741 and 1840 
 gridded_stable_spinup <- function(meta, gridded_forcing, fishing_effort_file){
   #Inputs:
+  #meta (named numeric vector) - Single column with named rows containing 
+  #region ID and file paths to save outputs
   #gridded_forcing (character) - Full path to folder containing gridded forcing
   #files
   #fishing_effort_file (character) - Full path to fishing effort file
-  #LMEnumber (numeric) - Unique ID identifying an LME
-  #yearly (boolean) - Default is FALSE. If set to TRUE, it will return yearly
-  #means for all forcing variables
-  #file_out (character) - Optional. If provided, the function does not return
-  #anything, but gridded data with stable spinup is returned.
   #
   #Output:
   #If file_out is set to NULL:
