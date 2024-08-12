@@ -33,34 +33,18 @@ library(data.table)
 
 # also calls dbpm_model_functions.R
 source("LME_calibration.R") 
-source("supporting_functions.R") 
 source("Plotting_functions_DBPM.R")
 
 
-
+# Defining base variables -------------------------------------------------
+#Location of folder where outputs will be saved
 LME_path <- "/g/data/vf71/fishmip_outputs/ISIMIP3a/DBPM/obsclim"
-
-
-# lme_inputs_grid <- get_lme_inputs(gridded_forcing = gridded_forcing, 
-#                                   fishing_effort_file = fishing_effort_file, 
-#                                   LMEnumber = LMEnumber, yearly = yearly)
-
-# get initial values from LME-scale results
-lme_input_init <- get_lme_inputs(forcing_file = forcing_file, 
-                                 fishing_effort_file = fishing_effort_file, 
-                                 LMEnumber = LMEnumber, 
-                                 file_out = PATH_TO_OUTPUT)
-
-#Gridded input data including stable spinup
-#LME_path needs to include the LME info !!!!!!!!!!!!!!!
-gridded_stable_spinup(gridded_forcing, fishing_effort_file, LMEnumber, 
-                      yearly = F, file_out = PATH_TO_OUTPUT) 
-
 
 #Fishing effort file location
 fishing_effort_file <- file.path("/g/data/vf71/fishmip_inputs/ISIMIP3a",
                                  "processed_forcings/lme_inputs/obsclim/025deg",
                                  "DBPM_LME_effort_catch_input.csv")
+
 #Non-gridded data
 forcing_file <- file.path("/g/data/vf71/fishmip_inputs/ISIMIP3a",
                           "processed_forcings/lme_inputs/obsclim/025deg", 
@@ -70,6 +54,27 @@ forcing_file <- file.path("/g/data/vf71/fishmip_inputs/ISIMIP3a",
 gridded_forcing <- file.path("/g/data/vf71/fishmip_inputs/ISIMIP3a",
                              "processed_forcings/lme_inputs_gridcell/obsclim",
                              "025deg")
+
+#Data frame containing information to process input files
+meta <- data.frame(region = 1:66) |> 
+  mutate(base_out = file.path(LME_path, paste0("LME_", region, "_output")), 
+         grid = file.path(base_out, 
+                          "obsclim_historical_DBPM_LME_inputs_gridded.csv"), 
+         non_grid = file.path(base_out, 
+                              "obsclim_historical_DBPM_LME_inputs_non-gridded.csv"))
+
+
+# Saving forcing data to disk ---------------------------------------------
+bestvals_fit <- pbapply(meta, 1, gridded_stable_spinup, gridded_forcing, 
+                        fishing_effort_file, cl = (detectCores()-4))
+
+for(reg in meta$region){
+  # get initial values from LME-scale results
+  lme_input_init <- get_lme_inputs(forcing_file = forcing_file, 
+                                   fishing_effort_file = fishing_effort_file, 
+                                   LMEnumber = reg, 
+                                   file_out = meta$non_grid[reg])
+}
 
 # get the latest best values based on iterations and search_vol
 no_iter <- 100
@@ -86,17 +91,14 @@ LMEnumber <- vals |>
 
 #### run gridded model by LME ----
 #### MOVE TO FUNCTION CODE
-rungridbyLME <- function(LMEnumber, forcing_file, gridded_forcing, 
-                         fishing_effort_file, yearly = FALSE, f.effort = TRUE, 
-                         vals = vals){
-  
+rungridbyLME <- function(meta, f.effort = TRUE, vals = vals){
+  LMEnumber <- meta["region"]
   #Ensuring values are numeric
   if(!is.numeric(vals)){
     stop("Values provided in the 'vals' parameter must be numeric.")
   }
   
-  LME_path_full <- file.path(LME_path, paste0("LME_", LMEnumber, "_output"))
-  
+  LME_path_full <- meta["base_out"]
   if(!dir.exists(LME_path_full)){
     dir.create(LME_path_full)
   }
@@ -109,7 +111,7 @@ rungridbyLME <- function(LMEnumber, forcing_file, gridded_forcing,
   # as per values below. 
   
   # get initial values from LME-scale results
-  lme_input_init <- fread(PATH_TO_OUTPUT)
+  lme_input_init <- fread(meta["non_grid"])
   
   # # run model using time-averaged inputs
   # WARNING - check: replace with fake best values that work
@@ -151,13 +153,14 @@ rungridbyLME <- function(LMEnumber, forcing_file, gridded_forcing,
   #Getting name of files to be used as gridded inputs
   gridded_files_all <- list.files(LME_path_full, pattern = "clim_",
                                    full.names = T) |> 
+    str_subset("gridded.csv", negate = T) |> 
     #Read files, but ignore coordinates
     map(~fread(., drop = c("lat", "lon"))) |>
     bind_rows() |> 
     #Group by variable name
     group_by(var_name)
   
-  grid_inputs_stable <- gridded_files_all |> 
+  lme_inputs_grid <- gridded_files_all |> 
     group_split(.keep = F) |> 
     #Remove empty columns
     map(~janitor::remove_empty(., "cols")) |> 
@@ -165,7 +168,7 @@ rungridbyLME <- function(LMEnumber, forcing_file, gridded_forcing,
     map(~data.matrix(.))
   
   #Add names to list elements
-  names(grid_inputs_stable) <- group_keys(gridded_files_all) |> 
+  names(lme_inputs_grid) <- group_keys(gridded_files_all) |> 
     pull(var_name)
   
   grid_results <- vector("list", nrow(lme_input_init))
@@ -235,13 +238,13 @@ rungridbyLME <- function(LMEnumber, forcing_file, gridded_forcing,
                               tmax = tmax, tstepspryr = 12,
                               search_vol = vals["search.vol"], fmort.u = f.u,
                               fminx.u = f.minu, fmort.v = f.v, fminx.v = f.minv,
-                              depth = grid_inputs_stable$depth, 
-                              er = grid_inputs_stable$er, 
-                              pp = grid_inputs_stable$intercept, 
-                              slope = grid_inputs_stable$slope, 
-                              sst = grid_inputs_stable$sst, 
-                              sft = grid_inputs_stable$sbt, use.init = TRUE,
-                              effort = grid_inputs_stable$nom_active_area_m2_relative, 
+                              depth = lme_inputs_grid$depth, 
+                              er = lme_inputs_grid$er, 
+                              pp = lme_inputs_grid$intercept, 
+                              slope = lme_inputs_grid$slope, 
+                              sst = lme_inputs_grid$sst, 
+                              sft = lme_inputs_grid$sbt, use.init = TRUE,
+                              effort = lme_inputs_grid$nom_active_area_m2_relative, 
                               U.initial = U.initial, V.initial = V.initial, 
                               W.initial = W.initial, Ngrid = nrow(depth_grid))
   
