@@ -100,10 +100,12 @@ bestvals_fit <- bestvals_fit |>
   relocate(c(region, cor, catchNA), .after = rmse)
 
 #Saving results
+out_file <- file.path(figure_folder, 
+                      paste0("best-fishing-parameters_LMEs_searchvol_", 
+                             search_vol, "_numb-iter_", no_iter, ".csv"))
+
 bestvals_fit |> 
-  fwrite(file.path(figure_folder, 
-                   paste0("best-fishing-parameters_LMEs_searchvol_", 
-                          search_vol, "_numb-iter_", no_iter, ".csv")))
+  fwrite(out_file)
 
 
 #### TO DO: Check other model performance indicators using the above estimates
@@ -138,6 +140,8 @@ bestvals_fit |>
 #   print(i)
 # }
 # toc()
+
+bestvals_fit <- fread(out_file)
 
 to_be_refined <- bestvals_fit |> 
   filter(cor < 0.5 | rmse > 0.5 | catchNA > 0)
