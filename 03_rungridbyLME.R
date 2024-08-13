@@ -1,18 +1,8 @@
-#' @title rungridbyLME
-#' @description run model across space and time using gridded inputs for each 
-#' LME
-#' @param LMEnumber The LME number you want to run
-#' @param yearly Correspond to the yearly argument in the get_lme_inputs 
-#' function 
-#' after initialisation. Default is FALSE
-#' @param f.effort Boolean value. If true, fisheries effort will be set using 
-#' bestvals_LME.rds. If false, fisheries effort is set to 0. Default is TRUE.
 #' @param search_vol Numeric value for the search volume. Default is .64.
 #' @param savePlots Boolean value. If true, plots related to the selected LME 
 #' will
 #' be saved in the same folder as the grid output. Default is TRUE.
-#' 
-#' 
+
 
 
 ###############################################################################
@@ -20,16 +10,18 @@
 #
 # Functions were updated by Denisse Fierro Arcos 
 # Date of update: 2024-08-08
+#
+###############################################################################
 
-
-
-#### set environment ----
+# Loading libraries
 #LME in Southern Ocean is called Antarctica (ID merged 147) LME 61
 #From /rd/gem/private/fishmip_inputs/ISIMIP3a/fishmip_regions/FAO-LME_masks
 
 # library(tictoc)
-library(tidyverse)
+library(dplyr)
+library(lubridate)
 library(data.table)
+library(pbapply)
 
 # also calls dbpm_model_functions.R
 source("LME_calibration.R") 
@@ -80,22 +72,35 @@ for(reg in meta$region){
 no_iter <- 100
 search_vol <- "estimated" 
 version <- "refined-fishing-parameters"
-vals <- file.path("Output", paste0(version, "_LMEs_searchvol_", search_vol, 
+f.effort <- file.path("Output", paste0(version, "_LMEs_searchvol_", search_vol, 
                                    "_numb-iter_", no_iter, ".csv")) |> 
   fread()
 
 # run only LMEs with a good correlation/error and all catches 
-LMEnumber <- vals |> 
+LMEnumber <- f.effort |> 
   filter(cor > 0.5 & rmse < 0.5 & catchNA == 0) |> 
   pull(region)
 
 #### run gridded model by LME ----
-#### MOVE TO FUNCTION CODE
-rungridbyLME <- function(meta, f.effort = TRUE, vals = vals){
+#Run model across space and time using gridded inputs for each LME
+calc_grid_params <- function(meta, f.effort = NULL){
+  #Inputs:
+  #meta (named character vector) - Single column with named rows: region 
+  #(unique ID for LME), base_out (path to folder where outputs will be saved),
+  #grid (full file path including filename to be used to save gridded inputs),
+  #non_grid (full file path including filename to be used to save non-gridded 
+  #inputs)
+  #f.effort (named numeric vector) - Optional. If inputs are provided, fisheries
+  #effort will be set using bestvals_LME. Otherwise, fisheries effort is set 
+  #to 0.
+  #
+  #Output:
+  #???? (????) - ????
+  
   LMEnumber <- meta["region"]
   #Ensuring values are numeric
-  if(!is.numeric(vals)){
-    stop("Values provided in the 'vals' parameter must be numeric.")
+  if(!is.numeric(f.effort)){
+    stop("Values provided in the 'f.effort' parameter must be numeric.")
   }
   
   LME_path_full <- meta["base_out"]
@@ -122,7 +127,7 @@ rungridbyLME <- function(meta, f.effort = TRUE, vals = vals){
   ## OR ### CHECK VERSION ABOVE IS THE SAME # moved outside function
   # vals <- data.frame(readRDS("Output/bestvals_LMEs_iter_10.RDS")) 
   
-  initial_results <- run_model(vals = unlist(vals[LMEnumber, ]),
+  initial_results <- run_model(vals = unlist(f.effort[LMEnumber, ]),
                                input = lme_input_init, withinput = F)
   
   U.initial <- rowMeans(initial_results$U[, 240:1440])
@@ -151,25 +156,7 @@ rungridbyLME <- function(meta, f.effort = TRUE, vals = vals){
   # used. 
   
   #Getting name of files to be used as gridded inputs
-  gridded_files_all <- list.files(LME_path_full, pattern = "clim_",
-                                   full.names = T) |> 
-    str_subset("gridded.csv", negate = T) |> 
-    #Read files, but ignore coordinates
-    map(~fread(., drop = c("lat", "lon"))) |>
-    bind_rows() |> 
-    #Group by variable name
-    group_by(var_name)
-  
-  lme_inputs_grid <- gridded_files_all |> 
-    group_split(.keep = F) |> 
-    #Remove empty columns
-    map(~janitor::remove_empty(., "cols")) |> 
-    #Turn to data matrix
-    map(~data.matrix(.))
-  
-  #Add names to list elements
-  names(lme_inputs_grid) <- group_keys(gridded_files_all) |> 
-    pull(var_name)
+  gridded_files_all <- merging_gridded_inputs(LME_path_full) 
   
   grid_results <- vector("list", nrow(lme_input_init))
   
@@ -205,11 +192,11 @@ rungridbyLME <- function(meta, f.effort = TRUE, vals = vals){
   #
   
   ###################### TEST GRIDDED MODEL
-  if(f.effort){
-    f.u <- vals["f.u"]
-    f.v <- vals["f.v"]
-    f.minu <- vals["f.minu"]
-    f.minv <- vals["f.minv"]
+  if(!is.null(f.effort)){
+    f.u <- f.effort["f.u"]
+    f.v <- f.effort["f.v"]
+    f.minu <- f.effort["f.minu"]
+    f.minv <- f.effort["f.minv"]
   }else{ 
     f.u <- f.v <- f.minu <- f.minv <- 0 
   }
@@ -236,9 +223,9 @@ rungridbyLME <- function(meta, f.effort = TRUE, vals = vals){
   gridded_params <- sizeparam(equilibrium = FALSE, dx = 0.1, 
                               xmin.consumer.u = -3, xmin.consumer.v = -3,
                               tmax = tmax, tstepspryr = 12,
-                              search_vol = vals["search.vol"], fmort.u = f.u,
-                              fminx.u = f.minu, fmort.v = f.v, fminx.v = f.minv,
-                              depth = lme_inputs_grid$depth, 
+                              search_vol = f.effort["search.vol"], 
+                              fmort.u = f.u, fminx.u = f.minu, fmort.v = f.v, 
+                              fminx.v = f.minv, depth = lme_inputs_grid$depth, 
                               er = lme_inputs_grid$er, 
                               pp = lme_inputs_grid$intercept, 
                               slope = lme_inputs_grid$slope, 
@@ -247,6 +234,16 @@ rungridbyLME <- function(meta, f.effort = TRUE, vals = vals){
                               effort = lme_inputs_grid$nom_active_area_m2_relative, 
                               U.initial = U.initial, V.initial = V.initial, 
                               W.initial = W.initial, Ngrid = nrow(depth_grid))
+  
+  # save inputs and params object needed for plotting 
+  save(gridded_params, 
+       file = file.path(LME_path_full, 
+                        paste0("grid_inputs_params_LME_", LMEnumber, ".RData")))
+}
+  
+
+rungridbyLME <- function(gridded_params){
+  
   
   # run model  for full time period across all grid cells
   grid_results <- gridded_sizemodel(gridded_params, ERSEM.det.input = F,
@@ -276,11 +273,7 @@ rungridbyLME <- function(meta, f.effort = TRUE, vals = vals){
   # gridded_params$Neq <- 2040
   
   # save results from run
-  fwrite(grid_results, file.path(LME_path_full, "grid_results.csv"))
-  
-  # save inputs and params object needed for plotting 
-  save(gridded_params, 
-       file = file.path(LME_path_full, "grid_results_inputs_params.RData"))
+  fwrite(grid_results, file.path(LME_path_full, "gridded_model_results.csv"))
 }
 
 
@@ -307,10 +300,9 @@ for(i in 1:length(LMEnumber)){
   i = 42 # 41 is LME 61 considering the selection above
   print(paste0("Now working on LME", LMEnumber[i]))
 
-  rungridbyLME(LMEnumber = LMEnumber[i],
+  calc_grid_params(LMEnumber = LMEnumber[i],
                yearly = FALSE, # for get_lme_inputs()
-               f.effort = TRUE, # for rungridbyLME()
-               vals = vals)
+               f.effort = f.effort) # for rungridbyLME()
 }
 
 toc()
