@@ -23,13 +23,12 @@ source("dbpm_model_functions.R")
 # library(gridExtra)
 
 
-# This function reads in LME-scale time-series inputs (climate and fishing) 
-# pre-processed 
-# as spatially averaged means to estimate catchability (and if needed other
-# model parameters)
+# Reading LME-scale time-series inputs (climate and fishing) -----
 get_lme_inputs <- function(forcing_file = NULL, gridded_forcing = NULL, 
                            fishing_effort_file, LMEnumber, yearly = F,
                            file_out = NULL){
+  #This function reads pre-processed inputs as spatially averaged means to 
+  #estimate catchability (and if needed other model parameters)
   #Inputs:
   #forcing_file (character) - Full path to forcing file. This must be 
   #non-gridded data
@@ -183,7 +182,7 @@ get_lme_inputs <- function(forcing_file = NULL, gridded_forcing = NULL,
 }
 
 
-# Function to run model
+# Running model with time series ----
 run_model <- function(vals = X, input = lme_input, withinput = T){
   #Inputs:
   #vals (named numeric vector) - Single column with named rows containing LHS
@@ -262,7 +261,7 @@ run_model <- function(vals = X, input = lme_input, withinput = T){
 }
 
 
-# Error function
+# Comparing observed and predicted fish biomass ----
 getError <- function(lhs_params = X, lme_forcings = lme_input, 
                      corr = F, figure_folder = NULL){
   #Inputs:
@@ -360,8 +359,7 @@ getError <- function(lhs_params = X, lme_forcings = lme_input,
 }
 
 
-######## Carry out LHS param search
-# now could try again with lhs instead of the regular grid of parameters
+# Tuning LHS parameters -----
 LHSsearch <- function(LMEnum = LME, num_iter = 1, search_vol = "estimated",
                       forcing_file = NULL, gridded_forcing = NULL, 
                       fishing_effort_file, corr = F, figure_folder = NULL,
@@ -460,7 +458,7 @@ LHSsearch <- function(LMEnum = LME, num_iter = 1, search_vol = "estimated",
 }
 
 
-# Correlation and calibration plots
+# Correlation and calibration plots ----
 corr_calib_plots <- function(fishing_params, forcing_file, 
                               fishing_effort_file, figure_folder = NULL){
   #Inputs:
@@ -641,8 +639,7 @@ merging_gridded_inputs <- function(LME_path_full){
 }
 
 
-# Function to run model for each LME with gridded inputs, after 
-# run_LME_calibration
+# Running model with gridded inputs ----
 run_model_timestep <- function(input = lme_inputs_igrid, 
                                vals = unlist(bestvals_LMEs[14, ]), U.initial,
                                V.initial, W.initial){
@@ -687,7 +684,7 @@ run_model_timestep <- function(input = lme_inputs_igrid,
   }
 
 
-### this needs to be faster or maybe just part of outputs of gridded_sizemodel
+# this needs to be faster or maybe just part of outputs of gridded_sizemodel
 getGriddedOutputs <- function(input = lme_inputs_grid, results = grid_results,
                               params = params){
   # returns all outputs of the model 
@@ -732,7 +729,7 @@ getGriddedOutputs <- function(input = lme_inputs_grid, results = grid_results,
   return(input)
 }
   
-### fastOptim to set up and run optimisations in parallel
+# Set up and run optimisations in parallel ----
 fastOptim <- function(LMEnum, vary, fishing_effort_file, forcing_file = NULL, 
                       gridded_forcing = NULL, errorFun = getError, ...,
                       spareCores = 1, libraries = c("optimParallel")){
