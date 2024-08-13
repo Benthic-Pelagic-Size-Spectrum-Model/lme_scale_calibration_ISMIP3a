@@ -2,6 +2,10 @@
 # CN 20/08/2023 - create a plotting file for DBPM based on plots prepared by 
 # Romain Forestier and JB
 library(rnaturalearth)
+library(ggplot2)
+library(dplyr)
+library(melt)
+source("LME_calibration.R")
 
 plotgridbyLME <- function(LMEnumber){
   
