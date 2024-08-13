@@ -16,6 +16,7 @@ library(zoo)
 library(lhs)
 library(pbapply)
 library(patchwork)
+library(janitor)
 library(parallel)
 # library(optimParallel)
 source("dbpm_model_functions.R")
@@ -606,6 +607,40 @@ gridded_stable_spinup <- function(meta, gridded_forcing, fishing_effort_file){
 }
 
 
+# Merging gridded input ---------------------------------------------------
+merging_gridded_inputs <- function(LME_path_full){
+  #Inputs:
+  #LME_path_full (character) - Full path to folder containing gridded data
+  #
+  #Output:
+  #lme_inputs_grid (list) - Gridded forcing data to be used in model with named
+  #items identifying the input variables contained in each list item
+    
+  #Getting name of files to be used as gridded inputs
+  gridded_files_all <- list.files(LME_path_full, pattern = "clim_",
+                                  full.names = T) |> 
+    str_subset("gridded.csv", negate = T) |> 
+    #Read files, but ignore coordinates
+    map(~fread(., drop = c("lat", "lon"))) |>
+    bind_rows() |> 
+    #Group by variable name
+    group_by(var_name)
+  
+  lme_inputs_grid <- gridded_files_all |> 
+    group_split(.keep = F) |> 
+    #Remove empty columns
+    map(~remove_empty(., "cols")) |> 
+    #Turn to data matrix
+    map(~data.matrix(.))
+  
+  #Add names to list elements
+  names(lme_inputs_grid) <- group_keys(gridded_files_all) |> 
+    pull(var_name)
+  
+  return(lme_inputs_grid)
+}
+
+
 # Function to run model for each LME with gridded inputs, after 
 # run_LME_calibration
 run_model_timestep <- function(input = lme_inputs_igrid, 
@@ -626,7 +661,6 @@ run_model_timestep <- function(input = lme_inputs_igrid,
                       W.initial = W.initial)
   
   # run model for 1 timestep
-  
   results <- sizemodel(params, use.init = T, ERSEM.det.input = F) 
   
   # input$TotalUbiomass <- apply(result_set$U[params$ref:params$Nx,]*
