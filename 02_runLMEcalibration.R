@@ -40,48 +40,9 @@ file_out <- file.path("Output",
                       paste0("best-fishing-parameters_LMEs_searchvol_", 
                              search_vol, "_numb-iter_", no_iter, ".csv"))
 
-#Stacking files before saving
-bestvals <- list.files("Output/best_fish_vals", full.names = T) |> 
-  map(~fread(.)) |> 
-  map_df(~bind_rows(.)) |> 
-  arrange(region)
-  
-#Saving data frame
-fwrite(bestvals, file_out)
-
-# WARNINGS: 
-# 2. some LME (e.g. LME 4) do not run because the model called by LHSsearch 
-# does not produce biomass 
-# increase to 64 # even worst 
-# decrease to 0.064 # now we have biomass!
-
-# 3. catches are always too small compared to observed data 
-# F.mort estimated in LHSsearch can only go to 1, 
-# so increase effort in get_lme_inputs() by 
-# using relative effort (effort_m2/max(effort_m2), with the highest value 
-# being 1)  
-# relative effort for each LME - not working well if search_vol = 0.064 as 
-# catches remain low  
-# doing this also means that effort is equal across LMEs (from 1 to close to 0
-# in each LME)
-# relative effort across LMEs - same as above and do not use (Julia)   
-
-# now try increasing search_vol again to 0.64
-# relative effort for each LME - not working as well as the above
-# relative effort across LMEs - working well (best option) but LME 4 and others 
-# not working again. 
-
-# now estimating search vol + relative effort for each LME + iter = 100 (but 
-# will need to increase to 1000 at least)
-
 
 ### Creating plots with best values for fishing parameters -------------
-#Calculate errors and correlations with tuned fishing parameters and save
-#plots
-
-#### Check other model performance indicators using the above estimates
-#bestvals<-data.frame(readRDS("bestvals_LMEs.RDS")) # these bestvalues don't 
-#give the CalibrationPlot 
+#Calculate errors and correlations with tuned fishing parameters and save plots
 
 #Load best fishing parameters
 bestvals <- fread(file_out)
@@ -108,39 +69,8 @@ bestvals_fit |>
   fwrite(out_file)
 
 
-#### TO DO: Check other model performance indicators using the above estimates
 
-# mean total consumer biomass density
-# biomass vs sst relationship
-# biomass vs phyto (+ zoo) biomass relationship
-# slope and intercept of size spectrum
-# P:B ratio
-# mean size and TL of catch
-# correlation with catch time series
-# correlation with relative biomass time series (and RAM Legacy)
-# OTHER : mse, rpi - hipsey et al metrics for total catch and for disaggregated
-# benthic ad pelagic catch
-
-# Use optimParallel to get better "bestvals" for LMES that do not have good 
-#enough fit to data
-
-# refine<-which(bestvals$cor<0.5|bestvals$rmse>0.5|bestvals$catchNA>0)
-# tic()
-# for (i in 1:dim(bestvals[refine,])[1]){
-#   vals<-unlist(bestvals[refine,][i,1:5])
-  # optim_result<-fastOptim(LMEnum=refine[i],vary=vals, 
-  #                         fishing_effort_file = fishing_effort_file, 
-  #                         forcing_file = forcing_file, gridded_forcing = NULL,
-  #                         errorFun = getError, corr = T, 
-  #                         figure_folder = NULL)
-
-
-#   bestvals[refine,][i,1:5]<-unlist(optim_result$par)[1:5]
-#   bestvals[refine,][i,6]<-unlist(optim_result$value)
-#   print(i)
-# }
-# toc()
-
+# Optimised underperforming regions ---------------------------------------
 bestvals_fit <- fread(out_file)
 
 to_be_refined <- bestvals_fit |> 
