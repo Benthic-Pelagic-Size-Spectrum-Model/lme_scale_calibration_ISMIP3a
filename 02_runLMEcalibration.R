@@ -47,7 +47,7 @@ bestvals <- list.files("Output/best_fish_vals", full.names = T) |>
   arrange(region)
   
 #Saving data frame
-fread(bestvals, file_out)
+fwrite(bestvals, file_out)
 
 # WARNINGS: 
 # 2. some LME (e.g. LME 4) do not run because the model called by LHSsearch 
@@ -158,19 +158,45 @@ refined_best_params <- t(pbsapply(X = to_be_refined$region, LHSsearch,
 #Load all files with refined fishing parameters for under-performing regions
 refined_best_params <- list.files(f_out, full.names = T) |> 
   map(~fread(.)) |> 
-  map_df(~bind_rows(.)) 
+  map_df(~bind_rows(.)) |> 
+  arrange(region)
+
+#Figure folder
+figure_folder <- file.path(figure_folder, "optimised_underperforming_LMEs")
+
+refined_vals_fit <- pbapply(refined_best_params, 1, corr_calib_plots,
+                            forcing_file, fishing_effort_file, 
+                            figure_folder = figure_folder, 
+                            cl = (detectCores()-4))
+
+#Adding correlation to fishing parameter data frame
+refined_vals_fit <- refined_vals_fit |> 
+  bind_rows() |> 
+  right_join(refined_best_params, by = join_by(region)) |> 
+  relocate(c(region, cor, catchNA), .after = rmse)
+
+#Creating file name to save optimised parameters only
+f_out <- file.path(figure_folder, 
+                   paste0("optimised-fishing-parameters_LMEs_searchvol_", 
+                          search_vol, "_numb-iter_1000.csv"))
+
+#Saving optimised fishing parameters
+refined_vals_fit |> 
+  fwrite(f_out)
 
 #File path for file where parameters will be stored
 file_out <- file.path("Output", 
                       paste0("refined-fishing-parameters_LMEs_searchvol_", 
                              search_vol, "_numb-iter_", no_iter, "-1000.csv"))
 
-# then we need to put these together with the other "bestvals", and save 
-# results in a single file
-bestvals |> 
-  filter(cor > 0.5 | rmse < 0.5 | catchNA < 0) |> 
-  bind_rows(refined) |> 
+
+# Merging optimised parameters with the regions that did not need to be 
+# optimised from the "bestvals_fit" variable. Saving results in a single file
+bestvals_fit |> 
+  #Removing the regions that needed to be refined
+  filter(!(cor < 0.5 | rmse > 0.5 | catchNA > 0)) |> 
+  #Replacing with new refined values
+  bind_rows(refined_vals_fit) |> 
+  arrange(region) |> 
   fwrite(file_out)
-
-
 
