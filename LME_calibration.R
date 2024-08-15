@@ -8,14 +8,15 @@
 
 # Loading libraries
 library(dplyr)
+library(tidyr)
 library(data.table)
 library(stringr)
 library(ggplot2)
 library(lubridate)
 library(zoo)
 library(lhs)
-library(pbapply)
 library(patchwork)
+library(purrr)
 library(janitor)
 library(parallel)
 # library(optimParallel)
@@ -142,37 +143,10 @@ get_lme_inputs <- function(forcing_file = NULL, gridded_forcing = NULL,
       arrange(lat, lon)
   }
   
-  # Original comments from line 260
-  # View(lme_clim)
-  # convert fishing effort and catch per yr (divide values by 12)
-
-  # ##### WARNING not sure this is OK Check With Julia.
-  # # Catch and effort are yearly values and here repeated for each month. 
-  # # Climate inputs are gm2 values (no time dimension, so??) repeated each
-  # month.
-  # # also here done considering aggregated inputs and runs (gridded = F, 
-  # Yearly = F) so
-  # # need to consider the other options too
-  # lme_clim$NomActive<-lme_clim$NomActive/12
-  # lme_clim$NomActive_area_m2<-lme_clim$NomActive_area_m2/12
-  # lme_clim$catch_tonnes<-lme_clim$catch_tonnes/12
-  # lme_clim$catch_tonnes_area_m2<-lme_clim$catch_tonnes_area_m2/12
-
-  # try increasing effort as catches are too low - this works. 
-  # lme_clim$NomActive<-lme_clim$NomActive*1000
-  
-  # select(lme_clim, c(t, NomActive, NomActive_area_m2, NomActive_relative, 
-  # NomActive_area_m2_relative))
-  
-  # if (yearly!=T) {
-  #   # could use a smoother to get intrannual variation working better
-  # }
-
-  #TO DO HERE: need to add a spin-up to these inputs prior to 1841 - 100 yrs 
-  #at first value
+  #Add a spin-up to these inputs prior to 1841 - 100 yrs at first value
   if(!is.null(file_out)){
     if(!dir.exists(dirname(file_out))){
-      dir.create(dirname(file_out))
+      dir.create(dirname(file_out), recursive = T)
     }
     lme_clim |> 
       fwrite(file_out)
@@ -215,16 +189,6 @@ run_model <- function(vals = X, input = lme_input, withinput = T){
   # run model through time
   # TO DO IN SIZEMODEL CODE: make fishing function like one in model template
   result_set <- sizemodel(params) 
-  
-  # # CN CHECK 
-  # NAs for size classes >90
-  # dim(result_set$U)
-  # result_set$U[,2040]
-  # result_set$V[,10] # here is when it starts giving NAs
-  
-  # returns all outputs of the model 
-  # saveRDS(result_set,
-  #filename=paste("dbpm_calibration_LMEnumber_catchability.rds"))
   
   if(withinput){
     lims_ubio <- result_set$params$ref:result_set$params$Nx
@@ -420,14 +384,13 @@ LHSsearch <- function(LMEnum = LME, num_iter = 1, search_vol = "estimated",
                                 LMEnumber = LMEnum)
   }
   
-  # # check averaged and gridded inputs are the same in terms of effort 
-  # lme_input[,c(2,15,16)]
-  # lme_input_gridded<-get_lme_inputs(LMEnumber=LMEnum, gridded=T)
-  # lme_input_gridded[,c(4,16,17)]
-  
-  # in pbapply setting cl = 6 calls mcapply to set up cluster 
-  sim$rmse <- pbapply(sim, 1, getError, lme_forcings = lme_input, corr,
-                      figure_folder, cl = 12)
+  # parallelise using 75% of cores available using mclapply
+  no_cores <- round((detectCores()*.75), 0)
+  sim$rmse <- mclapply(1:nrow(sim), 
+                       FUN = function(i) getError(unlist(sim[i,]),
+                                                  lme_forcings = lme_input, 
+                                                  corr, figure_folder), 
+                       mc.cores = no_cores)
   
   # check this time param set with lowest error
   bestvals <- sim |> 
@@ -544,9 +507,10 @@ stable_spinup <- function(df, name_col, base_out = NULL){
   #If base_out is provided, save data
   if(!is.null(base_out)){
     if(!dir.exists(dirname(base_out))){
-      dir.create(dirname(base_out))
+      dir.create(dirname(base_out), recursive = T)
     }
-    f_out <- str_replace(base_out, ".csv", paste0(name_col, "_1741-2010.csv"))
+    f_out <- str_replace(base_out, ".csv", 
+                         paste0("_", name_col, "_1741-2010.csv"))
     df_out |> 
       mutate(var_name = name_col, .after = "lon") |> 
       fwrite(f_out)
@@ -592,11 +556,11 @@ gridded_stable_spinup <- function(meta, gridded_forcing, fishing_effort_file){
   # Create base file path to be used to save variable
   if(!is.na(meta["grid"])){
     gridded_spinup <- vars_int |> 
-      map(~stable_spinup(df, ., meta["grid"]))
+      map(~stable_spinup(lme_inputs_grid, ., meta["grid"]))
   }else{
     #Otherwise return variables in a named list
     gridded_spinup <- vars_int |> 
-      map(~stable_spinup(df, .))
+      map(~stable_spinup(lme_inputs_grid, .))
     
     names(gridded_spinup) <- vars_int
     
@@ -660,22 +624,10 @@ run_model_timestep <- function(input = lme_inputs_igrid,
   # run model for 1 timestep
   results <- sizemodel(params, use.init = T, ERSEM.det.input = F) 
   
-  # input$TotalUbiomass <- apply(result_set$U[params$ref:params$Nx,]*
-  #params$dx*10^params$x[params$ref:params$Nx],2,sum)*min(params$depth,100)
-  # input$TotalVbiomass <- apply(result_set$V[params$ref.det:params$Nx,]*
-  #params$dx*10^params$x[params$ref.det:params$Nx],2,sum)*min(params$depth,100)
-  # input$TotalW <- result_set$W[]*min(params$depth,100)
-  # 
   #sum catches (currently in grams per m3 per year, across size classes) 
   # keep as grams per m2, then be sure to convert observed from tonnes per m2 
   # per year to g.^-m2.^-yr (for each month)
   
-  # input$TotalUcatch <- apply(result_set$Y.u[,]*params$dx,2,sum)*
-  #min(params$depth,100)
-  # input$TotalVcatch <- apply(result_set$Y.v[,]*params$dx,2,sum)*
-  #min(params$depth,100)
-  # input$Totalcatch <- input$TotalUcatch +   input$TotalVcatch
-  # 
   return(cbind(U = results$U[, 2], V = results$V[, 2], Y.u = results$Y.u[, 2],
                Y.v = results$Y.v[, 2], GG.u = results$GG.u[, 1],
                GG.v = results$GG.v[, 1], PM.u = results$PM.u[, 1],
@@ -688,14 +640,9 @@ run_model_timestep <- function(input = lme_inputs_igrid,
 getGriddedOutputs <- function(input = lme_inputs_grid, results = grid_results,
                               params = params){
   # returns all outputs of the model 
-  # saveRDS(result_set,filename=
-  #paste("dbpm_calibration_LMEnumber_catchability.rds"))
   input$TotalUbiomass <- input$TotalVbiomass <- input$TotalUcatch <-
     input$TotalVcatch<- input$Totalcatch <- NA
   cells <- unique(input$cell)
-  
-  # remove depth adjustment as run inn /m2 now
-  # depthadj<-ifelse(params$depth>100,100,params$depth)
   
   for(igrid in 1:length(cells)){
     input[input$cell == cells[igrid], ]$TotalUbiomass <- 
@@ -707,8 +654,6 @@ getGriddedOutputs <- function(input = lme_inputs_grid, results = grid_results,
       apply(results$V[igrid, params$ref:params$Nx, 2:(params$Neq+1)] * 
               params$dx*10^params$x[params$ref:params$Nx],
             2, sum, na.rm = T)#*depthadj[igrid]
-    
-    # input[input$t==time[itime]]$W <- results$W[,itime]*min(params$depth,100)
     
     #sum catches (currently in grams per m3 per year, across size classes) 
     #keep as grams per m2, then be sure to convert observed from tonnes per m2 
