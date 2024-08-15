@@ -1,14 +1,15 @@
 ###### Run LHS search for each LME to get best values for fishing parameters
 
-source("LME_calibration.R")
+
+# Loading libraries -------------------------------------------------------
 library(dplyr)
 library(pbapply)
 library(parallel)
 library(purrr)
 library(data.table)
+source("LME_calibration.R")
 
-# faster using pbsapply, in the LHSsearch pbapply has cl=12 which uses cluster 
-# to run in parallel, but here it is run sequentially if cl is not specified.
+# Defining basic variables ------------------------------------------------
 no_iter <- 100
 # other option is to specify a value for search_vol 
 search_vol <- "estimated" 
@@ -26,14 +27,18 @@ gridded_forcing <- file.path("/g/data/vf71/fishmip_inputs/ISIMIP3a",
                              "processed_forcings/lme_inputs_gridcell/obsclim",
                              "025deg")
 
-#Searching best values for fishing parameters for all LMEs
-lmes_best_params <- t(pbsapply(X = 1:66, LHSsearch, num_iter = no_iter, 
+
+
+# Searching best fishing parameters values for all LMEs -------------------
+# Faster using pbsapply, LHSsearch uses mclapply to run in parallel, but here 
+# it is run sequentially if cl is not specified.
+lmes_best_params <- pbsapply(X = 1:66, LHSsearch, num_iter = no_iter, 
                                search_vol = search_vol, 
                                forcing_file = forcing_file, 
                                gridded_forcing = NULL, 
                                fishing_effort_file = fishing_effort_file, 
                                corr = F, figure_folder = NULL, 
-                               best_val_folder = "Output/best_fish_vals"))
+                               best_val_folder = "Output/best_fish_vals")
 
 #File path for file where parameters will be stored
 file_out <- file.path("Output", 
@@ -41,7 +46,7 @@ file_out <- file.path("Output",
                              search_vol, "_numb-iter_", no_iter, ".csv"))
 
 
-### Creating plots with best values for fishing parameters -------------
+## Creating plots with best values for fishing parameters --------------
 #Calculate errors and correlations with tuned fishing parameters and save plots
 
 #Load best fishing parameters
@@ -69,21 +74,20 @@ bestvals_fit |>
   fwrite(out_file)
 
 
-
-# Optimised underperforming regions ---------------------------------------
+## Optimising underperforming regions --------------------------------------
 bestvals_fit <- fread(out_file)
 
 to_be_refined <- bestvals_fit |> 
   filter(cor < 0.5 | rmse > 0.5 | catchNA > 0)
 
 f_out <- "Output/best_fish_vals/optimised_underperforming_LMEs"
-refined_best_params <- t(pbsapply(X = to_be_refined$region, LHSsearch, 
+refined_best_params <- pbsapply(X = to_be_refined$region, LHSsearch, 
                                   num_iter = 1000, search_vol = "estimated", 
                                   forcing_file = forcing_file, 
                                   gridded_forcing = NULL, 
                                   fishing_effort_file = fishing_effort_file, 
                                   corr = F, figure_folder = NULL, 
-                                  best_val_folder = f_out))
+                                  best_val_folder = f_out)
 
 #Load all files with refined fishing parameters for under-performing regions
 refined_best_params <- list.files(f_out, full.names = T) |> 
@@ -120,6 +124,7 @@ file_out <- file.path("Output",
                              search_vol, "_numb-iter_", no_iter, "-1000.csv"))
 
 
+## Merging best fishing parameters for all LMEs ---------------------------
 # Merging optimised parameters with the regions that did not need to be 
 # optimised from the "bestvals_fit" variable. Saving results in a single file
 bestvals_fit |> 
