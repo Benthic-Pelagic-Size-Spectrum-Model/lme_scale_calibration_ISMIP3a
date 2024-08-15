@@ -194,7 +194,7 @@ run_model <- function(vals = X, input = lme_input, withinput = T){
     lims_ubio <- result_set$params$ref:result_set$params$Nx
     # JB:  changed inputs to m2 so no need to divide by depth here
     # added 1:params$Neq to same 2040 time steps instead of 2041
-    time_steps <- 1:params$Neq
+    time_steps <- 1:result_set$params$Neq
     
     input$TotalUbiomass <- apply(result_set$U[lims_ubio, time_steps] * 
                                    params$dx*10^params$x[lims_ubio], 
@@ -364,7 +364,6 @@ LHSsearch <- function(LMEnum = LME, num_iter = 1, search_vol = "estimated",
            f.minv = f.minv*2,
            # adjust range of search vol, others go from 0-1
            search.vol = search.vol+0.001)
-  # runif(n=iter, min=0.064, max=1.0))
   
   if(is.numeric(search_vol)){
     sim <- sim |> 
@@ -372,7 +371,6 @@ LHSsearch <- function(LMEnum = LME, num_iter = 1, search_vol = "estimated",
   }
   
   # use below to select a constant value for search.vol
-  # sim[,"search.vol"]<- 0.2
   if(!is.null(forcing_file)){
     lme_input <- get_lme_inputs(forcing_file = forcing_file, 
                                 fishing_effort_file = fishing_effort_file, 
@@ -580,27 +578,121 @@ merging_gridded_inputs <- function(LME_path_full){
   #items identifying the input variables contained in each list item
     
   #Getting name of files to be used as gridded inputs
-  gridded_files_all <- list.files(LME_path_full, pattern = "clim_",
-                                  full.names = T) |> 
-    str_subset("gridded.csv", negate = T) |> 
+  files_in <- list.files(LME_path_full, pattern = "clim_",
+                         full.names = T) |> 
+    str_subset("gridded.csv", negate = T) 
+  
+  gridded_files_no_depth <- str_subset(files_in, "depth", negate = T) |> 
     #Read files, but ignore coordinates
     map(~fread(., drop = c("lat", "lon"))) |>
     bind_rows() |> 
     #Group by variable name
     group_by(var_name)
   
-  lme_inputs_grid <- gridded_files_all |> 
+  lme_inputs_grid <- gridded_files_no_depth |> 
     group_split(.keep = F) |> 
-    #Remove empty columns
-    map(~remove_empty(., "cols")) |> 
     #Turn to data matrix
     map(~data.matrix(.))
   
   #Add names to list elements
-  names(lme_inputs_grid) <- group_keys(gridded_files_all) |> 
+  names(lme_inputs_grid) <- group_keys(gridded_files_no_depth) |> 
     pull(var_name)
   
+  lme_inputs_grid$depth <- str_subset(files_in, "depth") |> 
+    fread(drop = c("lat", "lon", "var_name")) |> 
+    data.matrix()
+  
   return(lme_inputs_grid)
+}
+
+
+
+# Calculating fishing parameters for gridded model ------------------------
+calc_grid_params <- function(meta, f.effort = NULL, start_cond = NULL){
+  #Inputs:
+  #meta (named character vector) - Single column with named rows: region 
+  #(unique ID for LME), base_out (path to folder where outputs will be saved),
+  #grid (full file path including filename to be used to save gridded inputs),
+  #non_grid (full file path including filename to be used to save non-gridded 
+  #inputs)
+  #f.effort (named numeric vector) - Optional. If inputs are provided, fisheries
+  #effort will be set using bestvals_LME. Otherwise, fisheries effort is set 
+  #to 0.
+  #start_cond (numeric vector) - Optional. Minimum and maximum years to be 
+  #used in calculating steady_state for the model.
+  #
+  #Output:
+  #This function does not return anything. Instead the output is saved in the 
+  #base folder provided in the meta parameter
+  
+  LMEnumber <- meta["region"]
+  #Ensuring values are numeric
+  if(!is.numeric(f.effort)){
+    stop("Values provided in the 'f.effort' parameter must be numeric.")
+  }
+  
+  LME_path_full <- meta["base_out"]
+  if(!dir.exists(LME_path_full)){
+    dir.create(LME_path_full)
+  }
+  
+  # get initial values from LME-scale results
+  lme_input_init <- fread(meta["non_grid"])
+  
+  #Run initial model with best parameters
+  initial_results <- run_model(vals = f.effort, input = lme_input_init, 
+                               withinput = F)
+  
+  #Calculate starting conditions
+  #Check if year range was given
+  if(!is.null(start_cond)){
+    ind <- which(lme_input_init$year >= min(start_cond) & 
+                   lme_input_init$year <= max(start_cond))
+  }else{
+    ind <- which(lme_input_init$year >= 1861 & lme_input_init$year <= 1960)
+  }
+  
+  #Add parameters for initial and end year to calculate starting conditions
+  U.initial <- rowMeans(initial_results$U[, ind])
+  V.initial <- rowMeans(initial_results$V[, ind])
+  W.initial <- mean(initial_results$W[ind])
+  
+  #Getting name of files to be used as gridded inputs
+  lme_inputs_grid <- merging_gridded_inputs(LME_path_full) 
+  
+  if(!is.null(f.effort)){
+    f.u <- f.effort["f.u"]
+    f.v <- f.effort["f.v"]
+    f.minu <- f.effort["f.minu"]
+    f.minv <- f.effort["f.minv"]
+  }else{ 
+    f.u <- f.v <- f.minu <- f.minv <- 0 
+  }
+  
+  #Get total number of years
+  tmax <- length(unique(year(ymd(colnames(lme_inputs_grid$er)))))
+  
+  # set up params for each month, across grid cells
+  gridded_params <- sizeparam(equilibrium = FALSE, dx = 0.1, 
+                              xmin.consumer.u = -3, xmin.consumer.v = -3,
+                              tmax = tmax, tstepspryr = 12,
+                              search_vol = f.effort["search.vol"], 
+                              fmort.u = f.u, fminx.u = f.minu, fmort.v = f.v, 
+                              fminx.v = f.minv, depth = lme_inputs_grid$depth, 
+                              er = lme_inputs_grid$er, 
+                              pp = lme_inputs_grid$intercept, 
+                              slope = lme_inputs_grid$slope, 
+                              sst = lme_inputs_grid$sst, 
+                              sft = lme_inputs_grid$sbt, use.init = TRUE,
+                              effort = lme_inputs_grid$nom_active_area_m2_relative, 
+                              U.initial = U.initial, V.initial = V.initial, 
+                              W.initial = W.initial, 
+                              Ngrid = nrow(lme_inputs_grid$depth))
+  
+  # save inputs and parameters object needed for plotting 
+  save(gridded_params, 
+       file = file.path(LME_path_full, 
+                        paste0("grid_inputs_params_LME_", LMEnumber, ".RData")))
 }
 
 
