@@ -390,7 +390,8 @@ LHSsearch <- function(LMEnum = LME, num_iter = 1, search_vol = "estimated",
                        FUN = function(i) getError(unlist(sim[i,]),
                                                   lme_forcings = lme_input, 
                                                   corr, figure_folder), 
-                       mc.cores = no_cores)
+                       mc.cores = no_cores) |> 
+    unlist()
   
   # check this time param set with lowest error
   bestvals <- sim |> 
