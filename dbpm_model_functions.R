@@ -1,6 +1,4 @@
-#--------------------------------------------------------------------------
 # Functions called within sizemodel()
-#--------------------------------------------------------------------------
 
 # Build a lookup table for diet preference ------
 # Looks at all combinations of predator and prey body size: diet preference 
@@ -27,7 +25,7 @@ gphi_f <- function(q1, q0, sd_q){
 
 # Build lookup tables for (constant) mortality ------
 mphi_f <- function(q2, q0, sd_q, alpha_u){
-  return(10^(alpha_u*q2)*phi_f(q2))
+  return(10^(alpha_u*q2)*phi_f(q2, q0, sd_q))
 }	
 
 # Build lookup table for components of 10^(alpha*x) ------
@@ -35,9 +33,9 @@ expax_f <- function(x, alpha_u){
   return(10^(alpha_u*x)) 
 }
 
-#Function to compute convolution products: can be for growth or mortality
-#depending on phi
-convolution.f <- function(phi, u) {
+# Compute convolution products ----
+# Can be for growth or mortality depending on phi
+convolution_f <- function(phi, x, u, dx) {
   res <- matrix(NA, length(x), 1)
   for(i in 1:length(res)){
     res[i] <- 0.0
@@ -46,42 +44,60 @@ convolution.f <- function(phi, u) {
   return(res)
 }
 
-#--------------------------------
-# Growth and Mortality Equations
-#--------------------------------
-
-#predators
-#death_u<-function(u,A,expax,mphi){return(pref.pel*A*expax*(convolution.f(mphi,u)))}
-#use faster matrix method instead of convolution loop function
-death_u <- function(u, A, expax, mphi){
-  return((pref.pel*A*expax)*(u*dx)%*%(mphi))
+# Growth and mortality equations ----
+## Predators ----
+# Use faster matrix method instead of convolution loop function
+death_u <- function(pref_pel, A, expax, u, dx, mphi){
+  return((pref_pel*A*expax)*(u*dx)%*%(mphi))
 } 
-#growth_u<-function(K0,K1,A,expax,gphi,u,v){return((pref.pel*K0*A*expax*(convolution.f(gphi,u)))+
-# (pref.ben*K1*A*expax*(convolution.f(gphi,v))))}
-growth_u <- function(K0, K1, A, expax, gphi, u, v){
-  return((pref.pel*K0*A*expax)*(u*dx)%*%(gphi) + 
-           (pref.ben*K1*A*expax)*(v*dx)%*%(gphi))
+
+growth_u <- function(pref_pel, K0, A, expax, u, dx, gphi, pref_ben, K1, v){
+  return((pref_pel*K0*A*expax)*(u*dx)%*%(gphi) + 
+           (pref_ben*K1*A*expax)*(v*dx)%*%(gphi))
 }
-#detritivores
-#death.v<-function(u,A,expax,mphi){return((pref.ben)*A*expax*(convolution.f(mphi,u)))}
-death_v <- function(u, A, expax, mphi){
-  return((pref.ben*A*expax)*(u*dx)%*%(mphi))
+
+## Detritivores ----
+death_v <- function(pref_ben, A, expax, u, dx, mphi){
+  return((pref_ben*A*expax)*(u*dx)%*%(mphi))
 }
-growth_v <- function(K1, A, w){
+
+growth_v <- function(x, K1, A, w){
   return((1/10^x)*(K1*A*10^(x*0.75)*w))
 }
-#detritus output (g.m-3.yr-1)
-out.w <- function(A, v, w){
+
+# detritus output (g.m-3.yr-1)
+out_w <- function(A, x, w, v, dx){
   return(sum((A*(10^(x*0.75))*w*v)*dx))}
 
+# Gravity model -----
+gravitymodel <- function(effort, prop_b, depth, iter){
+  # redistribute total effort across grid cells according to proportion of
+  # biomass in that grid cell using graivity model, Walters & Bonfil, 1999, 
+  # Gelchu & Pauly 2007 ideal free distribution - Blanchard et al 2008
+  # new_effort= prop_b*effort
+  
+  eff <- as.vector(effort)
+  d <- unlist(as.vector(depth))
+  
+  for(j in 1:iter){
+    suit <- prop_b*(1-d/max(d))
+    # rescale:
+    rel_suit <- suit/sum(suit)
+    neweffort <- eff+rel_suit*eff
+    mult <- sum(eff)/sum(neweffort)
+    #gradient drives individuals to best locations at equilibrium (assumed to 
+    #reached after 10000 iterations)
+    eff <- neweffort*mult
+  }
 
-
+  return(eff)
+}
 
 
 
 # Run model across grid cells, spreading out effort, uses 3D arrays ------
 gridded_sizemodel <- function(params, ERSEM.det.input = F, U_mat, V_mat, W_mat, 
-                              temp.effect = T, eps = 1e-5, 
+                              temp_effect = T, eps = 1e-5, 
                               output = "aggregated", use_init = F, burnin.len){
   
   # WARNING CN - commented for testing 
@@ -122,7 +138,7 @@ gridded_sizemodel <- function(params, ERSEM.det.input = F, U_mat, V_mat, W_mat,
     # Neq= params$Neq
     # q0 = params$q0
     # alpha_u = params$alpha.u
-    # sd_q = params$sd_q
+    # sd_q = params$sd.q
     # U_init = params$U.init
     # V_init = params$V.init
     # ref = params$ref
@@ -135,10 +151,15 @@ gridded_sizemodel <- function(params, ERSEM.det.input = F, U_mat, V_mat, W_mat,
     # # FISHING
     # Fmort_u = params$Fmort.u
     # effort = params$effort
+    # 
+    # effort[1:5,] <- effort[1:5,]+10
+    # effort[6:10,] <- effort[6:10,]+2
+    # effort[11:16,] <- effort[11:16,]+5
+    # 
     # Fmort_v = params$Fmort.v
     # Fref_v = params$Fref.v
     # Fref_u = params$Fref.u
-    #
+    # 
     # Nx = params$Nx
     # c1 = params$c1
     # E = params$E
@@ -147,29 +168,28 @@ gridded_sizemodel <- function(params, ERSEM.det.input = F, U_mat, V_mat, W_mat,
     # A_v = params$A.v
     # alpha_u = params$alpha.u
     # alpha_v = params$alpha.v
-    # pref.pel = params$pref.pel
-    # pref.ben = params$pref.ben
+    # pref_pel = params$pref.pel
+    # pref_ben = params$pref.ben
     # dx = params$dx
     # handling = params$handling
-    # repro.on = params$repro.on
-    # def.high = params$def.high
+    # repro_on = params$repro.on
+    # def_high = params$def.high
     # K_u = params$K.u
     # K_v = params$K.v
     # AM_u = params$AM.u
     # AM_v = params$AM.v
-    # def.low = params$def.low
-    # def.high = params$def.high
+    # def_low = params$def.low
     # depth = params$depth
-    # K.d = params$K.d
+    # K_d = params$K.d
     # K_u = params$K.u
     # K_v = params$K.v
-    # det.coupling = params$det.coupling
+    # det_coupling = params$det.coupling
     # delta_t = params$delta_t
     # idx = params$idx
 
     # gridded time series of intercept of plankton size spectrum (estimated 
     # from GCM, biogeophysical model output or satellite data).
-    ui0 <- 10^pp          
+    ui0 <- 10^pp
     # gridded time series of slope of plankton size spectrum (estimated from
     # GCM, biogeophysical model output or satellite data).
     r_plank <- r_plank   
@@ -195,7 +215,7 @@ gridded_sizemodel <- function(params, ERSEM.det.input = F, U_mat, V_mat, W_mat,
     
     #q2 is the reverse matrix holding the log(prey size/predator size) for all 
     #combinations of sizes
-    q2 <- matrix(-q1, length(x), length(y))	
+    q2 <- matrix(-q1, length(x), length(y))
     
     #matrix for recording the two size spectra 
     V <- U <- array(0, c(Ngrid, length(x), Neq+1))
@@ -222,7 +242,6 @@ gridded_sizemodel <- function(params, ERSEM.det.input = F, U_mat, V_mat, W_mat,
     #empty vector to hold fishing mortality rates at each size class at time
     Fvec_v <- Fvec_u <- array(0, c(Ngrid, length(x), Neq+1))
     
-    
     #lookup tables for terms in the integrals which remain constant over time
     gphi  <- gphi_f(q1, q0, sd_q)
     mphi  <- mphi_f(q2, q0, sd_q, alpha_u)
@@ -234,10 +253,9 @@ gridded_sizemodel <- function(params, ERSEM.det.input = F, U_mat, V_mat, W_mat,
     # Numerical integration -----------
     # set up with the initial values from param - same for all grid cells
     for (j in 1:Ngrid){
-      #(phyto+zoo)plankton size spectrum  
-      U[j, 1:(ref-1), 1] <- U_init[1:(ref-1)]
-      # set initial consumer size spectrum 
-      U[j, ref:120, 1] <- U_init[ref:120]           
+      #(phyto+zoo)plankton size spectrum (from 1:(ref-1))
+      # set initial consumer size spectrum  (from ref:120)
+      U[j, 1:120, 1] <- U_init[1:120]  
       # set initial detritivore spectrum  
       V[j, ref_det:120, 1] <- V_init[ref_det:120]  
       # set initial detritus biomass density (g.m^-3) 
@@ -247,10 +265,9 @@ gridded_sizemodel <- function(params, ERSEM.det.input = F, U_mat, V_mat, W_mat,
     if(use_init){
      for (j in 1:Ngrid){
        # set up with the initial values from previous run
-       #(phyto+zoo)plankton size spectrum 
-       U[j, 1:(ref-1), 1] <- U_init[1:(ref-1)]    
-       # set initial consumer size spectrum from previous run
-       U[j, ref:length(x), 1] <- U_init[ref:length(x)]
+       #(phyto+zoo)plankton size spectrum (from 1 to ref-1)
+       # set initial consumer size spectrum (from ref to length(x))
+       U[j, 1:length(x), 1] <- U_init[1:length(x)]
        # set initial detritivore spectrum from previous run
        V[j, ref_det:length(x), 1] <- V_init[ref_det:length(x)]  
        W[j, 1] <- W_init
@@ -258,265 +275,208 @@ gridded_sizemodel <- function(params, ERSEM.det.input = F, U_mat, V_mat, W_mat,
     }
     
     #intrinsic natural mortality
-    OM_u <- mu0*10^(-0.25*x)
-    OM_v <- mu0*10^(-0.25*x)
+    OM_v <- OM_u <- mu0*10^(-0.25*x)
     
     #senescence mortality rate to limit large fish from building up in the 
     #system. Same function as in Law et al 2008, with chosen parameters gives 
     #similar M2 values as in Hall et al. 2006
-    SM_u <- k_sm*10^(p_s*(x-xs))
-    SM_v <- k_sm*10^(p_s*(x-xs))
+    SM_v <- SM_u <- k_sm*10^(p_s*(x-xs))
     
     # Fishing mortality (THESE PARAMETERS NEED TO BE ESTIMATED!) ----
-    
     # from Benoit & Rochet 2004 
     #Fvec[Fref:Nx] = 0.09*(x[Fref:Nx]/ log10(exp(1)) ) + 0.04 
     
-    
     # here Fmort_u and Fmort_u= fixed catchability term for U and V to be 
     #estimated along with Fref_v and Fref_u
-    
     Fvec_u[, Fref_u:Nx, 1] <- Fmort_u*effort[,1]
     Fvec_v[, Fref_v:Nx, 1] <- Fmort_v*effort[,1]
     
     #output fisheries catches per yr at size
     catch_u <- Fvec_u[, Fref_u:Nx, 1]*U[, Fref_u:Nx, 1]
-    #Converting effort into matrix of same dimension as catch
-    eff_u <- matrix(rep(10^x[Fref_u:Nx], nrow(catch_u)), nrow = nrow(catch_u),
-                    ncol = length(Fref_u:Nx), byrow = T)
-    Y_u[, Fref_u:Nx, 1] <- catch_u*eff_u 
-    
+    Y_u[, Fref_u:Nx, 1] <- t(apply(catch_u, 1, function(i) i*10^x[Fref_u:Nx]))
     
     #output fisheries catches per yr at size
     catch_v <- Fvec_v[, Fref_v:Nx, 1]*V[, Fref_v:Nx, 1]
-    #Converting effort into matrix of same dimension as catch
-    eff_v <- matrix(rep(10^x[Fref_v:Nx], nrow(catch_v)), nrow = nrow(catch_v),
-                    ncol = length(Fref_v:Nx), byrow = T)
-    Y_v[, Fref_v:Nx, 1] <- catch_v*eff_v
+    Y_v[, Fref_v:Nx, 1] <- t(apply(catch_v, 1, function(i) i*10^x[Fref_v:Nx]))
     
-    
-    #iteration over time, N [days]
+    # Iteration over time, N [days] ----
     
     # Initial progress bar
     pb <- txtProgressBar(min = 0, max = Neq, initial = 1, style = 3) 
     
     # time
-    for (i in 1:(Neq)){ 
+    for(i in 1:(Neq)){ 
+      x_u <- 10^x[Fref_u:Nx]*dx
+      x_v <- 10^x[Fref_v:Nx]*dx
+      
       if (i < Neq){
         # get proportion of total fishable biomass for each grid cell
         #output rates of fisheries catches per yr at size
-        prop.b <- (apply(U[, Fref_u:Nx, i]*10^x[Fref_u:Nx]*dx, 1, sum) + 
-                     apply(V[, Fref_v:Nx, i]*10^x[Fref_v:Nx]*dx, 1, sum)) / 
-          sum(apply(U[, Fref_u:Nx, i]*10^x[Fref_u:Nx]*dx, 1, sum) + 
-                apply(V[, Fref_v:Nx, i]*10^x[Fref_v:Nx]*dx, 1, sum))
-        #check sums to 1
-        #sum(prop.b)
+        prop_bu <- rowSums(t(apply(U[, Fref_u:Nx, i], 1, function(j) j*x_u)))
+        prop_bv <- rowSums(t(apply(V[, Fref_v:Nx, i], 1, function(j) j*x_v)))
+      
+        #Proportion should add up to 1
+        prop_b <- (prop_bu+prop_bv)/sum(prop_bu+prop_bv)
+        #sum(prop_b)
         
-        # redistribute total effort across gridcells according to proportion of 
-        # biomass in that gridcell
-        effort[, i+1] <- gravitymodel(effort[, i+1], prop.b, depth = depth,
+        # redistribute total effort across grid cells according to proportion 
+        # of biomass in that grid cell
+        effort[, i+1] <- gravitymodel(effort[, i+1], prop_b, depth = depth,
                                       iter = 1)
         # for option 2 iter = 1
         
       } # end gravity model 
+      rm(prop_bu, prop_bv)
       
-      # grid cells
+      # Iteration over grid cells ----
       for(j in 1:(Ngrid)) { 
         # Update progress bar
         setTxtProgressBar(pb, i) 
       
-      # if(W[i]=="NaN"|W[i]<0)
-      # {
-      #   #browser()
-      #   U[,i]<-"NaN"
-      #   return(list(U=U[,],GG_u=GG_u[,],PM_u=PM_u[,],V=V[,],GG_v=GG_v[,],
-        #PM_v=PM_v[,],Y_u=Y_u[,],Y_v=Y_v[,],W=W[], params=params))
-      # }
-      
-      #  ONLY IF RUNNING TO EQUILIBRIUM:
-      #  below is to skip unecessary timesteps if model has reached equilibrium
-      # if(i>100 & equilibrium==T )
-      # {
-      #   # browser()
-      #   if(max(abs((log(U[-c(1:91),(i-1)]))-(log(U[-c(1:91),(i-2)]))))<eps
-      #      &max(abs((log(V[-c(1:91),(i-1)]))-(log(V[-c(1:91),(i-2)]))))<eps
-      #      &(abs((log(W[(i-1)]))-(log(W[(i-2)]))))<eps)
-      #   {
-      #     U[,Neq]<-U[,i-1]
-      #     PM_v[,Neq]<-PM_v[,i-1]
-      #     GG_v[,Neq]<-GG_v[,i-1]
-      #     V[,Neq]<-V[,i-1]
-      #     PM_u[,Neq]<-PM_u[,i-1]
-      #     GG_u[,Neq]<-GG_u[,i-1]
-      #     Y_u[,Neq]<-Y_u[,i-1]
-      #     Y_v[,Neq]<-Y_v[,i-1]
-      #     W[Neq]<-W[i-1]
-      #     return(list(U=U[,],GG_u=GG_u[,],PM_u=PM_u[,],V=V[,],GG_v=GG_v[,],
-        #PM_v=PM_v[,],Y_u=Y_u[,],Y_v=Y_v[,],W=W[], params=params))
-      #   }
-      # }
-      # 
-      
-        #--------------------------------
-        # Calculate Growth and Mortality
-        #--------------------------------
-        if(temp.effect == T){
-          pel.Tempeffect <- exp(c1 - E/(Boltzmann*(sst[j, i]+ 273)))
-          ben.Tempeffect <- exp(c1 - E/(Boltzmann*(sft[j, i]+ 273)))
+        ## Growth and mortality ----
+        
+        if(temp_effect){
+          pel_tempeffect <- exp(c1 - E/(Boltzmann*(sst[j, i]+ 273)))
+          ben_tempeffect <- exp(c1 - E/(Boltzmann*(sft[j, i]+ 273)))
         }            
-        
-        if(temp.effect == F){
-          pel.Tempeffect <- 1
-          ben.Tempeffect <- 1
+        if(!temp_effect){
+          pel_tempeffect <- 1
+          ben_tempeffect <- 1
         }
         
-        # feeding rates
+        # Feeding rates ----
         # yr-1
-        f.pel <- pel.Tempeffect * 
-          as.vector(((A_u*10^(x*alpha_u)*pref.pel[j])*(U[j,,i]*dx)%*%(gphi)) / 
-                      (1+handling*(A_u*10^(x*alpha_u)*pref.pel[j]) *
-                         (U[j, , i]*dx)%*%(gphi))) 
+        #Calculating term once to reduce computing needs
+        f_pel_term <- (A_u*10^(x*alpha_u)*pref_pel[j])*(U[j,,i]*dx)%*%(gphi)
+        f_pel <- pel_tempeffect*as.vector(f_pel_term/(1+handling*f_pel_term))
+        
         # yr-1
-        f.ben <- pel.Tempeffect * 
-          as.vector(((A_u*10^(x*alpha_u)*pref.ben[j])*(V[j,,i]*dx)%*%(gphi)) / 
-                      (1+handling*(A_u*10^(x*alpha_u)*pref.ben[j]) *
-                         (V[j, , i]*dx)%*%(gphi))) 
+        f_ben_term <- (A_u*10^(x*alpha_u)*pref_ben[j])*(V[j,,i]*dx)%*%(gphi)
+        f_ben <- pel_tempeffect*as.vector(f_ben_term/(1+handling*f_ben_term)) 
+        
         # yr-1 
-        f.det <- ben.Tempeffect * 
-          ((1/10^x)*A_v*10^(x*alpha_v)*W[j, i]) / 
-          (1+handling*(1/10^x)*A_v*10^(x*alpha_v)*W[j, i]) 
+        f_det_term <- (1/10^x)*A_v*10^(x*alpha_v)*W[j, i]
+        f_det <- ben_tempeffect*f_det_term/(1+handling*f_det_term) 
         
-        # Predator growth integral 
-        #yr-1
-        GG_u[j, , i] <- (1-def.high)*K_u*(f.pel)+(1-def.low)*K_v*(f.ben)
+        rm(f_ben_term, f_det_term)
         
-        # Reproduction
+        # Predator growth integral ----
         #yr-1
-        if(repro.on == 1){
-          R_u[j, , i] <- (1-def.high)*(1-(K_u+AM_u))*(f.pel) + 
-            (1-def.high)*(1-(K_v+AM_v))*f.ben
+        GG_u[j, ,i] <- (1-def_high)*K_u*(f_pel)+(1-def_low)*K_v*(f_ben)
+        
+        # Reproduction ----
+        #yr-1
+        if(repro_on == 1){
+          R_u[j, ,i] <- (1-def_high)*(1-(K_u+AM_u))*(f_pel) + 
+            (1-def_high)*(1-(K_v+AM_v))*f_ben
         }
       
-          
-        # Predator death integrals 
+        # Predator death integrals ----
         #Satiation level of predator for pelagic prey
-        sat.pel <- ifelse(f.pel > 0, f.pel / 
-                            ((A_u*10^(x*alpha_u)*pref.pel[j]) * 
-                               (U[j, , i]*dx)%*%(gphi)), 0)
+        sat_pel <- ifelse(f_pel > 0, (f_pel/f_pel_term), 0)
         
         #yr-1 
-        PM_u[j, , i] <- as.vector((pref.pel[j]*A_u*expax) * 
-                                    (U[j, , i]*sat.pel*dx)%*%(mphi))
+        PM_u[j, ,i] <- as.vector((pref_pel[j]*A_u*expax) * 
+                                    (U[j, ,i]*sat_pel*dx)%*%(mphi))
         
-        #yr-1 
-        #PM_u[,i]<-as.vector((1-f.pel)*(A_u*10^(x*alpha_u)*pref.pel)*(U[,i]*dx)%*%(mphi))
+        rm(f_pel_term)
       
-        #summing mortality terms - note no temperature effect on senescence 
-        #mortality
+        # Summing mortality terms ----
+        # note no temperature effect on senescence mortality
         #yr-1
-        Z_u[j, , i] <- PM_u[j, , i] + pel.Tempeffect*OM_u + SM_u + 
-          Fvec_u[j, , i]
+        Z_u[j, ,i] <- PM_u[j, ,i]+pel_tempeffect*OM_u+SM_u+Fvec_u[j, ,i]
         
-        # Benthos growth integral
+        # Benthos growth integral ----
         #yr-1
-        GG_v[j, , i] <- (1-def.low)*K.d*f.det
+        GG_v[j, ,i] <- (1-def_low)*K_d*f_det
         
-        #reproduction
+        # Reproduction ----
         #yr-1
-        if(repro.on == 1){
-          R_v[j, , i] <- (1-def.low)*(1-(K.d+AM_v))*(f.det)
+        if(repro_on == 1){
+          R_v[j, ,i] <- (1-def_low)*(1-(K_d+AM_v))*(f_det)
         }
       
-      # Benthos death integral
+      # Benthos death integral -----
       #Satiation level of predator for benthic prey  
-      sat.ben <- ifelse(f.ben > 0, 
-                        f.ben/((A_u*10^(x*alpha_v)*pref.ben[j]) * 
-                                 (V[j, , i]*dx)%*%(gphi)),
+      sat_ben <- ifelse(f_ben > 0, 
+                        f_ben/((A_u*10^(x*alpha_v)*pref_ben[j]) * 
+                                 (V[j, ,i]*dx)%*%(gphi)),
                         0)
       #yr-1
-      PM_v[j, , i] <- ifelse(sat.ben > 0,
-                             as.vector((pref.ben[j]*A_u*expax) * 
-                                         (U[j, , i]*sat.ben*dx)%*%(mphi)),
+      PM_v[j, ,i] <- ifelse(sat_ben > 0,
+                             as.vector((pref_ben[j]*A_u*expax) * 
+                                         (U[j, , i]*sat_ben*dx)%*%(mphi)),
                              0)
       
       #yr-1
-      #PM_v[,i]<-as.vector((1-f.ben)*(A_u*10^(x*alpha_u)*pref.ben)*(U[,i]*dx)%*%(mphi))
+      Z_v[j, ,i] <- PM_v[j, ,i]+ben_tempeffect*OM_v+SM_v+Fvec_v[j, ,i]
       
-      #yr-1
-      Z_v[j, , i] <- PM_v[j, , i]+ben.Tempeffect*OM_v+SM_v+Fvec_v[j, , i]
+      # Total biomass density eaten by pred (g.m-2.yr-1) ----
+      eatenbypred <- 10^x*f_pel*U[j, ,i]+10^x*f_ben*U[j, ,i] 
       
-      #total biomass density eaten by pred (g.m-2.yr-1)
-      eatenbypred <- 10^x*f.pel*U[j, , i]+10^x*f.ben*U[j, , i] 
-      
-      #detritus output (g.m-2.yr-1)
+      # Detritus output (g.m-2.yr-1) ----
       # losses from detritivore scavenging/filtering only:
-      output.w <- sum(10^x*f.det*V[j, , i]*dx)   
+      output_w <- sum(10^x*f_det*V[j, ,i]*dx)   
       
       #total biomass density defecated by pred (g.m-2.yr-1)
-      defbypred <- def.high*(f.pel)*10^x*U[j, , i] + 
-        def.low*(f.ben)*10^x*U[j, , i]
+      defbypred <- def_high*(f_pel)*10^x*U[j, ,i] + 
+        def_low*(f_ben)*10^x*U[j, ,i]
       
-      #------------------------------------------------
-      # Increment values of W,U & V	for next time step  
-      #------------------------------------------------
+      # Increment values of W,U & V	for next time step
       
-      #Detritus Biomass Density Pool - fluxes in and out (g.m-2.yr-1) of 
-      # detritus pool and solve for detritus biomass density in next time step 
+      # Detritus Biomass Density Pool ----
+      # Fluxes in and out (g.m-2.yr-1) of detritus pool and solve for detritus 
+      # biomass density in next time step 
       if(ERSEM.det.input == F){
         #considering pelagic faeces as input as well as dead bodies from both 
         #pelagic and benthic communities and phytodetritus (dying sinking 
         #phytoplankton)
-        if(det.coupling == 1.0){
+        det_coupling_v_multiplier <- V[j, 1:Nx, i]*10^(x[1:Nx])*dx
+        if(det_coupling == 1.0){
+          det_coupling_u_multiplier <- U[j, 1:Nx, i]*10^(x[1:Nx])*dx
           # pelagic spectrum inputs (sinking dead bodies and faeces) - export 
           # ratio used for "sinking rate"
           #  + benthic spectrum inputs (dead stuff - already on/in seafloor)
-          input.w <- (sinking_rate[j, i] * 
+          input_w <- (sinking_rate[j, i] * 
                         (sum(defbypred[ref:Nx]*dx) + 
-                           sum(pel.Tempeffect*OM_u[1:Nx]*U[j, 1:Nx, i] *
-                                 10^(x[1:Nx])*dx) + 
-                           sum(pel.Tempeffect*SM_u[1:Nx]*U[j, 1:Nx, i] * 
-                                 10^(x[1:Nx])*dx)) +
-                        (sum(ben.Tempeffect*OM_v[1:Nx]*V[j, 1:Nx, i] * 
-                               10^(x[1:Nx])*dx) + 
-                           sum(ben.Tempeffect*SM_v[1:Nx]*V[j, 1:Nx, i] * 
-                                 10^(x[1:Nx])*dx)))
-          # )
+                           sum(pel_tempeffect*OM_u[1:Nx] *
+                                 det_coupling_u_multiplier) + 
+                           sum(pel_tempeffect*SM_u[1:Nx] *
+                                 det_coupling_u_multiplier)) +
+                        (sum(ben_tempeffect*OM_v[1:Nx] *
+                               det_coupling_v_multiplier) + 
+                           sum(ben_tempeffect*SM_v[1:Nx] *
+                                 det_coupling_v_multiplier)))
+          rm(det_coupling_u_multiplier)
         }
         
-        if(det.coupling == 0.0){
-          input.w <- sum(ben.Tempeffect*OM_v[1:Nx]*V[j, 1:Nx, i] * 
-                           10^(x[1:Nx])*dx) + 
-            sum(ben.Tempeffect*SM_v[1:Nx]*V[j, 1:Nx, i]*10^(x[1:Nx])*dx)
+        if(det_coupling == 0.0){
+          input_w <- sum(ben_tempeffect*OM_v[1:Nx]*det_coupling_v_multiplier) + 
+            sum(ben_tempeffect*SM_v[1:Nx]*det_coupling_v_multiplier)
         }
+        
+        rm(det_coupling_v_multiplier)
         
         # get burial rate from Dunne et al. 2007 equation 3
-        burial <- input.w*(0.013+0.53*input.w^2/(7+input.w)^2)
+        burial <- input_w*(0.013+0.53*input_w^2/(7+input_w)^2)
         
-        # change in detritus biomass density (g.m-2.yr-1)                     
-        
-        # this one assumes immediate additional losses to sediment?
-        # dW<-input.w - (output.w + W[i])     
-        
-        # losses due to detritivory only:
-        # dW<-input.w - (output.w)     
-        
+        # Change in detritus biomass density (g.m-2.yr-1) ----
         # losses from detritivory + burial rate (not including remineralisation 
         # bc that goes to p.p. after sediment, we are using realised p.p. as 
         # inputs to the model) 
-        dW <- input.w-(output.w+burial)
+        dW <- input_w-(output_w+burial)
         
         #biomass density of detritus g.m-2
-        W[j, i+1] <- W[j, i] + dW*delta_t  
+        W[j, i+1] <- W[j, i]+dW*delta_t  
       }
       
       if(ERSEM.det.input == T) {
          W[j, i+1] <- W[j, i+1]
        }
       
-      #----------------------------------------------
-      # Pelagic Predator Density (nos.m-2) - solve for time + delta_t using 
-      # implicit time Euler upwind finite difference (help from Ken Andersen 
-      # and Richard Law)
+      # Pelagic Predator Density (nos.m-2) ----
+      # Solve for time + delta_t using implicit time Euler upwind finite 
+      # difference (help from Ken Andersen and Richard Law)
       
       # Matrix setup for implicit differencing 
       Ai_u <- Bi_u <- Si_u <- array(0, c(length(x), 1))   
@@ -530,42 +490,34 @@ gridded_sizemodel <- function(params, ERSEM.det.input = F, U_mat, V_mat, W_mat,
       Bi_u[ref] <- 1
       Si_u[ref] <- U[j, ref, i]
       
-      # Invert matrix
-      #recruitment at smallest consumer mass
-      #continuation of plankton hold constant  
+      # Invert matrix 
+      
+      # Recruitment at smallest consumer mass ----
+      # continuation of plankton hold constant  
       # U[1:ref,i+1]<-U[1:ref,i] 
       
-      if(use_init == T){
-        U[j, 1:ref, i+1] <- ui0[j, i]*10^(r_plank[j, i]*x)[1:(ref)] 
-      }
-      
-      if(use_init == F){
-        U[j, 1:ref, i+1] <- ui0[j, i]*10^(r_plank[j, i]*x)[1:(ref)] 
-      }
+      U[j, 1:ref, i+1] <- ui0[j, i]*10^(r_plank[j, i]*x)[1:(ref)] 
       
       # apply transfer efficiency of 10% *plankton density at same size  
-      # if (repro.on==0)  U[ref,i+1]<-0.1*u.init.f(x,ui0,r_plank)[ref]       
+      # if (repro_on==0)  U[ref,i+1]<-0.1*u.init.f(x,ui0,r_plank)[ref]       
       # reproduction from energy allocation
-      if(repro.on == 1){
+      if(repro_on == 1){
         U[j, ref, i+1] <- U[j, ref, i] +
-          (sum(R_u[j, (ref+1):Nx, i]*10^x[(ref+1):Nx] * 
-                 U[j, (ref+1):Nx, i]*dx)*delta_t)/(dx*10^x[ref]) - 
+          (sum(R_u[j, (ref+1):Nx, i]*10^x[(ref+1):Nx]*U[j, (ref+1):Nx, i]*dx) *
+             delta_t) / (dx*10^x[ref]) - 
           (delta_t/dx)*(1/log(10))*(GG_u[j, ref, i])*U[j, ref, i] -
           delta_t*Z_u[j, ref, i]*U[j, ref, i]
       }
       
       #main loop calculation
       for(sz in (ref+1):(Nx)){
-        #U[j,i+1]<-U[j,i]-(delta_t/dx)*(1/log(10))*(GG_u[j,i])*U[j,i] + 
-        #(delta_t/dx)*(1/log(10))*GG_u[j-1,i]*U[j-1,i] -delta_t*Z_u[j,i]*U[j,i]
         U[j, sz, i+1] <- (Si_u[sz]-Ai_u[sz]*U[j, sz-1, i+1])/Bi_u[sz]
       }
       
-      #----------------------------------------------
-      # Benthic Detritivore Density (nos.m-2) 
+      # Benthic Detritivore Density (nos.m-2) ----
       Ai_v <- Bi_v <- Si_v <- array(0, c(length(x), 1))   
       #shorthand for matrix referencing
-      idx <- (ref_det+1):Nx  
+      idx <- (ref_det+1):Nx
       
       Ai_v[idx] <- (1/log(10))*-GG_v[j, idx-1, i]*delta_t/dx 
       Bi_v[idx] <- 1+(1/log(10))*GG_v[j, idx, i]*delta_t/dx +
@@ -578,14 +530,15 @@ gridded_sizemodel <- function(params, ERSEM.det.input = F, U_mat, V_mat, W_mat,
       Si_v[ref_det] <- V[j, ref_det, i]  
       
       #invert matrix
-      #recruitment at smallest detritivore mass
+      
+      # Recruitment at smallest detritivore mass ----
       #hold constant continution of plankton with sinking rate multiplier 
       V[j, 1:ref_det, i+1] <- V[j, 1:ref_det, i]
       
       # apply a very low of transfer efficiency 1%* total biomass of detritus 
       #divided by minimum size
-      # if (repro.on==0)  V[ref_det,i+1]<-(0.01*W[i+1])/(10^x[ref]) 
-      if(repro.on == 1){
+      # if (repro_on==0)  V[ref_det,i+1]<-(0.01*W[i+1])/(10^x[ref]) 
+      if(repro_on == 1){
         V[j, ref_det, i+1] <- V[j, ref_det, i] +
           sum(R_v[j, (ref_det+1):Nx, i]*10^x[(ref_det+1):Nx] * 
                 V[j, (ref_det+1):Nx, i]*dx)*delta_t/(dx*10^x[ref_det]) - 
@@ -595,12 +548,10 @@ gridded_sizemodel <- function(params, ERSEM.det.input = F, U_mat, V_mat, W_mat,
       
       #loop calculation
       for(sz in (ref_det+1):(Nx)){ 
-        #V[j,i+1]<-V[j,i]-(delta_t/dx)*(1/log(10))*(GG_v[j,i])*V[j,i] + 
-        #(delta_t/dx)*(1/log(10))*GG_v[j-1,i]*V[j-1,i]-delta_t*Z_v[j,i]*V[j,i] 
         V[j, sz, i+1] <- (Si_v[sz]-Ai_v[sz]*V[j, sz-1, i+1])/Bi_v[sz]
       }		
      
-      # update Fmort 
+      # Update Fmort ----
       if (i < Neq){
         Fvec_u[j, Fref_u:Nx, i+1] <- Fmort_u*effort[j, i+1]
         Fvec_v[j, Fref_v:Nx, i+1] <- Fmort_v*effort[j, i+1]
@@ -612,13 +563,7 @@ gridded_sizemodel <- function(params, ERSEM.det.input = F, U_mat, V_mat, W_mat,
       #output rates of fisheries catches per yr at size
       Y_v[j, Fref_v:Nx, i+1] <- Fvec_v[j, Fref_v:Nx, i+1] *
         V[j, Fref_v:Nx, i+1]*10^x[Fref_v:Nx]
-      
-      ### ORIGINAL
-      #output rates of fisheries catches per yr at size
-      # Y_u[,Fref_u:Nx,i+1]<-Fvec_u[j,Fref_u:Nx,i]*U[j,Fref_u:Nx,i+1]*10^x[Fref_u:Nx]
-      #output rates of fisheries catches per yr at size
-      # Y_v[,Fref_v:Nx,i+1]<-Fvec_v[j,Fref_v:Nx,i]*V[j,Fref_v:Nx,i+1]*10^x[Fref_v:Nx]
-    
+     
       }#end across grid   
         
     }#end time iteration
@@ -634,9 +579,6 @@ gridded_sizemodel <- function(params, ERSEM.det.input = F, U_mat, V_mat, W_mat,
                 W = W[,], 
                 params = params, 
                 effort = effort[,]))
-  
-    # return(list(U=U[,Neq+1],GG_u=GG_u[,Neq],PM_u=PM_u[,Neq],V=V[,Neq+1],
-      #GG_v=GG_v[,Neq],PM_v=PM_v[,Neq],Y=Y[,Neq],W=W[Neq+1], params=params))
     
   }) # end with(params)
   
@@ -646,7 +588,7 @@ gridded_sizemodel <- function(params, ERSEM.det.input = F, U_mat, V_mat, W_mat,
 
 #### model to run per grid cell or averaged over an area ------
 sizemodel <- function(params, ERSEM.det.input = F, U_mat, V_mat, W_mat, 
-                      temp.effect = T, eps = 1e-5, output="aggregated",
+                      temp_effect = T, eps = 1e-5, output="aggregated",
                       use_init = F, burnin.len){
   with(params,{
     #--------------------------------------------------------------------------
@@ -687,89 +629,6 @@ sizemodel <- function(params, ERSEM.det.input = F, U_mat, V_mat, W_mat,
     #time series of export ratio (read in sizeparam)
     sinking_rate <- sinking_rate
     
-    #--------------------------------------------------------------------------
-    # Functions called within sizemodel()
-    #--------------------------------------------------------------------------
-    
-    #Function to build a lookup table for diet preference of all combinations of 
-    #predator and prey body size: diet preference (in predator spectrum only)
-    phi_f <- function(q){
-      q <- q
-      q0 <- q0
-      sd_q <- sd_q
-      phi <- ifelse(q > 0,
-                   exp(-(q-q0)*(q-q0)/(2*sd_q*sd_q))/(sd_q*sqrt(2.0*pi)),
-                   0) 
-      
-      return(phi)
-      
-      # or normalise feeding kernel to sum to 1:
-      # return(phi/sum(phi))
-      # this is commented out because in previous work normalising did not 
-      # produce realistic growth rates
-    }
-    
-    #Functions to build lookup tables for components of integration which 
-    #remain constant
-    #growth
-    gphi_f <- function(q1){
-      return(10^(-q1)*phi_f(q1))
-    }
-    
-    #mortality
-    mphi_f <- function(q2){
-      return(10^(alpha_u*q2)*phi_f(q2))
-    }
-    
-    #Function to build lookup table for components of 10^(alpha*x)
-    expax_f <- function(x, alpha_u){
-      return(10^(alpha_u*x))
-    }
-    
-    #Function to compute convolution products: can be for growth or mortality 
-    #depending on phi
-    convolution.f <- function(phi, u){
-      res <- matrix(NA, length(x), 1)
-      for(i in 1:length(res)){
-        res[i] <- 0.0
-        res[i] <- sum(phi[, i]*u*dx)
-      }
-      return(res)
-    }
-    
-    #--------------------------------
-    # Growth and Mortality Equations
-    #--------------------------------
-    
-    #predators
-    #death_u<-function(u,A,expax,mphi){return(pref.pel*A*expax*
-    #(convolution.f(mphi,u)))}
-    #use faster matrix method instead of convolution loop function
-    death_u <- function(u, A, expax, mphi){
-      return((pref.pel*A*expax)*(u*dx)%*%(mphi))
-    }
-    
-    #growth_u<-function(K0,K1,A,expax,gphi,u,v){return((pref.pel*K0*A*expax*
-    #(convolution.f(gphi,u)))+ (pref.ben*K1*A*expax*(convolution.f(gphi,v))))}
-    growth_u <- function(K0, K1, A, expax, gphi, u, v){
-      return((pref.pel*K0*A*expax)*(u*dx)%*%(gphi)+
-               (pref.ben*K1*A*expax)*(v*dx)%*%(gphi))
-    }
-    
-    #detritivores
-    #death_v<-function(u,A,expax,mphi){return((pref.ben)*A*expax*
-    #(convolution.f(mphi,u)))}
-    death_v <- function(u, A, expax, mphi){
-      return((pref.ben*A*expax)*(u*dx)%*%(mphi))
-    }
-    growth_v <- function(K1, A, w){
-      return((1/10^x)*(K1*A*10^(x*0.75)*w))
-    }
-    
-    #detritus output (g.m-3.yr-1)
-    out.w <- function(A, v, w){
-      return(sum((A*(10^(x*0.75))*w*v)*dx))
-      }     
     
     #--------------------------------------------------------------------------
     # Initialising matrices
@@ -913,92 +772,92 @@ sizemodel <- function(params, ERSEM.det.input = F, U_mat, V_mat, W_mat,
       #--------------------------------
       # Calculate Growth and Mortality
       #--------------------------------
-      if(temp.effect == T){
-        pel.Tempeffect <- exp(c1-E/(Boltzmann*(sst+273)))
-        ben.Tempeffect <- exp(c1-E/(Boltzmann*(sft+273)))
+      if(temp_effect == T){
+        pel_tempeffect <- exp(c1-E/(Boltzmann*(sst+273)))
+        ben_tempeffect <- exp(c1-E/(Boltzmann*(sft+273)))
       }
-      if(temp.effect == F){
-        pel.Tempeffect <- 1
-        ben.Tempeffect <- 1
+      if(temp_effect == F){
+        pel_tempeffect <- 1
+        ben_tempeffect <- 1
       }
       
       # feeding rates
       # yr-1
-      f.pel <- pel.Tempeffect[i] * 
-        as.vector(((A_u*10^(x*alpha_u)*pref.pel)*(U[, i]*dx)%*%(gphi)) / 
-                    (1+handling*(A_u*10^(x*alpha_u)*pref.pel) * 
+      f_pel <- pel_tempeffect[i] * 
+        as.vector(((A_u*10^(x*alpha_u)*pref_pel)*(U[, i]*dx)%*%(gphi)) / 
+                    (1+handling*(A_u*10^(x*alpha_u)*pref_pel) * 
                        (U[, i]*dx)%*%(gphi))) 
       # yr-1
-      f.ben <- pel.Tempeffect[i] * 
-        as.vector(((A_u*10^(x*alpha_u)*pref.ben)*(V[, i]*dx)%*%(gphi)) / 
-                    (1+handling*(A_u*10^(x*alpha_u)*pref.ben) *
+      f_ben <- pel_tempeffect[i] * 
+        as.vector(((A_u*10^(x*alpha_u)*pref_ben)*(V[, i]*dx)%*%(gphi)) / 
+                    (1+handling*(A_u*10^(x*alpha_u)*pref_ben) *
                        (V[, i]*dx)%*%(gphi)))
       # yr-1
-      f.det <- ben.Tempeffect[i] *
+      f_det <- ben_tempeffect[i] *
         ((1/10^x)*A_v*10^(x*alpha_v)*W[i]) / 
         (1+handling*(1/10^x)*A_v*10^(x*alpha_v)*W[i])
       
       # Predator growth integral 
       # yr-1
-      GG_u[, i] <- (1-def.high)*K_u*(f.pel)+(1-def.low)*K_v*(f.ben)
+      GG_u[, i] <- (1-def_high)*K_u*(f_pel)+(1-def_low)*K_v*(f_ben)
       
       # Reproduction
       # yr-1
-      if(repro.on == 1){
-        R_u[, i] <- (1-def.high)*(1-(K_u+AM_u))*(f.pel) +
-          (1-def.high)*(1-(K_v+AM_v))*f.ben
+      if(repro_on == 1){
+        R_u[, i] <- (1-def_high)*(1-(K_u+AM_u))*(f_pel) +
+          (1-def_high)*(1-(K_v+AM_v))*f_ben
       }
       
       # Predator death integrals 
       #Satiation level of predator for pelagic prey
-      sat.pel <- ifelse(f.pel > 0,
-                        f.pel/((A_u*10^(x*alpha_u)*pref.pel) * 
+      sat_pel <- ifelse(f_pel > 0,
+                        f_pel/((A_u*10^(x*alpha_u)*pref_pel) * 
                                  (U[,i]*dx)%*%(gphi)),
                         0)
       # yr-1
-      PM_u[, i] <- as.vector((pref.pel*A_u*expax)*(U[, i]*sat.pel*dx)%*%(mphi))
+      PM_u[, i] <- as.vector((pref_pel*A_u*expax)*(U[, i]*sat_pel*dx)%*%(mphi))
       # yr-1
-      #PM_u[,i]<-as.vector((1-f.pel)*(A_u*10^(x*alpha_u)*pref.pel)*(U[,i]*dx)%*%(mphi))
+      #PM_u[,i]<-as.vector((1-f_pel)*(A_u*10^(x*alpha_u)*pref_pel)*(U[,i]*dx)%*%(mphi))
       
       # yr-1
-      Z_u[, i] <- PM_u[, i]+pel.Tempeffect[i]*OM_u+SM_u+Fvec_u[, i]
+      Z_u[, i] <- PM_u[, i]+pel_tempeffect[i]*OM_u+SM_u+Fvec_u[, i]
       
       # Benthos growth integral
       # yr-1
-      GG_v[, i] <- (1-def.low)*K.d*f.det
+      GG_v[, i] <- (1-def_low)*K_d*f_det
       
       #reproduction
       # yr-1
-      if(repro.on == 1){
-        R_v[, i] <- (1-def.low)*(1-(K.d+AM_v))*(f.det)
+      if(repro_on == 1){
+        R_v[, i] <- (1-def_low)*(1-(K_d+AM_v))*(f_det)
       }
       
       # Benthos death integral
       #Satiation level of predator for benthic prey 
-      sat.ben <- ifelse(f.ben > 0,
-                        f.ben/((A_u*10^(x*alpha_v)*pref.ben) * 
+      sat_ben <- ifelse(f_ben > 0,
+                        f_ben/((A_u*10^(x*alpha_v)*pref_ben) * 
                                  (V[, i]*dx)%*%(gphi)),
                         0)
       # yr-1
-      PM_v[, i] <- ifelse(sat.ben > 0,
-                          as.vector((pref.ben*A_u*expax) *
-                                      (U[, i]*sat.ben*dx)%*%(mphi)),
+      PM_v[, i] <- ifelse(sat_ben > 0,
+                          as.vector((pref_ben*A_u*expax) *
+                                      (U[, i]*sat_ben*dx)%*%(mphi)),
                           0)
       # yr-1
-      #PM_v[,i]<-as.vector((1-f.ben)*(A_u*10^(x*alpha_u)*pref.ben)*(U[,i]*dx)%*%(mphi))
+      #PM_v[,i]<-as.vector((1-f_ben)*(A_u*10^(x*alpha_u)*pref_ben)*(U[,i]*dx)%*%(mphi))
       
       # yr-1
-      Z_v[, i] <- PM_v[, i]+ben.Tempeffect[i]*OM_v+SM_v+Fvec_v[, i]
+      Z_v[, i] <- PM_v[, i]+ben_tempeffect[i]*OM_v+SM_v+Fvec_v[, i]
       
       #total biomass density eaten by pred (g.m-2.yr-1)
-      eatenbypred <- 10^x*f.pel*U[, i]+10^x*f.ben*U[, i] 
+      eatenbypred <- 10^x*f_pel*U[, i]+10^x*f_ben*U[, i] 
       
       #detritus output (g.m-2.yr-1)
       # losses from detritivore scavenging/filtering only:
-      output.w <- sum(10^x*f.det*V[, i]*dx)   
+      output_w <- sum(10^x*f_det*V[, i]*dx)   
       
       #total biomass density defecated by pred (g.m-2.yr-1)
-      defbypred <- def.high*(f.pel)*10^x*U[, i]+ def.low*(f.ben)*10^x*U[, i]
+      defbypred <- def_high*(f_pel)*10^x*U[, i]+ def_low*(f_ben)*10^x*U[, i]
       
       #------------------------------------------------
       # Increment values of W,U & V	for next time step  
@@ -1010,41 +869,41 @@ sizemodel <- function(params, ERSEM.det.input = F, U_mat, V_mat, W_mat,
         #considering pelagic faeces as input as well as dead bodies from both 
         #pelagic and benthic communities and phytodetritus (dying sinking
         #phytoplankton)
-        if(det.coupling == 1.0){
+        if(det_coupling == 1.0){
           # pelagic spectrum inputs (sinking dead bodies and faeces) - export 
           # ratio used for "sinking rate" + benthic spectrum inputs (dead stuff
           # already on/in seafloor)
-          input.w <- (sinking_rate[i] * 
+          input_w <- (sinking_rate[i] * 
                         (sum(defbypred[ref:Nx]*dx) +
-                           sum(pel.Tempeffect[i] * 
+                           sum(pel_tempeffect[i] * 
                                  OM_u[1:Nx]*U[1:Nx, i]*10^(x[1:Nx])*dx) + 
-                           sum(pel.Tempeffect[i] * 
+                           sum(pel_tempeffect[i] * 
                                  SM_u[1:Nx]*U[1:Nx,i]*10^(x[1:Nx])*dx)) +
-                        (sum(ben.Tempeffect[i] * 
+                        (sum(ben_tempeffect[i] * 
                                OM_v[1:Nx]*V[1:Nx,i]*10^(x[1:Nx])*dx) + 
-                           sum(ben.Tempeffect[i] * 
+                           sum(ben_tempeffect[i] * 
                                  SM_v[1:Nx]*V[1:Nx,i]*10^(x[1:Nx])*dx)))
           # )
         }
-        if(det.coupling == 0.0){
-          input.w <- sum(ben.Tempeffect[i] *
+        if(det_coupling == 0.0){
+          input_w <- sum(ben_tempeffect[i] *
                            OM_v[1:Nx]*V[1:Nx, i]*10^(x[1:Nx])*dx) + 
-            sum(ben.Tempeffect[i]*SM_v[1:Nx]*V[1:Nx, i]*10^(x[1:Nx])*dx)
+            sum(ben_tempeffect[i]*SM_v[1:Nx]*V[1:Nx, i]*10^(x[1:Nx])*dx)
         }
         
         # get burial rate from Dunne et al. 2007 equation 3
-        burial <- input.w*(0.013 + 0.53*input.w^2/(7+input.w)^2)
+        burial <- input_w*(0.013 + 0.53*input_w^2/(7+input_w)^2)
         
         # change in detritus biomass density (g.m-2.yr-1)                     
         # this one assumes immeidate additional losses to sediment?
-        # dW<-input.w - (output.w + W[i])     
+        # dW<-input_w - (output_w + W[i])     
         # losses due to detritivory only:
-        # dW<-input.w - (output.w)     
+        # dW<-input_w - (output_w)     
         
         # losses from detritivory + burial rate (not including remineralisation
         # bc that goes to p.p. after sediment, we are using realised p.p. as
         # inputs to the model) 
-        dW <- input.w-(output.w+burial) 
+        dW <- input_w-(output_w+burial) 
         #biomass density of detritus g.m-2
         W[i+1] <- W[i]+dW*delta_t
       }
@@ -1083,9 +942,9 @@ sizemodel <- function(params, ERSEM.det.input = F, U_mat, V_mat, W_mat,
       }
       
       # apply transfer efficency of 10% *plankton density at same size  
-      # if (repro.on==0)  U[ref,i+1]<-0.1*u.init.f(x,ui0,r_plank)[ref]       
+      # if (repro_on==0)  U[ref,i+1]<-0.1*u.init.f(x,ui0,r_plank)[ref]       
       # reproduction from energy allocation
-      if(repro.on == 1){
+      if(repro_on == 1){
         U[ref, i+1] <- U[ref, i] +
           (sum(R_u[(ref+1):Nx, i]*10^x[(ref+1):Nx]*U[(ref+1):Nx, i]*dx) *
              delta_t)/(dx*10^x[ref])-(delta_t/dx)*(1/log(10)) *
@@ -1122,8 +981,8 @@ sizemodel <- function(params, ERSEM.det.input = F, U_mat, V_mat, W_mat,
       
       # apply a very low of transfer effiency 1%* total biomass of detritus
       #divided by minimum size
-      # if (repro.on==0)  V[ref_det,i+1]<-(0.01*W[i+1])/(10^x[ref]) 
-      if(repro.on == 1){
+      # if (repro_on==0)  V[ref_det,i+1]<-(0.01*W[i+1])/(10^x[ref]) 
+      if(repro_on == 1){
         V[ref_det, i+1] <- V[ref_det, i] +
           sum(R_v[(ref_det+1):Nx, i]*10^x[(ref_det+1):Nx] * 
                 V[(ref_det+1):Nx, i]*dx)*delta_t/(dx*10^x[ref_det]) - 
@@ -1171,11 +1030,11 @@ sizemodel <- function(params, ERSEM.det.input = F, U_mat, V_mat, W_mat,
 
 
 sizeparam <- function(equilibrium = F, dx = 0.1, xmin = -12, xmax = 6,
-                      xmin.consumer_u = -7, xmin.consumer_v = -7, tmax = 100,
-                      tstepspryr = 48, fmort_u = 0.0, fminx_u = 1, 
-                      fmort_v = 0.0, fminx_v = 1, er = 0.5, pp = -3, 
+                      xmin.consumer.u = -7, xmin.consumer.v = -7, tmax = 100,
+                      tstepspryr = 48, fmort.u = 0.0, fminx.u = 1, 
+                      fmort.v = 0.0, fminx.v = 1, er = 0.5, pp = -3, 
                       slope = -1, lat = NA, lon = NA, depth = 500, sst = 20,
-                      sft = 20, effort = 1.0, search_vol = 640, use_init = F, 
+                      sft = 20, effort = 1.0, search_vol = 640, use.init = F, 
                       U.initial = NA, V.initial = NA, W.initial = NA, 
                       Ngrid = NA){
   #----------------------------------------------------------------------------
@@ -1209,13 +1068,13 @@ sizeparam <- function(equilibrium = F, dx = 0.1, xmin = -12, xmax = 6,
   
   # fishing parameters 
   # fishing mortality rate for predators 
-  param$Fmort.u <- fmort_u
+  param$Fmort.u <- fmort.u
   # fishing mortality rate for detritivores
-  param$Fmort.v <- fmort_v
+  param$Fmort.v <- fmort.v
   # minimum log10 body size fished for predators
-  param$min.fishing.size.u <- fminx_u 
+  param$min.fishing.size.u <- fminx.u 
   # minimum log10 body size fished for detritivores
-  param$min.fishing.size.v <- fminx_v 
+  param$min.fishing.size.v <- fminx.v 
 
   # get effort and rescale 
   param$effort <- effort
@@ -1237,7 +1096,7 @@ sizeparam <- function(equilibrium = F, dx = 0.1, xmin = -12, xmax = 6,
   param$det.coupling <- 1.0  
   # fraction of sinking detritus reaching the seafloor (from export ratio input)
   param$sinking.rate <- param$er 
-  # fraction of sinking detritus reaching the seafloor (SAME AS pref.ben)
+  # fraction of sinking detritus reaching the seafloor (SAME AS pref_ben)
   # param$sinking.rate <- (0.8*exp(-1/250*depth))*0.01 
   
   # feeding and energy budget parameters
@@ -1304,9 +1163,9 @@ sizeparam <- function(equilibrium = F, dx = 0.1, xmin = -12, xmax = 6,
   # minimum log10 body size of plankton
   param$xmin <- xmin  
   # minimum log10 body size in dynamics predators
-  param$x1 <- xmin.consumer_u
+  param$x1 <- xmin.consumer.u
   # minimum log10 body size in dynamics benthic detritivores
-  param$x1.det <- xmin.consumer_v
+  param$x1.det <- xmin.consumer.v
   # maximum log10 body size of predators
   param$xmax <- xmax
   # maximum log10 body size before senescence kicks in (departure form 
@@ -1354,7 +1213,7 @@ sizeparam <- function(equilibrium = F, dx = 0.1, xmin = -12, xmax = 6,
   # abritrary initial value for detritus
   param$W.init <- 0.00001
   
-  if(use_init == TRUE){
+  if(use.init == TRUE){
     param$U.init <- U.initial
     param$V.init <- V.initial
     param$W.init <- W.initial
@@ -1400,10 +1259,10 @@ plotsizespectrum <- function(modeloutput, params, itime = params$Neq,
     #paste("day = ",itime,sep=""),pos=4)
     
     text(x1.det+abs(0.05*x1.det), miny+abs(0.3*miny),
-         paste("pel.pref=", round(pref.pel, 2), sep = ""), pos = 4)
+         paste("pel.pref=", round(pref_pel, 2), sep = ""), pos = 4)
     
     text(x1.det+abs(0.05*x1.det), miny+abs(0.2*miny), 
-         paste("ben.pref=", round(pref.ben, 2), sep = ""), pos = 4)
+         paste("ben.pref=", round(pref_ben, 2), sep = ""), pos = 4)
     
     #text(x1.det+abs(0.05*x1.det),miny+abs(0.1*miny),
     #paste("PP=",round(ui0,3),sep=""),pos=4)
@@ -1585,7 +1444,7 @@ optimizeYield <- function(params, com, pp = pp, sst = sst, sft = sft,
     params$W.init[1] <- com$W 
     
     com <- sizemodel(params = params, pp, sst, sft, U_mat, V_mat, 
-                     temp.effect = T) 
+                     temp_effect = T) 
     
     # mean yield through time for specific size range (or entire fished range)    
     yield <- com$Y[sizeindex]
@@ -1607,59 +1466,14 @@ optimizeYield <- function(params, com, pp = pp, sst = sst, sft = sft,
 
 # # get proportion of total fishable biomass for each grid cell
 # #output rates of fisheries catches per yr at size
-# prop.b<-(apply(U[,Fref_u:Nx,i]*10^x[Fref_u:Nx]*dx,1,sum) + 
+# prop_b<-(apply(U[,Fref_u:Nx,i]*10^x[Fref_u:Nx]*dx,1,sum) + 
 # apply(V[,Fref_v:Nx,i]*10^x[Fref_v:Nx]*dx,1,sum))/
 # sum(apply(U[,Fref_u:Nx,i]*10^x[Fref_u:Nx]*dx,1,sum) +
 # apply(V[,Fref_v:Nx,i]*10^x[Fref_v:Nx]*dx,1,sum))
 # #check sums to 1
-# #sum(prop.b)
+# #sum(prop_b)
 # dim(effort)
 # plot(colSums(effort_grid[,-1]))
 # depth
 
-gravitymodel <- function(effort = effort[, 3000], prop.b, depth, iter){
-  # redistribute total effort across gridcells according to proportion of
-  # biomass in that gridcell
-  # using graivity model, Walters & Bonfil, 1999, Gelchu & Pauly 2007
-  # ideal free distribution - Blanchard et al 2008
-  # new_effort= prop.b*effort
-  eff <- as.vector(effort)
-  d <- unlist(as.vector(depth))
-  
-  for(j in 1:iter){
-    a <- eff
-    # suit = prop.b*(1-d/max(d))*(1-a/0.001)
-    # # CN option 2 from below 
-    suit <- prop.b*(1-d/max(d))
-    # # CN option 3 from below 
-    # suit = prop.b
-    # rescale:
-    rel.suit <- suit/sum(suit)
-    neweffort <- eff+rel.suit*eff
-    mult <- sum(eff)/sum(neweffort)
-    #gradient drives individuals to best locations at equilibrium (assumed to 
-    #reached after 10000 iterations)
-    eff <- neweffort*mult
-  }
-  
- # plot(prop.b,effort_grid[,3200],cex=(1-d/max(d)))
- # plot(prop.b,eff,cex=(1-d/max(d)))
- # 
- #  rmax<-max(rel.suit)
- #  r<-ifelse(suit >= rmax,rmax,s1)
- #  newden<-ifelse(s1 >= rmax,density[iter,] + rmax*density[iter,],0)
- #  mult <- totalpop[i,n]/sum(newden * area)
- #  density[iter,]<-newden*mult
-  
-  # make depth dependent as well
-  # d<-unlist(as.vector(depth_grid[,2]))
-  # suit = prop.b*(1-d/max(d))
-  # rescale:
-  # rel.suit = suit/sum(suit)
-  # effort[,i+1] = rel.suit*effort[,i+1]
-  # plot(d,effort[,i+1])
-  # 
-  #for IFD would calculate "rmax" then work out which grid cells are < rmax
-  
-  return(eff)
-}
+
