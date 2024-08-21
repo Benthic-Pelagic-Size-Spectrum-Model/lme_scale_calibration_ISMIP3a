@@ -98,7 +98,7 @@ gravitymodel <- function(effort, prop_b, depth, iter){
 # Run model across grid cells, spreading out effort, uses 3D arrays ------
 gridded_sizemodel <- function(params, ERSEM.det.input = F, U_mat, V_mat, W_mat, 
                               temp_effect = T, eps = 1e-5, 
-                              output = "aggregated", use_init = F, burnin.len){
+                              output = "aggregated", use_init = F){
   
   # WARNING CN - commented for testing 
   with(params, {
