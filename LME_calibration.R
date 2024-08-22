@@ -606,7 +606,6 @@ merging_gridded_inputs <- function(LME_path_full){
 }
 
 
-
 # Calculating fishing parameters for gridded model ------------------------
 calc_grid_params <- function(meta, f.effort = NULL, start_cond = NULL){
   #Inputs:
@@ -696,6 +695,41 @@ calc_grid_params <- function(meta, f.effort = NULL, start_cond = NULL){
 }
 
 
+# Run gridded model by LME ----
+rungridbyLME <- function(meta){
+  #Run model across space and time using gridded inputs for each LME
+  #Inputs:
+  #meta (named character vector) - Single column with named rows: region 
+  #(unique ID for LME), base_out (path to folder where outputs will be saved),
+  #grid (full file path including filename to be used to save gridded inputs),
+  #non_grid (full file path including filename to be used to save non-gridded 
+  #inputs)
+  
+  load(list.files(meta["base_out"], "grid_inputs_params_", full.names = T))
+  
+  lme_input_init <- fread(meta["non_grid"])
+  grid_results <- vector("list", nrow(lme_input_init))
+  # run model  for full time period across all grid cells
+  grid_results <- gridded_sizemodel(gridded_params, ERSEM.det.input = F,
+                                    temp_effect = T, eps = 1e-5, 
+                                    output = "aggregated", use_init = TRUE)
+  
+  # removing the stable spinup section to match dimensions with the code
+  ind <- which(ymd(colnames(gridded_params$er)) >= min(lme_input_init$t))
+  
+  grid_results$U <- grid_results$U[, , ind]
+  grid_results$V <- grid_results$V[, , ind]
+  grid_results$Y.u <- grid_results$Y.u[, , ind]
+  grid_results$Y.v <- grid_results$Y.v[, , ind]
+  
+  # save results from run
+  save(grid_results, 
+       file = file.path(meta["base_out"], 
+                        paste0("gridded_model_results_LME_", 
+                               meta["region"], ".RData")))
+}
+
+
 # Running model with gridded inputs ----
 run_model_timestep <- function(input = lme_inputs_igrid, 
                                vals = unlist(bestvals_LMEs[14, ]), U.initial,
@@ -729,35 +763,41 @@ run_model_timestep <- function(input = lme_inputs_igrid,
   }
 
 
-# this needs to be faster or maybe just part of outputs of gridded_sizemodel
+# Adding outputs to gridded_sizemodel ----
 getGriddedOutputs <- function(input = lme_inputs_grid, results = grid_results,
                               params = params){
   # returns all outputs of the model 
   input$TotalUbiomass <- input$TotalVbiomass <- input$TotalUcatch <-
     input$TotalVcatch<- input$Totalcatch <- NA
+  # Merging coordinates together to use as unique identifier
+  input <- input |>
+    unite("cell", lat, lon, remove = F)
   cells <- unique(input$cell)
   
+  # 2:(params$Neq+1) changed to 1:params$Neq because the newly processed data
+  # does subsets data based on time ranges. It does not include December data
+  # for year prior
   for(igrid in 1:length(cells)){
     input[input$cell == cells[igrid], ]$TotalUbiomass <- 
-      apply(results$U[igrid, params$ref:params$Nx, 2:(params$Neq+1)] * 
+      apply(results$U[igrid, params$ref:params$Nx, 1:(params$Neq)] * 
               params$dx*10^params$x[params$ref:params$Nx],
-            2, sum, na.rm = T)#*depthadj[igrid]
+            2, sum, na.rm = T)
     
     input[input$cell == cells[igrid], ]$TotalVbiomass <- 
-      apply(results$V[igrid, params$ref:params$Nx, 2:(params$Neq+1)] * 
+      apply(results$V[igrid, params$ref:params$Nx, 1:(params$Neq)] * 
               params$dx*10^params$x[params$ref:params$Nx],
-            2, sum, na.rm = T)#*depthadj[igrid]
+            2, sum, na.rm = T)
     
     #sum catches (currently in grams per m3 per year, across size classes) 
     #keep as grams per m2, then be sure to convert observed from tonnes per m2 
     #per year to g.^-m2.^-yr (for each month)
     input[input$cell == cells[igrid], ]$TotalUcatch <- 
-      apply(results$Y.u[igrid, params$ref:params$Nx, 2:(params$Neq+1)] *
-              params$dx, 2, sum, na.rm = T)#*depthadj[igrid]
+      apply(results$Y_u[igrid, params$ref:params$Nx, 1:(params$Neq)] *
+              params$dx, 2, sum, na.rm = T)
     
     input[input$cell == cells[igrid], ]$TotalVcatch <- 
-      apply(results$Y.v[igrid, params$ref:params$Nx, 2:(params$Neq+1)] *
-              params$dx, 2, sum, na.rm = T)#*depthadj[igrid]
+      apply(results$Y_v[igrid, params$ref:params$Nx, 1:(params$Neq)] *
+              params$dx, 2, sum, na.rm = T)
     
     input[input$cell == cells[igrid], ]$Totalcatch <- 
       input[input$cell == cells[igrid], ]$TotalUcatch +
