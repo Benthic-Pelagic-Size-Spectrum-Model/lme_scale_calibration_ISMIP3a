@@ -324,7 +324,6 @@ gridded_sizemodel <- function(params, ERSEM.det.input = F, U_mat, V_mat, W_mat,
         # for option 2 iter = 1
         
       } # end gravity model 
-      rm(prop_bu, prop_bv)
       
       # Iteration over grid cells ----
       for(j in 1:(Ngrid)) { 
