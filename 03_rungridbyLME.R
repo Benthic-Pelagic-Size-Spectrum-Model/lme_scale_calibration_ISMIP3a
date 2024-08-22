@@ -70,9 +70,6 @@ lapply(1:nrow(meta),
                                         file_out = meta[i,]$non_grid))
 
 # get the latest best values based on iterations and search_vol
-# no_iter <- 100
-# search_vol <- "estimated" 
-# version <- "refined-fishing-parameters"
 f.effort <- list.files("Output/", "refined-fishing", full.names = T) |> 
   fread() |> 
   # run only LMEs with a good correlation/error and all catches 
@@ -88,51 +85,13 @@ mclapply(1:nrow(meta),
                                             start_cond = NULL), 
          mc.cores = round((detectCores()*.75), 0))
 
+#Selecting Southern Ocean only
+meta <- meta |> 
+  filter(region == 61)
 
-
-
-#### run gridded model by LME ----
-#Run model across space and time using gridded inputs for each LME
-  
-
-
-
-
-rungridbyLME <- function(meta){
-  load(list.files(meta["base_out"], "grid_inputs_params_", full.names = T))
-  
-  lme_input_init <- fread(meta["non_grid"])
-  grid_results <- vector("list", nrow(lme_input_init))
-  # run model  for full time period across all grid cells
-  grid_results <- gridded_sizemodel(gridded_params, ERSEM.det.input = F,
-                                    temp.effect = T, eps = 1e-5, 
-                                    output = "aggregated", use.init = TRUE,
-                                    burnin.len)
-  
-  #### TEST 3 - OK working 
-  # LME 1
-  # random bestvalues - i.e. the ones that picked manually best approximate
-  # catches (0.1,0.5,1,1) 
-  # search vol = 0.64 as OK for this LME
-  # Fmort = first spread effort then calculate Fmort and catches as discussed 
-  # with Julia 
-  # gravity model option 2 with iter = 1 
-  
-  # removing the stable spinup section to have matching dimensions with the code
-  # WARNING  move to plotting function for now as need to figure out catch trend
-  ind <- which(ymd(colnames(gridded_params$er)) >= min(lme_input_init$t))
-  
-  grid_results$U <- grid_results$U[, , ind]
-  grid_results$V <- grid_results$V[, , ind]
-  grid_results$Y.u <- grid_results$Y.u[, , ind]
-  grid_results$Y.v <- grid_results$Y.v[, , ind]
-  # moved to plotting function as needed there
-  # gridded_params$Neq <- 2040
-  
-  # save results from run
-  fwrite(grid_results, file.path(LME_path_full, "gridded_model_results.csv"))
-}
-
+tic()
+rungridbyLME(unlist(meta))
+toc()
 
 ## RUN all LMEs 
 
@@ -150,19 +109,6 @@ rungridbyLME <- function(meta){
 # toc() # 1536.929 sec elapsed/25 min. No working with all LMEs ?!
 
 ## OR standard loop (possibly very slow)
-
-tic()
-for(i in 1:length(LMEnumber)){
-  # # trial 
-  i = 42 # 41 is LME 61 considering the selection above
-  print(paste0("Now working on LME", LMEnumber[i]))
-
-  calc_grid_params(LMEnumber = LMEnumber[i],
-               yearly = FALSE, # for get_lme_inputs()
-               f.effort = f.effort) # for rungridbyLME()
-}
-
-toc()
 
 # STACK at LME 61 
 
