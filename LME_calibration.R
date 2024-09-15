@@ -403,7 +403,7 @@ LHSsearch <- function(LMEnum = LME, num_iter = 1, search_vol = "estimated",
   if(!is.null(best_val_folder)){
     #Ensure folder exists
     if(!dir.exists(best_val_folder)){
-      dir.create(best_val_folder)
+      dir.create(best_val_folder, recursive = T)
     }
     
     #File path to save output
