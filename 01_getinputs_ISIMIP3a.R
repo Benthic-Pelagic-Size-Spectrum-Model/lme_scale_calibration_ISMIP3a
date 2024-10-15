@@ -123,7 +123,7 @@ plot_df <- DBPM_FAO_effort_catch_input |>
 
 #Plotting data
 plot_df |> 
-  ggplot(aes(Year, total_nom_active))+
+  ggplot(aes(year, total_nom_active))+
   ggtitle(paste("FAO region #", unique(plot_df$region), sep = " "))+
   # spin-up edf8fb
   annotate("rect", xmin = 1841, xmax = 1960, ymin = 0, ymax = Inf, 
@@ -362,7 +362,7 @@ plot_df <- DBPM_LME_effort_catch_input |>
 
 #Plotting data
 plot_df |> 
-  ggplot(aes(Year, total_nom_active))+
+  ggplot(aes(year, total_nom_active))+
   ggtitle(paste("LME #", unique(plot_df$region), sep = " "))+
   annotate("rect", xmin = 1841, xmax = 1960, ymin = 0, ymax = Inf, 
            fill = "#b2e2e2", alpha = 0.4)+ 

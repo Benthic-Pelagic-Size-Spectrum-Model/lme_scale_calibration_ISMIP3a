@@ -18,13 +18,6 @@ plotgridbyLME <- function(LMEnumber){
                         paste0("LME_", LMEnumber, "_output"))
   load(list.files(LME_path, "gridded_model_results", full.names = T))
   
-  # ### WARNING need to comment out to figure out trend in biomass 
-  # removing the stable spinup section to have matching dimensions with the code
-  # grid_results$U <- grid_results$U[,,1201:3241]
-  # grid_results$V <- grid_results$V[,,1201:3241]
-  # grid_results$Y.u <- grid_results$Y.u[,,1201:3241]
-  # grid_results$Y.v <- grid_results$Y.v[,,1201:3241]
-
   # load inputs and param object 
   load(list.files(LME_path, "grid_inputs", full.names = T))
   lme_inputs_grid <- fread(list.files(LME_path, "LME_inputs_gridded.csv",
@@ -32,7 +25,7 @@ plotgridbyLME <- function(LMEnumber){
   lme_input_init <- fread(list.files(LME_path, "LME_inputs_non-gridded.csv",
                                      full.names = T))
   
-    # Would this be the original time steps ?
+  # Would this be the original time steps ?
   # gridded_params$Neq <- 2040 
   # If so, this should be replaced by:
   gridded_params$Neq <- length(unique(lme_inputs_grid$t))
@@ -47,10 +40,6 @@ plotgridbyLME <- function(LMEnumber){
   #for inputs and for runLMEcalibration? 
   out <- getGriddedOutputs(input = lme_inputs_grid, results = grid_results,
                            params = gridded_params)
-
-  cells <- unique(out$cell)
-  out <- out |> 
-    mutate(cell = as.factor(cell))
 
   # World map
   world <- read_sf("data/world_map.shp")
