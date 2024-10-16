@@ -1175,7 +1175,7 @@ sizeparam <- function(equilibrium = F, dx = 0.1, xmin = -12, xmax = 6,
   param$ref.det <- ((param$x1.det-param$xmin)/param$dx)+1 
   
   #position in F vector corresponding to smallest size fished in U
-  param$Fref.u <- ((param$min.fishing.size_u-param$xmin)/param$dx)+1
+  param$Fref.u <- ((param$min.fishing.size.u-param$xmin)/param$dx)+1
   #position in F vector corresponding to smallest size fished in V
   param$Fref.v <- ((param$min.fishing.size.v-param$xmin)/param$dx)+1
   

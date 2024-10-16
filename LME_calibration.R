@@ -20,7 +20,7 @@ library(purrr)
 library(janitor)
 library(parallel)
 # library(optimParallel)
-source("dbpm_model_functions.R")
+source("dbpm_model_functions_NEW_DFA.R")
 # library(gridExtra)
 
 
@@ -188,7 +188,7 @@ run_model <- function(vals = X, input = lme_input, withinput = T){
   
   # run model through time
   # TO DO IN SIZEMODEL CODE: make fishing function like one in model template
-  result_set <- sizemodel(params) 
+  result_set <- sizemodel(params)
   
   if(withinput){
     lims_ubio <- result_set$params$ref:result_set$params$Nx
@@ -211,9 +211,9 @@ run_model <- function(vals = X, input = lme_input, withinput = T){
     # keep as grams per m2, then be sure to convert observed from tonnes per m2
     # per year to g.^-m2.^-yr (for each month)
     
-    input$TotalUcatch <- apply(result_set$Y.u[, time_steps]*params$dx, 2, sum)
+    input$TotalUcatch <- apply(result_set$Y_u[, time_steps]*params$dx, 2, sum)
     #*min(params$depth,100)
-    input$TotalVcatch <- apply(result_set$Y.v[, time_steps]*params$dx, 2, sum)
+    input$TotalVcatch <- apply(result_set$Y_v[, time_steps]*params$dx, 2, sum)
     #*min(params$depth,100)
     input$Totalcatch <- input$TotalUcatch + input$TotalVcatch
   
