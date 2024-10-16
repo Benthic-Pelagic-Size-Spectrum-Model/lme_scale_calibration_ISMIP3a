@@ -45,8 +45,8 @@ getExportRatio <- function(sphy, lphy, sst, depth){
 
 # Calculating intercept from tabular data ---------------------------------
 # Method to calculate intercept from appendix of Barnes et al. 2010 JPR
-GetPPIntSlope <- function(sphy, lphy, mmin = 10^-14.25, mmid = 10^-10.184, 
-                          mmax = 10^-5.25, depth, output = "slope"){
+GetPPIntSlope <- function(sphy, lphy, depth, mmin = 10^-14.25, 
+                          mmid = 10^-10.184, mmax = 10^-5.25, output = "slope"){
   #Inputs:
   # - sphy (numeric vector) Small phytoplankton
   # - lphy (numeric vector) Large phytoplankton
@@ -116,11 +116,9 @@ dbpm_input_calc <- function(file_path, path_out){
            expcbot = expc_bot_mol_m_2_s_1, area_m2 = tot_area_m2) |> 
     mutate(er = getExportRatio(sphy, lphy, sst, depth),
            er = ifelse(er < 0, 0, ifelse(er > 1, 1, er)),
-           intercept = GetPPIntSlope(sphy, lphy, mmin = 10^-14.25, 
-                                     mmid = 10^-10.184, mmax = 10^-5.25, depth, 
+           intercept = GetPPIntSlope(sphy, lphy, depth, 
                                      output = "intercept"),
-           slope = GetPPIntSlope(sphy, lphy, mmin = 10^-14.25, mmid = 10^-10.184, 
-                                 mmax = 10^-5.25, depth, output = "slope")) |> 
+           slope = GetPPIntSlope(sphy, lphy, depth, output = "slope")) |> 
     relocate(all_of(c("er", "intercept", "slope")), .before = sphy)
   
   #Save results
