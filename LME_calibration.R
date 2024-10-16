@@ -211,9 +211,9 @@ run_model <- function(vals = X, input = lme_input, withinput = T){
     # keep as grams per m2, then be sure to convert observed from tonnes per m2
     # per year to g.^-m2.^-yr (for each month)
     
-    input$TotalUcatch <- apply(result_set$Y.u[, time_steps]*params$dx, 2, sum)
+    input$TotalUcatch <- apply(result_set$Y_u[, time_steps]*params$dx, 2, sum)
     #*min(params$depth,100)
-    input$TotalVcatch <- apply(result_set$Y.v[, time_steps]*params$dx, 2, sum)
+    input$TotalVcatch <- apply(result_set$Y_v[, time_steps]*params$dx, 2, sum)
     #*min(params$depth,100)
     input$Totalcatch <- input$TotalUcatch + input$TotalVcatch
   
