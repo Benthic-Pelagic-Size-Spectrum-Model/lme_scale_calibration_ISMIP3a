@@ -129,10 +129,10 @@ gridded_sizemodel <- function(params, ERSEM.det.input = F, U_mat, V_mat, W_mat,
     
     # # trial
     # pp = params$pp
-    # r_plank = params$r.plank
+    # r.plank = params$r.plank
     # sst = params$sst
     # sft = params$sft
-    # sinking_rate = params$sinking.rate
+    # sinking.rate = params$sinking.rate
     # x = params$x
     # Ngrid = params$Ngrid
     # Neq= params$Neq
@@ -166,8 +166,8 @@ gridded_sizemodel <- function(params, ERSEM.det.input = F, U_mat, V_mat, W_mat,
     # Boltzmann = params$Boltzmann
     # A.u = params$A.u
     # A.v = params$A.v
-    # alpha_u = params$alpha.u
-    # alpha_v = params$alpha.v
+    # alpha.u = params$alpha.u
+    # alpha.v = params$alpha.v
     # pref.pel = params$pref.pel
     # pref.ben = params$pref.ben
     # dx = params$dx
@@ -182,7 +182,7 @@ gridded_sizemodel <- function(params, ERSEM.det.input = F, U_mat, V_mat, W_mat,
     # depth = params$depth
     # K.d = params$K.d
     # det.coupling = params$det.coupling
-    # delta_t = params$delta_t
+    # delta.t = params$delta.t
     # idx = params$idx
 
     # gridded time series of intercept of plankton size spectrum (estimated 
@@ -190,14 +190,14 @@ gridded_sizemodel <- function(params, ERSEM.det.input = F, U_mat, V_mat, W_mat,
     ui0 <- 10^pp
     # gridded time series of slope of plankton size spectrum (estimated from
     # GCM, biogeophysical model output or satellite data).
-    r_plank <- r.plank   
+    r.plank <- r.plank   
     
     # gridded time series of temperature in water column
     sst <- sst            
     #gridded time series of temperature near seabed
     sft <- sft		      
     # gridded time series of export ratio ( read in sizeparam)
-    sinking_rate <- sinking.rate  	      
+    sinking.rate <- sinking.rate  	      
     
     # Initialising matrices -----------
     
@@ -434,7 +434,7 @@ gridded_sizemodel <- function(params, ERSEM.det.input = F, U_mat, V_mat, W_mat,
           # pelagic spectrum inputs (sinking dead bodies and faeces) - export 
           # ratio used for "sinking rate"
           #  + benthic spectrum inputs (dead stuff - already on/in seafloor)
-          input_w <- (sinking_rate[j, i] * 
+          input_w <- (sinking.rate[j, i] * 
                         (sum(defbypred[ref:Nx]*dx) + 
                            sum(pel_tempeffect*OM_u[1:Nx] *
                                  det_coupling_u_multiplier) + 
@@ -464,7 +464,7 @@ gridded_sizemodel <- function(params, ERSEM.det.input = F, U_mat, V_mat, W_mat,
         dW <- input_w-(output_w+burial)
         
         #biomass density of detritus g.m-2
-        W[j, i+1] <- W[j, i]+dW*delta_t  
+        W[j, i+1] <- W[j, i]+dW*delta.t  
       }
       
       if(ERSEM.det.input == T) {
@@ -472,14 +472,14 @@ gridded_sizemodel <- function(params, ERSEM.det.input = F, U_mat, V_mat, W_mat,
        }
       
       # Pelagic Predator Density (nos.m-2) ----
-      # Solve for time + delta_t using implicit time Euler upwind finite 
+      # Solve for time + delta.t using implicit time Euler upwind finite 
       # difference (help from Ken Andersen and Richard Law)
       
       # Matrix setup for implicit differencing 
       Ai_u <- Bi_u <- Si_u <- array(0, c(length(x), 1))   
-      Ai_u[idx] <- (1/log(10))*-GG_u[j, idx-1, i]*delta_t/dx
+      Ai_u[idx] <- (1/log(10))*-GG_u[j, idx-1, i]*delta.t/dx
       Bi_u[idx] <- 1+(1/log(10))*GG_u[j, idx, i] * 
-        delta_t/dx+Z_u[j, idx, i]*delta_t
+        delta.t/dx+Z_u[j, idx, i]*delta.t
       Si_u[idx] <- U[j, idx, i]
       
       # Boundary condition at upstream end 
@@ -493,17 +493,17 @@ gridded_sizemodel <- function(params, ERSEM.det.input = F, U_mat, V_mat, W_mat,
       # continuation of plankton hold constant  
       # U[1:ref,i+1]<-U[1:ref,i] 
       
-      U[j, 1:ref, i+1] <- ui0[j, i]*10^(r_plank[j, i]*x)[1:(ref)] 
+      U[j, 1:ref, i+1] <- ui0[j, i]*10^(r.plank[j, i]*x)[1:(ref)] 
       
       # apply transfer efficiency of 10% *plankton density at same size  
-      # if (repro.on==0)  U[ref,i+1]<-0.1*u.init.f(x,ui0,r_plank)[ref]       
+      # if (repro.on==0)  U[ref,i+1]<-0.1*u.init.f(x,ui0,r.plank)[ref]
       # reproduction from energy allocation
       if(repro.on == 1){
         U[j, ref, i+1] <- U[j, ref, i] +
           (sum(R_u[j, (ref+1):Nx, i]*10^x[(ref+1):Nx]*U[j, (ref+1):Nx, i]*dx) *
-             delta_t) / (dx*10^x[ref]) - 
-          (delta_t/dx)*(1/log(10))*(GG_u[j, ref, i])*U[j, ref, i] -
-          delta_t*Z_u[j, ref, i]*U[j, ref, i]
+             delta.t) / (dx*10^x[ref]) - 
+          (delta.t/dx)*(1/log(10))*(GG_u[j, ref, i])*U[j, ref, i] -
+          delta.t*Z_u[j, ref, i]*U[j, ref, i]
       }
       
       #main loop calculation
@@ -516,9 +516,9 @@ gridded_sizemodel <- function(params, ERSEM.det.input = F, U_mat, V_mat, W_mat,
       #shorthand for matrix referencing
       idx <- (ref.det+1):Nx
       
-      Ai_v[idx] <- (1/log(10))*-GG_v[j, idx-1, i]*delta_t/dx 
-      Bi_v[idx] <- 1+(1/log(10))*GG_v[j, idx, i]*delta_t/dx +
-        Z_v[j, idx, i]*delta_t
+      Ai_v[idx] <- (1/log(10))*-GG_v[j, idx-1, i]*delta.t/dx 
+      Bi_v[idx] <- 1+(1/log(10))*GG_v[j, idx, i]*delta.t/dx +
+        Z_v[j, idx, i]*delta.t
       Si_v[idx] <- V[j, idx, i]
       
       #boundary condition at upstream end
@@ -538,9 +538,9 @@ gridded_sizemodel <- function(params, ERSEM.det.input = F, U_mat, V_mat, W_mat,
       if(repro.on == 1){
         V[j, ref.det, i+1] <- V[j, ref.det, i] +
           sum(R_v[j, (ref.det+1):Nx, i]*10^x[(ref.det+1):Nx] * 
-                V[j, (ref.det+1):Nx, i]*dx)*delta_t/(dx*10^x[ref.det]) - 
-          (delta_t/dx)*(1/log(10))*(GG_v[j, ref.det, i])*V[j, ref.det, i] -
-          delta_t*Z_v[j, ref.det, i]*V[j, ref.det, i]
+                V[j, (ref.det+1):Nx, i]*dx)*delta.t/(dx*10^x[ref.det]) - 
+          (delta.t/dx)*(1/log(10))*(GG_v[j, ref.det, i])*V[j, ref.det, i] -
+          delta.t*Z_v[j, ref.det, i]*V[j, ref.det, i]
       }
       
       #loop calculation
@@ -618,13 +618,13 @@ sizemodel <- function(params, ERSEM.det.input = F, U_mat, V_mat, W_mat,
     ui0 <- 10^pp          
     # time series of slope of plankton size spectrum (estimated from GCM, 
     #biogeophysical model output or satellite data).  	
-    r_plank <- r_plank
+    r.plank <- r.plank
     # time series of temperature in water column
     sst <- sst
     #time series of temperature near seabed
     sft <- sft
     #time series of export ratio (read in sizeparam)
-    sinking_rate <- sinking_rate
+    sinking.rate <- sinking.rate
     
     
     #--------------------------------------------------------------------------
@@ -670,8 +670,8 @@ sizemodel <- function(params, ERSEM.det.input = F, U_mat, V_mat, W_mat,
     Fvec_v <- Fvec_u <- array(0, c(length(x), Neq+1))
     
     #lookup tables for terms in the integrals which remain constant over time
-    gphi  <- gphi_f(q1)
-    mphi  <- mphi_f(q2)
+    gphi  <- gphi_f(q1, q0, sd.q)
+    mphi  <- mphi_f(q2, q0, sd.q, alpha.u)
     
     #lookup table for components of 10^(alpha.u*x)
     expax <- expax_f(x, alpha.u)
@@ -870,7 +870,7 @@ sizemodel <- function(params, ERSEM.det.input = F, U_mat, V_mat, W_mat,
           # pelagic spectrum inputs (sinking dead bodies and faeces) - export 
           # ratio used for "sinking rate" + benthic spectrum inputs (dead stuff
           # already on/in seafloor)
-          input_w <- (sinking_rate[i] * 
+          input_w <- (sinking.rate[i] * 
                         (sum(defbypred[ref:Nx]*dx) +
                            sum(pel_tempeffect[i] * 
                                  OM_u[1:Nx]*U[1:Nx, i]*10^(x[1:Nx])*dx) + 
@@ -902,7 +902,7 @@ sizemodel <- function(params, ERSEM.det.input = F, U_mat, V_mat, W_mat,
         # inputs to the model) 
         dW <- input_w-(output_w+burial) 
         #biomass density of detritus g.m-2
-        W[i+1] <- W[i]+dW*delta_t
+        W[i+1] <- W[i]+dW*delta.t
       }
       
       if(ERSEM.det.input == T){
@@ -910,15 +910,15 @@ sizemodel <- function(params, ERSEM.det.input = F, U_mat, V_mat, W_mat,
       }
       
       #----------------------------------------------
-      # Pelagic Predator Density (nos.m-2)- solve for time + delta_t using
+      # Pelagic Predator Density (nos.m-2)- solve for time + delta.t using
       # implicit time Euler upwind finite difference (help from Ken Andersen 
       # and Richard Law)
       
       # Matrix setup for implict differencing 
       Ai_u <- Bi_u <- Si_u <- array(0, c(length(x), 1))   
       
-      Ai_u[idx] <- (1/log(10))*-GG_u[idx-1, i]*delta_t/dx
-      Bi_u[idx] <- 1+(1/log(10))*GG_u[idx, i]*delta_t/dx +Z_u[idx, i]*delta_t
+      Ai_u[idx] <- (1/log(10))*-GG_u[idx-1, i]*delta.t/dx
+      Bi_u[idx] <- 1+(1/log(10))*GG_u[idx, i]*delta.t/dx +Z_u[idx, i]*delta.t
       Si_u[idx] <- U[idx, i]
       
       # Boundary condition at upstream end 
@@ -932,26 +932,26 @@ sizemodel <- function(params, ERSEM.det.input = F, U_mat, V_mat, W_mat,
       # U[1:ref,i+1]<-U[1:ref,i] 
       
       if(use_init==T){
-        U[1:ref, i+1] <- ui0[i]*10^(r_plank[i]*x)[1:(ref)] 
+        U[1:ref, i+1] <- ui0[i]*10^(r.plank[i]*x)[1:(ref)] 
       }
       if(use_init == F){
-        U[1:ref, i+1] <- ui0[i+1]*10^(r_plank[i+1]*x)[1:(ref)] 
+        U[1:ref, i+1] <- ui0[i+1]*10^(r.plank[i+1]*x)[1:(ref)] 
       }
       
       # apply transfer efficency of 10% *plankton density at same size  
-      # if (repro.on==0)  U[ref,i+1]<-0.1*u.init.f(x,ui0,r_plank)[ref]       
+      # if (repro.on==0)  U[ref,i+1]<-0.1*u.init.f(x,ui0,r.plank)[ref]       
       # reproduction from energy allocation
       if(repro.on == 1){
         U[ref, i+1] <- U[ref, i] +
           (sum(R_u[(ref+1):Nx, i]*10^x[(ref+1):Nx]*U[(ref+1):Nx, i]*dx) *
-             delta_t)/(dx*10^x[ref])-(delta_t/dx)*(1/log(10)) *
-          (GG_u[ref, i])*U[ref, i]-delta_t*Z_u[ref, i]*U[ref, i]
+             delta.t)/(dx*10^x[ref])-(delta.t/dx)*(1/log(10)) *
+          (GG_u[ref, i])*U[ref, i]-delta.t*Z_u[ref, i]*U[ref, i]
       }
       
       #main loop calculation
       for(j in (ref+1):(Nx)){
-        #U[j,i+1]<-U[j,i]-(delta_t/dx)*(1/log(10))*(GG_u[j,i])*U[j,i] + 
-        #(delta_t/dx)*(1/log(10))*GG_u[j-1,i]*U[j-1,i] -delta_t*Z_u[j,i]*U[j,i]
+        #U[j,i+1]<-U[j,i]-(delta.t/dx)*(1/log(10))*(GG_u[j,i])*U[j,i] + 
+        #(delta.t/dx)*(1/log(10))*GG_u[j-1,i]*U[j-1,i] -delta.t*Z_u[j,i]*U[j,i]
         
         U[j, i+1] <- (Si_u[j]-Ai_u[j]*U[j-1, i+1])/Bi_u[j]
       }
@@ -962,8 +962,8 @@ sizemodel <- function(params, ERSEM.det.input = F, U_mat, V_mat, W_mat,
       #shorthand for matrix referencing
       idx <- (ref.det+1):Nx  
       
-      Ai_v[idx] <- (1/log(10))*-GG_v[idx-1,i]*delta_t/dx 
-      Bi_v[idx] <- 1+(1/log(10))*GG_v[idx, i]*delta_t/dx +Z_v[idx, i]*delta_t
+      Ai_v[idx] <- (1/log(10))*-GG_v[idx-1,i]*delta.t/dx 
+      Bi_v[idx] <- 1+(1/log(10))*GG_v[idx, i]*delta.t/dx +Z_v[idx, i]*delta.t
       Si_v[idx] <- V[idx, i]
       
       #boundary condition at upstream end
@@ -982,15 +982,15 @@ sizemodel <- function(params, ERSEM.det.input = F, U_mat, V_mat, W_mat,
       if(repro.on == 1){
         V[ref.det, i+1] <- V[ref.det, i] +
           sum(R_v[(ref.det+1):Nx, i]*10^x[(ref.det+1):Nx] * 
-                V[(ref.det+1):Nx, i]*dx)*delta_t/(dx*10^x[ref.det]) - 
-          (delta_t/dx)*(1/log(10))*(GG_v[ref.det, i])*V[ref.det, i] - 
-          delta_t*Z_v[ref.det, i]*V[ref.det, i]
+                V[(ref.det+1):Nx, i]*dx)*delta.t/(dx*10^x[ref.det]) - 
+          (delta.t/dx)*(1/log(10))*(GG_v[ref.det, i])*V[ref.det, i] - 
+          delta.t*Z_v[ref.det, i]*V[ref.det, i]
       }
       
       #loop calculation
       for(j in (ref.det+1):(Nx)){ 
-        #V[j,i+1]<-V[j,i]-(delta_t/dx)*(1/log(10))*(GG_v[j,i])*V[j,i] + 
-        #(delta_t/dx)*(1/log(10))*GG_v[j-1,i]*V[j-1,i]-delta_t*Z_v[j,i]*V[j,i] 
+        #V[j,i+1]<-V[j,i]-(delta.t/dx)*(1/log(10))*(GG_v[j,i])*V[j,i] + 
+        #(delta.t/dx)*(1/log(10))*GG_v[j-1,i]*V[j-1,i]-delta.t*Z_v[j,i]*V[j,i] 
         V[j, i+1] <- (Si_v[j]-Ai_v[j]*V[j-1, i+1])/Bi_v[j]
       }		
       rm(j)
@@ -1191,9 +1191,9 @@ sizeparam <- function(equilibrium = F, dx = 0.1, xmin = -12, xmax = 6,
   # number of years to run model
   param$tmax <- tmax
   # discretisation of year 
-  param$delta_t <- (1/tstepspryr)
+  param$delta.t <- (1/tstepspryr)
   # number of time bins 
-  param$Neq <- param$tmax/param$delta_t	
+  param$Neq <- param$tmax/param$delta.t	
   # number of grid cells
   param$Ngrid <- Ngrid	
   
@@ -1433,7 +1433,7 @@ optimizeYield <- function(params, com, pp = pp, sst = sst, sft = sft,
     # total number of steps in a period
     params$Neq <- as.integer(365.0*params$tmaxyears/params$tstepdays)	
     # time step (rates per year)  
-    params$delta_t <- params$tmaxyears/params$Neq
+    params$delta.t <- params$tmaxyears/params$Neq
     params$siz_time <- 1:params$Neq
     
     params$U.init[, 1] <- com$U
