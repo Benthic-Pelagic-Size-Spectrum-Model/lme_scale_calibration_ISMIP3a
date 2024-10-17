@@ -79,6 +79,12 @@ def weighted_mean_timestep(file_paths, weights, region):
     
     #Loading all zarr files into a single dataset
     da = xr.open_mfdataset(file_paths, engine = 'zarr')
+    #Fix time format if needed
+    try:
+        new_time = da.indexes['time'].to_datetimeindex()
+        da['time'] = new_time
+    except:
+        pass
 
     #Apply weights
     da_weighted = da.weighted(weights)
