@@ -1,5 +1,5 @@
 # Dynamic Benthic Pelagic Model (DBPM) calibration - ISIMIP3A protocol
-This repository contains all code necessary to process inputs used by DBPM. Following protocol ISIMIP3A, this simulation uses inputs from GFDL-MOM6-COBALT2 at two horizontal resolutions: $0.25^{\circ}$ (original) and $1^{\circ}$ (coarsen).  
+This repository contains all code necessary to process inputs used by DBPM. This repository has been redesigned to use both Python and R as part of the model workflow. Following protocol ISIMIP3A, this simulation uses inputs from GFDL-MOM6-COBALT2 at two horizontal resolutions: $0.25^{\circ}$ (original) and $1^{\circ}$ (coarsen).  
   
 ## Step 1. Get input (environmental and fishing) data 
 - Script [`01_getinputs_ISIMIP3a.R`](https://github.com/Benthic-Pelagic-Size-Spectrum-Model/lme_scale_calibration_ISMIP3a/blob/main/01_getinputs_ISIMIP3a.R) gets environmental and fishing data for the region of interest  
