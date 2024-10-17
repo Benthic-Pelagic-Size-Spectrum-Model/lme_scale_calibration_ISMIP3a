@@ -34,7 +34,7 @@ def netcdf_to_zarr(file_path, path_out):
 def extract_gfdl(file_path, mask, path_out):
     '''
     Inputs:
-    - file_path (character) File path where GFDL output is located
+    - file_path (character) File path where GFDL zarr file is located
     - mask (boolean data array) Grid cells within region of interest should be identified
     as 1.
     - path_out (character) File path where outputs should be stored as zarr files
@@ -44,52 +44,74 @@ def extract_gfdl(file_path, mask, path_out):
     '''
 
     #Loading and rechunking data
-    da = xr.open_dataarray(file_path).chunk({'lat': 120, 'lon': 240})
+    da = xr.open_zarr(file_path)
+
+    #Getting name of variable contained in dataset
+    [var] = list(da.keys())
+    da = da[var]
     
     #Apply mask and remove rows where all grid cells are empty to reduce data array size
     da = da.where(mask == 1, drop = 'all')
+
+    #Rechunking data
+    if 'time' in da.dims:
+        da = da.chunk({'time': '50MB', 'lat': '50MB', 'lon': '50MB'})
+    else:
+        da = da.chunk({'lat': '50MB', 'lon': '50MB'})
 
     #Save results
     da.to_zarr(path_out, consolidated = True, mode = 'w')
 
 
 ## Calculating area weighted means
-def weighted_mean_timestep(file_path, weights):
+def weighted_mean_timestep(file_paths, weights, region):
     '''
     Inputs:
-    - file_path (character) File path pointing to zarr file from which weighted means 
-    will be calculated
+    - file_paths (list) File paths pointing to zarr files from which weighted means 
+    will be calculated and stored in a single data frame
     - weights (data array) Contains the weights to be used when calculating weighted mean.
     It should NOT include NaN, zeroes (0) should be used instead.
+    - region (character) Name of the region to be recorded in data frame
 
     Outputs:
     - df (pandas data frame) containing area weighted mean per time step
     '''
     
-    #Loading data
-    da = xr.open_zarr(file_path)
-    #Getting name of variable contained in dataset
-    [var] = list(da.keys())
-    da = da[var]
-    #Add units to name
-    new_name = var + '_' + da.attrs['units']
-    new_name = re.sub(' ', '_', new_name)
-    da.name = new_name
+    #Loading all zarr files into a single dataset
+    da = xr.open_mfdataset(file_paths, engine = 'zarr')
 
     #Apply weights
     da_weighted = da.weighted(weights)
     #Calculate weighted mean
     da_weighted_mean = da_weighted.mean(('lat', 'lon'))
-
-    if len(da.shape) < 3:
-        df = da_weighted_mean.values.tolist()
-    else:
-         #Change cftime to datetime
-        new_time = da_weighted_mean.indexes['time'].to_datetimeindex()
-        da_weighted_mean['time'] = new_time
-        #Transform to data frame
-        df = da_weighted_mean.to_dataframe().reset_index()
     
+    #Transform to data frame
+    df = da_weighted_mean.to_dataframe().reset_index()
+
+    #Getting names of variables in data frame
+    col_names = [i for i in df.columns if i != 'time']
+    #Getting name of experiment from file path
+    [exp] = re.findall('cobalt2_(.*?)_', file_paths[0])
+
+    #If no depth file is included, add variable and leave it empty
+    if 'deptho' not in col_names:
+        df['depth_m'] = np.nan
+    else:
+        col_names.remove('deptho')
+        df = df.rename(columns = {'deptho': 'depth_m'})
+    
+    #Add metadata to data frame
+    df['tot_area_m2'] = weights.values.sum()
+    df['year'] = df.apply(lambda x: x.time.year, axis = 1)
+    df['month'] = df.apply(lambda x: x.time.strftime('%B'), axis = 1)
+    df['region'] = region
+    df['scenario'] = exp
+
+    #Rearrange columns 
+    names = ['region', 'scenario', 'time', 'year', 'month', 
+             'depth_m', 'tot_area_m2'] + col_names
+    df = df[names]
+
     return df
 
 
