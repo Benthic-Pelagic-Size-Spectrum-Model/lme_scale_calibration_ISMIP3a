@@ -131,7 +131,7 @@ def getExportRatio(folder_gridded_data, gfdl_exp):
     - er (data array) Contains export ratio
     '''
 
-    #Create regex to find experiment in 
+    #Get list of files in experiment
     file_list = glob(os.path.join(folder_gridded_data, f'*_{gfdl_exp}_*'))
     
     #Load sea surface temperature
@@ -170,13 +170,12 @@ def getExportRatio(folder_gridded_data, gfdl_exp):
 
 
 #Calculate slope and intercept
-def GetPPIntSlope(sphy, lphy, depth, mmin = 10**(-14.25), mmid = 10**(-10.184), 
+def GetPPIntSlope(file_paths, mmin = 10**(-14.25), mmid = 10**(-10.184), 
                   mmax = 10**(-5.25), output = 'both'):
     '''
     Inputs:
-    - sphy (data array) Small phytoplankton
-    - lphy (data array) Large phytoplankton
-    - depth (data array) Depth
+    - file_paths (list) File paths pointing to zarr files from which slope and
+    intercept will be calculated
     - mmin (numeric)  Default is 10**(-14.25). ????
     - mmid (numeric)  Default is 10**(-10.184). ????
     - mmax (numeric)  Default is 10**(-5.25). ????
@@ -186,7 +185,16 @@ def GetPPIntSlope(sphy, lphy, depth, mmin = 10**(-14.25), mmid = 10**(-10.184),
     Outputs:
     - (Data array) - Depends on value of 'output' parameter. 
     '''
-
+        
+    #Load depth
+    depth = xr.open_zarr([f for f in file_paths if '_deptho_' in f][0])['deptho']
+    
+    #load large phytoplankton
+    lphy = xr.open_zarr([f for f in file_paths if '_lphy_' in f][0])['lphy']
+    
+    #Load small phytoplankton
+    sphy = xr.open_zarr([f for f in file_paths if '_sphy_' in f][0])['sphy']
+    
     #Convert sphy and lphy from mol C / m^3 to g C / m^3
     sphy = sphy*12.0107
     lphy = lphy*12.0107
