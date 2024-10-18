@@ -32,7 +32,10 @@ effort_data <- file.path("/g/data/vf71/fishmip_inputs/ISIMIP3a/DKRZ_EffortFiles"
   # Adding depth and area information for the area of interest
   mutate(depth = depth_area$depth_m, 
          area_m2 = depth_area$tot_area_m2,
-         total_nom_active_area_m2 = total_nom_active/area_m2)
+         total_nom_active_area_m2 = total_nom_active/area_m2,
+         nom_active_relative = total_nom_active/max(total_nom_active),
+         nom_active_area_m2_relative = total_nom_active_area_m2/
+         max(total_nom_active_area_m2))
 
 #Catches data
 catch_data <- file.path("/g/data/vf71/fishmip_inputs/ISIMIP3a/DKRZ_EffortFiles",
