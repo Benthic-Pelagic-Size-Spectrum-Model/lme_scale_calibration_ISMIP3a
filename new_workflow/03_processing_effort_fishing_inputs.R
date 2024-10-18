@@ -5,16 +5,28 @@
 library(data.table)
 library(dplyr)
 library(arrow)
+library(purrr)
+library(janitor)
 library(ggplot2)
 
 # Loading DBPM climate inputs ---------------------------------------------
-# We will load 'ctrlclim' data to get the mean depth and area of the region
-# of interest
-depth_area <- file.path("/g/data/vf71/la6889/dbpm_inputs/east_antarctica", 
-                        "monthly_weighted") |> 
-  list.files("ctrlclim_dbpm_clim", full.names = T) |> 
-  read_parquet(col_select = c("depth_m", "tot_area_m2")) |> 
+# We will load climate inputs to merge wih catch and effort data before saving
+# results
+forcing_folder <- file.path("/g/data/vf71/la6889/dbpm_inputs/east_antarctica",
+                            "monthly_weighted")
+
+clim_forcing_file <- list.files(forcing_folder, pattern = "obsclim|spinup",
+                                full.names = T) |>
+  map(\(x) read_parquet(x)) |> 
+  bind_rows() |> 
+  arrange(time) |> 
+  clean_names()
+
+# Getting the mean depth and area of the region of interest
+depth_area <- clim_forcing_file |> 
+  select(depth_m, tot_area_m2) |> 
   distinct()
+
 
 ## Loading effort and catches data ----------------------------------------
 effort_data <- file.path("/g/data/vf71/fishmip_inputs/ISIMIP3a/DKRZ_EffortFiles",
@@ -57,13 +69,19 @@ catch_data <- file.path("/g/data/vf71/fishmip_inputs/ISIMIP3a/DKRZ_EffortFiles",
 
 #Merging catches and effort data
 DBPM_effort_catch_input <- effort_data |> 
-  full_join(catch_data)
+  full_join(catch_data) |> 
+  mutate(region = paste0("FAO ", region))
 
 #Removing individual data frames
 rm(effort_data, catch_data)
 
+#Joining with climate inputs
+forcing_file <- clim_forcing_file |> 
+  full_join(DBPM_effort_catch_input, by = c("region", "year")) 
+
+
 ## Plotting fish and catch data -------------------------------------------
-DBPM_effort_catch_input |> 
+forcing_file |> 
   ggplot(aes(year, total_nom_active))+
   annotate("rect", xmin = 1841, xmax = 1960, ymin = 0, ymax = Inf, 
            fill = "#b2e2e2", alpha = 0.4)+ 
@@ -86,8 +104,7 @@ ggsave("new_workflow/outputs/effort_fao-58.pdf", device = "pdf", dpi = 300)
 
 
 ## Saving catch and effort, and inputs data -------------------------------
-DBPM_effort_catch_input |> 
-  write_parquet(
-    file.path("/g/data/vf71/la6889/dbpm_inputs/east_antarctica",
-              "monthly_weighted/dbpm_effort-catch-inputs_fao-58.parquet"))
+forcing_file |> 
+  write_parquet(file.path(forcing_folder, 
+                          "dbpm_clim-fish-inputs_fao-58_1841-2010.parquet"))
 
