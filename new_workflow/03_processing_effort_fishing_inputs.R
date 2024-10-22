@@ -72,6 +72,11 @@ DBPM_effort_catch_input <- effort_data |>
   full_join(catch_data) |> 
   mutate(region = paste0("FAO ", region))
 
+#Saving summarised catch and effort data
+DBPM_effort_catch_input |> 
+  write_parquet(file.path(forcing_folder,
+                          "dbpm_effort-catch-inputs_fao-58.parquet"))
+
 #Removing individual data frames
 rm(effort_data, catch_data)
 
