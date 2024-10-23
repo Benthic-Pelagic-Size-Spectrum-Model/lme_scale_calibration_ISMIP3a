@@ -1,19 +1,19 @@
 # Dynamic Benthic Pelagic Model (DBPM) calibration - ISIMIP3A protocol
 This repository contains all code necessary to process inputs used by DBPM. This repository has been redesigned to use both Python and R as part of the model workflow. Following protocol ISIMIP3A, this simulation uses inputs from GFDL-MOM6-COBALT2 at two horizontal resolutions: $0.25^{\circ}$ (original) and $1^{\circ}$ (coarsen).  
   
-## Step 1. Get input (environmental and fishing) data 
-- Script [`01_getinputs_ISIMIP3a.R`](https://github.com/Benthic-Pelagic-Size-Spectrum-Model/lme_scale_calibration_ISMIP3a/blob/main/01_getinputs_ISIMIP3a.R) gets environmental and fishing data for the region of interest  
+## Step 1. Processing DBPM inputs at a global scale
+- Script [`01_processing_dbpm_global_inputs.ipynb`](new_workflow/01_processing_dbpm_global_inputs.ipynb) gets environmental and fishing data for the region of interest  
 - You can choose any [FAO Major Fishing Areas](https://www.fao.org/fishery/en/area/search) or [Large Marine Ecosystems (LMEs)](https://worldoceanreview.com/en/wor-5/improving-coastal-protection/the-art-of-coastal-management/large-marine-ecosystems/)  
 - Input data will be formatted ready to be used with modelling functions  
   
 ## Step 2. LME-scale calibration  
-- Script [`02_runLMEcalibration.R`](https://github.com/Benthic-Pelagic-Size-Spectrum-Model/lme_scale_calibration_ISMIP3a/blob/main/02_runLMEcalibration.R) estimates fishing mortality parameters (catchability and selectivities for each functional group)    
+- Script [`02_processing_dbpm_regional_inputs.ipynb`](https://github.com/Benthic-Pelagic-Size-Spectrum-Model/lme_scale_calibration_ISMIP3a/blob/main/02_runLMEcalibration.R) estimates fishing mortality parameters (catchability and selectivities for each functional group)    
 - Checks and adjusts search volume parameter  
 - Creates and saves calibration plots as in PDF format  
 - Plots can be used to visually inspect fit of predicted catch to observed catch data  
   
 ## Step 3. Running DBPM model (with and without fishing)
-- Script [`03_rungridbyLME.R
+- Script [`03_processing_effort_fishing_inputs.R
 `](https://github.com/Benthic-Pelagic-Size-Spectrum-Model/lme_scale_calibration_ISMIP3a/blob/main/03_rungridbyLME.R) takes parameters estimated in **step 2** to create initial values by re-running the LME scale inputs  
 - Gets inputs for `gridded_sizemodel()` and runs for LME  
 - Produces diagnostic plots for each LME  
@@ -42,3 +42,4 @@ In the next section, we include information about how to create an NCI account i
   * You are also welcome to follow along with the [instructions to set up ssh keys](https://access-hive.org.au/getting_started/first_steps/#automatic-login), but this is optional.  
 
 
+Adding new line
