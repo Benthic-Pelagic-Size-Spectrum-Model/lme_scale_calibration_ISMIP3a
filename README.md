@@ -5,11 +5,10 @@ This repository contains all code necessary to process inputs used by DBPM. This
 - Script [`01_processing_dbpm_global_inputs.ipynb`](new_workflow/01_processing_dbpm_global_inputs.ipynb) processes environmental data needed to force the DBPM model at a global scale. GFDL-MOM6-COBALT2 output files are transformed from `netCDF` to analysis ready `zarr` files. Files for `spinup` period are also created here.  
   
 ## Step 2. Processing DBPM climate inputs at a regional scale
-- Script [`02_processing_dbpm_regional_inputs.ipynb`](https://github.com/Benthic-Pelagic-Size-Spectrum-Model/lme_scale_calibration_ISMIP3a/blob/new_features/new_workflow/02_processing_dbpm_regional_inputs.ipynb) uses `zarr` files produced in the previous step to extract data for an area of interest. In this notebook, we used the [FAO Major Fishing Area 58: Indian Ocean, Antarctic And Southern](https://www.fao.org/fishery/en/area/fao:58/en).  
+- Script [`02_processing_dbpm_regional_inputs.ipynb`](new_features/new_workflow/02_processing_dbpm_regional_inputs.ipynb) uses `zarr` files produced in the previous step to extract data for an area of interest. In this notebook, we used the [FAO Major Fishing Area 58: Indian Ocean, Antarctic And Southern](https://www.fao.org/fishery/en/area/fao:58/en).  
 
 ## Step 3. Processing DBPM fishing inputs at a regional scale
-- Script [`03_processing_effort_fishing_inputs.R
-`](https://github.com/Benthic-Pelagic-Size-Spectrum-Model/lme_scale_calibration_ISMIP3a/blob/new_features/new_workflow/03_processing_effort_fishing_inputs.R) processes fishing catch and effort data for the area of interest. It also creates a single file including fishing and climate data, which has all variables needed to run DBPM within the boundaries of the area of interest.  
+- Script [`03_processing_effort_fishing_inputs.R`](new_features/new_workflow/03_processing_effort_fishing_inputs.R) processes fishing catch and effort data for the area of interest. It also creates a single file including fishing and climate data, which has all variables needed to run DBPM within the boundaries of the area of interest.  
 
 
 # Running this repository
