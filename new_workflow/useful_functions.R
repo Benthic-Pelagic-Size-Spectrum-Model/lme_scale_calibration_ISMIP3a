@@ -3,38 +3,11 @@
 # Functions have been adapted from previous DBPM work
 # 
 # Edited by: Denisse Fierro Arcos
-# Date of update: 2024-10-16
+# Date of update: 2024-10-23
 
 
 # Loading libraries -------------------------------------------------------
-library(arrow)
-library(janitor)
-library(dplyr)
-library(lhs)
-
-
-dbpm_inputs <- read_parquet("/g/data/vf71/la6889/dbpm_inputs/east_antarctica/monthly_weighted/dbpm_clim-fish-inputs_fao-58_1841-2010.parquet")
-
-#Making function reproducible
-set.seed(1234)
-
-#Construct a hypercube with random numbers
-#num_iter defines number of rows in hypercube
-#columns represent five specific parameters needed
-fishing_params <- data.frame(randomLHS(100, 5))
-colnames(fishing_params) <- c("fmort_u", "fmort_v", "fminx_u", "fminx_v", 
-                              "search_vol")
-
-#Adjust range of mi size params, others go from 0-1
-fishing_params <- fishing_params |> 
-  mutate(fminx_u = fminx_u*2, 
-         fminx_v = fminx_v*2,
-         # adjust range of search vol, others go from 0-1
-         search_vol = search_vol+0.001)
-
-
-test <- sizeparam(dbpm_inputs, fishing_params, xmin_consumer_u = -3, 
-          xmin_consumer_v = -3, tstepspryr = 12)
+# library(dplyr)
 
 
 # Getting DBPM model parameters ready -------------------------------------
@@ -181,6 +154,7 @@ sizeparam <- function(dbpm_inputs, fishing_params, dx = 0.1, xmin = -12,
   # net growth conversion efficiency for organisms in the "detritivore" 
   # spectrum (K.v)
   param$growth_detritivore <- 0.2
+  
   # net growth conversion efficiency for detritus (K.d)
   param$growth_detritus <- param$growth_detritivore
   
@@ -247,11 +221,12 @@ sizeparam <- function(dbpm_inputs, fishing_params, dx = 0.1, xmin = -12,
   param$numb_size_bins <- length(param$log10_size_bins)
   
   # index for minimum log10 predator size (ref)
-  param$ind_pred <- which(log10_size_bins == param$min_log10_pred)
+  param$ind_pred <- which(param$log10_size_bins == param$min_log10_pred)
     #((param$min_log10_pred-param$min_log10_plankton)/dx)+1
   
   # index for minimum log10 detritivore size (ref.det)
-  param$ind_detritivore <- which(log10_size_bins == param$min_log10_detritivore)
+  param$ind_detritivore <- which(param$log10_size_bins == 
+                                   param$min_log10_detritivore)
     #((param$min_log10_detritivore-param$min_log10_plankton)/dx)+1 
   
   # index in F vector corresponding to smallest size fished in U (Fref.u)
