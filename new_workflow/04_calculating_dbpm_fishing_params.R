@@ -34,32 +34,29 @@ fishing_params <- fishing_params |>
          # adjust range of search vol, others go from 0-1
          search_vol = search_vol+0.001)
 
-test <- sizeparam(dbpm_inputs, fishing_params, xmin_consumer_u = -3, 
-                  xmin_consumer_v = -3, tstepspryr = 12)
 
-test |> 
-  write_json("test.json")
+# Getting DBPM parameters -------------------------------------------------
+params <- sizeparam(dbpm_inputs, fishing_params, xmin_consumer_u = -3, 
+                    xmin_consumer_v = -3, tstepspryr = 12)
 
-a <- read_json("test.json", simplifyVector = T)
+# Saving parameters
+params |> 
+  write_json("new_workflow/outputs/dbpm_size_params.json")
 
-phi_f <- function(q, q0, sd.q){
-  phi <- ifelse(q > 0, 
-                exp(-(q-q0)*(q-q0)/(2*sd.q*sd.q))/(sd.q*sqrt(2.0*pi)),
-                0) 
-  return(phi)
-}
 
-gphi_f <- function(q1, q0, sd.q){
-  return(10^(-q1)*phi_f(q1, q0, sd.q))
-}	
+# Loading DBPM parameters -------------------------------------------------
+# If paramaters were already saved, they can be read instead of being 
+# recalculated
+params <- read_json("new_workflow/outputs/dbpm_size_params.json", 
+                    simplifyVector = T)
 
-mphi_f <- function(q2, q0, sd.q, alpha.u){
-  return(10^(alpha.u*q2)*phi_f(q2, q0, sd.q))
-}	
 
-expax_f <- function(x, alpha.u){
-  return(10^(alpha.u*x)) 
-}
+
+
+
+
+
+
 
 
 params <- sizeparam(xmin.consumer.u = -3, xmin.consumer.v = -3, 
@@ -534,26 +531,6 @@ return(list(U = U[,],
 #   #bestvals (data frame) - Contains the values for LHS parameters that resulted
 #   #in the best performing model based on RMSE values
 #   
-#   #Making function reproducible
-#   set.seed(1234)
-#   
-#   #Construct a hypercube with random numbers
-#   #num_iter defines number of rows in hypercube
-#   #columns represent five specific parameters needed
-#   sim <- data.frame(randomLHS(num_iter, 5))
-#   colnames(sim) <- c("f.u", "f.v", "f.minu", "f.minv", "search.vol")
-#   
-#   #Adjust range of mi size params, others go from 0-1
-#   sim <- sim |> 
-#     mutate(f.minu = f.minu*2, 
-#            f.minv = f.minv*2,
-#            # adjust range of search vol, others go from 0-1
-#            search.vol = search.vol+0.001)
-#   
-#   if(is.numeric(search_vol)){
-#     sim <- sim |> 
-#       mutate(search.vol = search_vol)
-#   }
 #   
 #   # use below to select a constant value for search.vol
 #   # if(!is.null(forcing_file)){
@@ -601,3 +578,30 @@ return(list(U = U[,],
 #   
 #   return(bestvals)
 # }
+
+
+
+
+
+
+
+
+gridded_params <- sizeparam(,
+                            
+                            equilibrium = FALSE, dx = 0.1, 
+                            xmin.consumer.u = -3, xmin.consumer.v = -3,
+                            tmax = tmax, tstepspryr = 12,
+                            search_vol = f.effort["search.vol"], 
+                            fmort.u = f.u, fminx.u = f.minu, fmort.v = f.v, 
+                            fminx.v = f.minv, depth = lme_inputs_grid$depth, 
+                            er = lme_inputs_grid$er, 
+                            pp = lme_inputs_grid$intercept, 
+                            slope = lme_inputs_grid$slope, 
+                            sst = lme_inputs_grid$sst, 
+                            sft = lme_inputs_grid$sbt, use.init = TRUE,
+                            effort = lme_inputs_grid$nom_active_area_m2_relative, 
+                            U.initial = U.initial, V.initial = V.initial, 
+                            W.initial = W.initial, 
+                            Ngrid = nrow(lme_inputs_grid$depth))
+
+
