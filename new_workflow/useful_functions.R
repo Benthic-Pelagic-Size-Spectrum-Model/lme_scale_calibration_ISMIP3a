@@ -52,7 +52,7 @@ sizeparam <- function(dbpm_inputs, fishing_params, dx = 0.1, xmin = -12,
   param <- list()
   
   # depth
-  param$depth <- dbpm_inputs$depth
+  param$depth <- mean(dbpm_inputs$depth)
   
   # number of years to run model (tmax)
   param$n_years <- length(unique(dbpm_inputs$year))
@@ -332,7 +332,7 @@ sizemodel <- function(params, ERSEM_det_input = F, temp_effect = T,
     # Input parameters to vary:
     # time series of intercept of plankton size spectrum (estimated from GCM, 
     # biogeophysical model output or satellite data).		
-    ui0 <- 10^int_phy_zoo  
+    ui0 <- 10^int_phy_zoo
     # time series of slope of plankton size spectrum (estimated from GCM, 
     #biogeophysical model output or satellite data).  	
     slope_phy_zoo <- slope_phy_zoo
@@ -342,6 +342,10 @@ sizemodel <- function(params, ERSEM_det_input = F, temp_effect = T,
     sea_floor_temp <- sea_floor_temp
     #time series of export ratio (read in sizeparam)
     sinking_rate <- sinking_rate
+    #Size bin index
+    size_bin_index <- 1:numb_size_bins
+    #Size bins
+    size_bins_vals <- 10^log10_size_bins
     
     
     #--------------------------------------------------------------------------
@@ -350,8 +354,8 @@ sizemodel <- function(params, ERSEM_det_input = F, temp_effect = T,
     
     #q1 is a square matrix holding the log(predatorsize/preysize) for all 
     #combinations of sizes (q1)
-    pred_prey_matrix  <- matrix(NA, numb_size_bins, numb_size_bins)
-    for(i in 1:numb_size_bins){
+    pred_prey_matrix <- matrix(NA, numb_size_bins, numb_size_bins)
+    for(i in size_bin_index){
       pred_prey_matrix[, i] <- log10_size_bins[i] - log10_size_bins
     }
     
@@ -369,7 +373,7 @@ sizemodel <- function(params, ERSEM_det_input = F, temp_effect = T,
     #matrix for keeping track of growth (GG_v, GG_u) and reproduction (R_v, R_u) 
     #from ingested food:
     reprod_det <- reprod_pred <- array(0, c(numb_size_bins, numb_time_steps+1))
-    growth_det <- growth_pred <- array(0, c(numb_size_bins, numb_time_steps+1))
+    growth_det <- growth_int_pred <- array(0, c(numb_size_bins, numb_time_steps+1))
     
     #matrix for keeping track of predation mortality (PM_v, PM_u)
     pred_mort_det <- array(0, c(numb_size_bins, numb_time_steps+1))
@@ -408,60 +412,66 @@ sizemodel <- function(params, ERSEM_det_input = F, temp_effect = T,
     #--------------------------------------------------------------------------
     
     # set up with the initial values from param
-    #(phyto+zoo)plankton size spectrum  
-    predators[1:(ind_min_pred_size-1), 1] <- plank_pred_sizes[1:(ind_min_pred_size-1)]    
-    # set initial consumer size spectrum 
-    predators[ind_min_pred_size:120, 1] <- plank_pred_sizes[ind_min_pred_size:120]       
-    # set initial detritivore spectrum  
-    detritivores[ind_min_detritivore_size:120, 1] <- detritivore_sizes[ind_min_detritivore_size:120]  
-    # set initial detritus biomass density (g.m^-3) 
+    #(phyto+zoo)plankton size spectrum - set initial consumer size spectrum (U)
+    predators[1:120, 1] <- plank_pred_sizes[1:120]       
+    # set initial detritivore spectrum  (V)
+    detritivores[ind_min_detritivore_size:120, 1] <- 
+      detritivore_sizes[ind_min_detritivore_size:120]
+    # set initial detritus biomass density (g.m^-3) (W)
     detritus[1] <- init_detritus
     
     if(use_init){
       # set up with the initial values from previous run
-      #(phyto+zoo)plankton size spectrum  
-      predators[1:(ind_min_pred_size-1), 1] <- plank_pred_sizes[1:(ind_min_pred_size-1)]    
       # set initial consumer size spectrum from previous run
-      predators[ind_min_pred_size:numb_size_bins, 1] <- plank_pred_sizes[ind_min_pred_size:numb_size_bins]
+      predators[ind_min_pred_size:numb_size_bins, 1] <- 
+        plank_pred_sizes[ind_min_pred_size:numb_size_bins]
       # set initial detritivore spectrum from previous run
-      detritivores[ind_min_detritivore_size:numb_size_bins, 1] <- detritivore_sizes[ind_min_detritivore_size:numb_size_bins] 
-      detritus[1] <- init_detritus
+      detritivores[ind_min_detritivore_size:numb_size_bins, 1] <- 
+        detritivore_sizes[ind_min_detritivore_size:numb_size_bins] 
     }
     
-    #intrinsic natural mortality
-    other_mort_pred <- natural_mort*10^(-0.25*log10_size_bins)
-    other_mort_det <- natural_mort*10^(-0.25*log10_size_bins)
+    #intrinsic natural mortality (OM_u, OM_v)
+    other_mort_det <- other_mort_pred <- natural_mort*10^(-0.25*log10_size_bins)
     
     #senescence mortality rate to limit large fish from building up in the 
     #system
     #same function as in Law et al 2008, with chosen parameters gives similar 
-    #M2 values as in Hall et al. 2006
-    senes_mort_pred <- const_senescence_mort*10^(exp_senescence_mort*(log10_size_bins-size_senescence))
-    senes_mort_det <- const_senescence_mort*10^(exp_senescence_mort*(log10_size_bins-size_senescence))
+    #M2 values as in Hall et al. 2006 (SM_u, SM_v)
+    senes_mort_det <- senes_mort_pred <- const_senescence_mort*
+      10^(exp_senescence_mort*(log10_size_bins-size_senescence))
     
-    #Fishing mortality (THESE PARAMETERS NEED TO BE ESTIMATED!)
+    #Fishing mortality (THESE PARAMETERS NEED TO BE ESTIMATED!) (FVec_u, FVec_v)
     # from Benoit & Rochet 2004 
     # here fish_mort_pred and fish_mort_pred= fixed catchability term for predators and 
     # detritivores to be estimated along with ind_min_det and ind_min_fish_pred
-    fishing_mort_pred[ind_min_fish_pred:numb_size_bins, 1] <- fish_mort_pred*effort[1]
-    fishing_mort_det[ind_min_det:numb_size_bins, 1] <- fish_mort_detritivore*effort[1]
+    fishing_mort_pred[ind_min_fish_pred:numb_size_bins, 1] <- 
+      fish_mort_pred*effort[1]
+    fishing_mort_det[ind_min_det:numb_size_bins, 1] <- 
+      fish_mort_detritivore*effort[1]
     
+    #output fisheries catches per yr at size (Y_u, Y_v)
+    catch_pred[ind_min_fish_pred:numb_size_bins, 1] <- 
+      fishing_mort_pred[ind_min_fish_pred:numb_size_bins, 1]*
+      predators[ind_min_fish_pred:numb_size_bins, 1]*
+      size_bins_vals[ind_min_fish_pred:numb_size_bins] 
     #output fisheries catches per yr at size
-    catch_pred[ind_min_fish_pred:numb_size_bins, 1] <- fishing_mort_pred[ind_min_fish_pred:numb_size_bins, 1]*predators[ind_min_fish_pred:numb_size_bins, 1]*10^log10_size_bins[ind_min_fish_pred:numb_size_bins] 
-    #output fisheries catches per yr at size
-    catch_det[ind_min_det:numb_size_bins, 1] <- fishing_mort_det[ind_min_det:numb_size_bins, 1]*detritivores[ind_min_det:numb_size_bins, 1]*10^log10_size_bins[ind_min_det:numb_size_bins] 
+    catch_det[ind_min_det:numb_size_bins, 1] <- 
+      fishing_mort_det[ind_min_det:numb_size_bins, 1]*
+      detritivores[ind_min_det:numb_size_bins, 1]*
+      size_bins_vals[ind_min_det:numb_size_bins] 
     
     #iteration over time, N [days]
-    for(i in 1:(numb_time_steps)){
+    for(i in 1:numb_time_steps){
       
       #--------------------------------
       # Calculate Growth and Mortality
       #--------------------------------
-      if(temp_effect == T){
-        pel_tempeffect <- exp(c1-activation_energy/(boltzmann*(sea_surf_temp+273)))
-        ben_tempeffect <- exp(c1-activation_energy/(boltzmann*(sea_floor_temp+273)))
-      }
-      if(temp_effect == F){
+      if(temp_effect){
+        pel_tempeffect <- exp(c1-activation_energy/
+                                (boltzmann*(sea_surf_temp+273)))
+        ben_tempeffect <- exp(c1-activation_energy/
+                                (boltzmann*(sea_floor_temp+273)))
+      }else{
         pel_tempeffect <- 1
         ben_tempeffect <- 1
       }
@@ -469,44 +479,57 @@ sizemodel <- function(params, ERSEM_det_input = F, temp_effect = T,
       # feeding rates
       # yr-1
       #(f_pel)
-      feed_rate_pel <- pel_tempeffect[i] * 
-        as.vector(((hr_volume_search*10^(log10_size_bins*metabolic_req_pred)*pref_pelagic)*(predators[, i]*log_size_increase)%*%(constant_growth)) / 
-                    (1+handling*(hr_volume_search*10^(log10_size_bins*metabolic_req_pred)*pref_pelagic) * 
-                       (predators[, i]*log_size_increase)%*%(constant_growth))) 
+      feed_multiplier <- hr_volume_search*10^(log10_size_bins*metabolic_req_pred)
+      pred_growth <- (predators[, i]*log_size_increase)%*%(constant_growth)
+      
+      feed_rate_pel <- pel_tempeffect[i]*
+        as.vector(((feed_multiplier*pref_pelagic)*pred_growth)/ 
+                    (1+handling*(feed_multiplier*pref_pelagic)*pred_growth)) 
       # yr-1
       #(f_ben)
-      feed_rate_bent <- pel_tempeffect[i] * 
-        as.vector(((hr_volume_search*10^(log10_size_bins*metabolic_req_pred)*pref_benthos)*(detritivores[, i]*log_size_increase)%*%(constant_growth)) / 
-                    (1+handling*(hr_volume_search*10^(log10_size_bins*metabolic_req_pred)*pref_benthos) *
-                       (detritivores[, i]*log_size_increase)%*%(constant_growth)))
+      detrit_growth <- (detritivores[, i]*log_size_increase)%*%(constant_growth)
+      
+      feed_rate_bent <- pel_tempeffect[i]* 
+        as.vector(((feed_multiplier*pref_benthos)*detrit_growth)/ 
+                    (1+handling*(feed_multiplier*pref_benthos)*detrit_growth))
       # yr-1
       #(f_det)
-      feed_rate_det <- ben_tempeffect[i] *
-        ((1/10^log10_size_bins)*hr_vol_filter_benthos*10^(log10_size_bins*metabolic_req_detritivore)*detritus[i]) / 
-        (1+handling*(1/10^log10_size_bins)*hr_vol_filter_benthos*10^(log10_size_bins*metabolic_req_detritivore)*detritus[i])
+      detritus_multiplier <- (1/size_bins_vals)*hr_vol_filter_benthos*
+        10^(log10_size_bins*metabolic_req_detritivore)*detritus[i]
+      
+      feed_rate_det <- ben_tempeffect[i] *(detritus_multiplier)/
+        (1+handling*detritus_multiplier)
       
       # Predator growth integral 
-      # yr-1
-      growth_pred[, i] <- (1-defecate_prop)*growth_pred*(feed_rate_pel)+(1-def_low)*growth_detritivore*(feed_rate_bent)
+      # yr-1 (GG_u)
+      growth_prop <- (1-defecate_prop)
+      
+      growth_int_pred[, i] <- growth_prop*growth_pred*
+        (feed_rate_pel)+(1-def_low)*growth_detritivore*(feed_rate_bent)
       
       # Reproduction
       # yr-1
       if(dynamic_reproduction){
-        reprod_pred[, i] <- (1-defecate_prop)*(1-(growth_pred+energy_pred))*(feed_rate_pel) +
-          (1-defecate_prop)*(1-(growth_detritivore+energy_detritivore))*feed_rate_bent
+        reprod_pred[, i] <- growth_prop*(1-(growth_pred+energy_pred))*
+          (feed_rate_pel)+growth_prop*
+          (1-(growth_detritivore+energy_detritivore))*feed_rate_bent
       }
       
       # Predator death integrals 
       #Satiation level of predator for pelagic prey
       sat_pel <- ifelse(feed_rate_pel > 0,
-                        feed_rate_pel/((hr_volume_search*10^(log10_size_bins*metabolic_req_pred)*pref_pelagic) * 
-                                 (predators[,i]*log_size_increase)%*%(constant_growth)),
+                        feed_rate_pel/
+                          ((feed_multiplier*pref_pelagic)*
+                             (predators[,i]*log_size_increase)%*%(constant_growth)),
                         0)
       # yr-1
-      pred_mort_pred[, i] <- as.vector((pref_pelagic*hr_volume_search*met_req_log10_size_bins)*(predators[, i]*sat_pel*log_size_increase)%*%(constant_mortality))
+      pred_mort_pred[, i] <- as.vector(
+        (pref_pelagic*hr_volume_search*met_req_log10_size_bins)*
+          (predators[, i]*sat_pel*log_size_increase)%*%(constant_mortality))
       
       # yr-1
-      tot_mort_pred[, i] <- pred_mort_pred[, i]+pel_tempeffect[i]*other_mort_pred+senes_mort_pred+fishing_mort_pred[, i]
+      tot_mort_pred[, i] <- pred_mort_pred[, i]+
+        pel_tempeffect[i]*other_mort_pred+senes_mort_pred+fishing_mort_pred[, i]
       
       # Benthos growth integral
       # yr-1
@@ -515,36 +538,47 @@ sizemodel <- function(params, ERSEM_det_input = F, temp_effect = T,
       #reproduction
       # yr-1
       if(dynamic_reproduction){
-        reprod_det[, i] <- (1-def_low)*(1-(growth_detritus+energy_detritivore))*(feed_rate_det)
+        reprod_det[, i] <- (1-def_low)*(1-(growth_detritus+energy_detritivore))*
+          (feed_rate_det)
       }
       
       # Benthos death integral
       #Satiation level of predator for benthic prey 
       sat_ben <- ifelse(feed_rate_bent > 0,
-                        feed_rate_bent/((hr_volume_search*10^(log10_size_bins*metabolic_req_detritivore)*pref_benthos) * 
-                                 (detritivores[, i]*log_size_increase)%*%(constant_growth)),
+                        feed_rate_bent/
+                          ((hr_volume_search*
+                              10^(log10_size_bins*metabolic_req_detritivore)*
+                              pref_benthos)* 
+                                 detrit_growth),
                         0)
       # yr-1
       pred_mort_det[, i] <- ifelse(sat_ben > 0,
-                          as.vector((pref_benthos*hr_volume_search*met_req_log10_size_bins) *
-                                      (predators[, i]*sat_ben*log_size_increase)%*%(constant_mortality)),
+                          as.vector(
+                            (pref_benthos*hr_volume_search*
+                               met_req_log10_size_bins)*
+                              (predators[, i]*sat_ben*
+                                 log_size_increase)%*%(constant_mortality)),
                           0)
       
       # yr-1
-      tot_mort_det[, i] <- pred_mort_det[, i]+ben_tempeffect[i]*other_mort_det+senes_mort_det+fishing_mort_det[, i]
+      tot_mort_det[, i] <- pred_mort_det[, i]+
+        ben_tempeffect[i]*other_mort_det+senes_mort_det+fishing_mort_det[, i]
       
       #total biomass density eaten by pred (g.m-2.yr-1)
-      eatenbypred <- 10^log10_size_bins*feed_rate_pel*predators[, i]+10^log10_size_bins*feed_rate_bent*predators[, i] 
+      eatenbypred <- size_bins_vals*feed_rate_pel*
+        predators[, i]+size_bins_vals*feed_rate_bent*predators[, i] 
       
       #detritus output (g.m-2.yr-1)
       # losses from detritivore scavenging/filtering only:
-      output_w <- sum(10^log10_size_bins*feed_rate_det*detritivores[, i]*log_size_increase)   
+      output_w <- sum(size_bins_vals*feed_rate_det*detritivores[, i]*
+                        log_size_increase)   
       
       #total biomass density defecated by pred (g.m-2.yr-1)
-      defbypred <- defecate_prop*(feed_rate_pel)*10^log10_size_bins*predators[, i]+ def_low*(feed_rate_bent)*10^log10_size_bins*predators[, i]
+      defbypred <- defecate_prop*(feed_rate_pel)*size_bins_vals*
+        predators[, i]+def_low*(feed_rate_bent)*size_bins_vals*predators[, i]
       
       #------------------------------------------------
-      # Increment values of detritus, predators & detritivores	for next time step  
+      # Increment values of detritus, predators & detritivores for next time step  
       #------------------------------------------------
       
       #Detritus Biomass Density Pool - fluxes in and out (g.m-2.yr-1) of 
@@ -557,22 +591,24 @@ sizemodel <- function(params, ERSEM_det_input = F, temp_effect = T,
           # pelagic spectrum inputs (sinking dead bodies and faeces) - export 
           # ratio used for "sinking rate" + benthic spectrum inputs (dead stuff
           # already on/in seafloor)
-          input_w <- (sinking_rate[i] * 
-                        (sum(defbypred[ind_min_pred_size:numb_size_bins]*log_size_increase) +
-                           sum(pel_tempeffect[i] * 
-                                 other_mort_pred[1:numb_size_bins]*predators[1:numb_size_bins, i]*10^(log10_size_bins[1:numb_size_bins])*log_size_increase) + 
-                           sum(pel_tempeffect[i] * 
-                                 senes_mort_pred[1:numb_size_bins]*predators[1:numb_size_bins,i]*10^(log10_size_bins[1:numb_size_bins])*log_size_increase)) +
-                        (sum(ben_tempeffect[i] * 
-                               other_mort_det[1:numb_size_bins]*detritivores[1:numb_size_bins,i]*10^(log10_size_bins[1:numb_size_bins])*log_size_increase) + 
-                           sum(ben_tempeffect[i] * 
-                                 senes_mort_det[1:numb_size_bins]*detritivores[1:numb_size_bins,i]*10^(log10_size_bins[1:numb_size_bins])*log_size_increase)))
+          input_w <- (sinking_rate[i]* 
+                        (sum(defbypred[ind_min_pred_size:numb_size_bins]*
+                               log_size_increase)+
+                           sum(pel_tempeffect[i]*other_mort_pred*predators[, i]*
+                                 size_bins_vals*log_size_increase) + 
+                           sum(pel_tempeffect[i]*senes_mort_pred*predators[, i]*
+                                 size_bins_vals*log_size_increase)) +
+                        (sum(ben_tempeffect[i]*other_mort_det*detritivores[, i]*
+                               size_bins_vals*log_size_increase) + 
+                           sum(ben_tempeffect[i]*senes_mort_det*
+                                 detritivores[, i]*size_bins_vals*log_size_increase)))
           # )
         }
         if(!detritus_coupling){
-          input_w <- sum(ben_tempeffect[i] *
-                           other_mort_det[1:numb_size_bins]*detritivores[1:numb_size_bins, i]*10^(log10_size_bins[1:numb_size_bins])*log_size_increase) + 
-            sum(ben_tempeffect[i]*senes_mort_det[1:numb_size_bins]*detritivores[1:numb_size_bins, i]*10^(log10_size_bins[1:numb_size_bins])*log_size_increase)
+          input_w <- sum(ben_tempeffect[i]*other_mort_det*detritivores[, i]*
+                           size_bins_vals*log_size_increase)+ 
+            sum(ben_tempeffect[i]*senes_mort_det*detritivores[, i]*
+                  size_bins_vals*log_size_increase)
         }
         
         # get burial rate from Dunne et al. 2007 equation 3
@@ -596,10 +632,10 @@ sizemodel <- function(params, ERSEM_det_input = F, temp_effect = T,
       # and Richard Law)
       
       # Matrix setup for implicit differencing 
-      Ai_u <- Bi_u <- Si_u <- array(0, c(numb_size_bins, 1))   
+      Ai_u <- Bi_u <- Si_u <- array(0, c(numb_size_bins, 1))
       
-      Ai_u[idx] <- (1/log(10))*-growth_pred[idx-1, i]*timesteps_years/log_size_increase
-      Bi_u[idx] <- 1+(1/log(10))*growth_pred[idx, i]*timesteps_years/log_size_increase +tot_mort_pred[idx, i]*timesteps_years
+      Ai_u[idx] <- (1/log(10))*-growth_int_pred[idx-1, i]*timesteps_years/log_size_increase
+      Bi_u[idx] <- 1+(1/log(10))*growth_int_pred[idx, i]*timesteps_years/log_size_increase +tot_mort_pred[idx, i]*timesteps_years
       Si_u[idx] <- predators[idx, i]
       
       # Boundary condition at upstream end 
@@ -612,8 +648,7 @@ sizemodel <- function(params, ERSEM_det_input = F, temp_effect = T,
       #continuation of plankton hold constant  
       if(use_init){
         predators[1:ind_min_pred_size, i+1] <- ui0[i]*10^(slope_phy_zoo[i]*log10_size_bins)[1:(ind_min_pred_size)] 
-      }
-      if(!use_init){
+      }else{
         predators[1:ind_min_pred_size, i+1] <- ui0[i+1]*10^(slope_phy_zoo[i+1]*log10_size_bins)[1:(ind_min_pred_size)] 
       }
       
@@ -621,9 +656,9 @@ sizemodel <- function(params, ERSEM_det_input = F, temp_effect = T,
       # reproduction from energy allocation
       if(dynamic_reproduction){
         predators[ind_min_pred_size, i+1] <- predators[ind_min_pred_size, i] +
-          (sum(reprod_pred[(ind_min_pred_size+1):numb_size_bins, i]*10^log10_size_bins[(ind_min_pred_size+1):numb_size_bins]*predators[(ind_min_pred_size+1):numb_size_bins, i]*log_size_increase) *
-             timesteps_years)/(log_size_increase*10^log10_size_bins[ind_min_pred_size])-(timesteps_years/log_size_increase)*(1/log(10)) *
-          (growth_pred[ind_min_pred_size, i])*predators[ind_min_pred_size, i]-timesteps_years*tot_mort_pred[ind_min_pred_size, i]*predators[ind_min_pred_size, i]
+          (sum(reprod_pred[(ind_min_pred_size+1):numb_size_bins, i]*size_bins_vals[(ind_min_pred_size+1):numb_size_bins]*predators[(ind_min_pred_size+1):numb_size_bins, i]*log_size_increase) *
+             timesteps_years)/(log_size_increase*size_bins_vals[ind_min_pred_size])-(timesteps_years/log_size_increase)*(1/log(10)) *
+          (growth_int_pred[ind_min_pred_size, i])*predators[ind_min_pred_size, i]-timesteps_years*tot_mort_pred[ind_min_pred_size, i]*predators[ind_min_pred_size, i]
       }
       
       #main loop calculation
@@ -635,11 +670,11 @@ sizemodel <- function(params, ERSEM_det_input = F, temp_effect = T,
       # Benthic Detritivore Density (nos.m-2) 
       Ai_v <- Bi_v <- Si_v <- array(0, c(numb_size_bins, 1))   
       #shorthand for matrix referencing
-      idx <- (ind_min_detritivore_size+1):numb_size_bins  
+      idx_ben_det <- (ind_min_detritivore_size+1):numb_size_bins  
       
-      Ai_v[idx] <- (1/log(10))*-growth_det[idx-1,i]*timesteps_years/log_size_increase 
-      Bi_v[idx] <- 1+(1/log(10))*growth_det[idx, i]*timesteps_years/log_size_increase +tot_mort_det[idx, i]*timesteps_years
-      Si_v[idx] <- detritivores[idx, i]
+      Ai_v[idx_ben_det] <- (1/log(10))*-growth_det[idx_ben_det-1,i]*timesteps_years/log_size_increase 
+      Bi_v[idx_ben_det] <- 1+(1/log(10))*growth_det[idx_ben_det, i]*timesteps_years/log_size_increase +tot_mort_det[idx_ben_det, i]*timesteps_years
+      Si_v[idx_ben_det] <- detritivores[idx_ben_det, i]
       
       #boundary condition at upstream end
       Ai_v[ind_min_detritivore_size] <- 0
@@ -655,8 +690,8 @@ sizemodel <- function(params, ERSEM_det_input = F, temp_effect = T,
       #divided by minimum size
       if(dynamic_reproduction){
         detritivores[ind_min_detritivore_size, i+1] <- detritivores[ind_min_detritivore_size, i] +
-          sum(reprod_det[(ind_min_detritivore_size+1):numb_size_bins, i]*10^log10_size_bins[(ind_min_detritivore_size+1):numb_size_bins] * 
-                detritivores[(ind_min_detritivore_size+1):numb_size_bins, i]*log_size_increase)*timesteps_years/(log_size_increase*10^log10_size_bins[ind_min_detritivore_size]) - 
+          sum(reprod_det[(ind_min_detritivore_size+1):numb_size_bins, i]*size_bins_vals[(ind_min_detritivore_size+1):numb_size_bins] * 
+                detritivores[(ind_min_detritivore_size+1):numb_size_bins, i]*log_size_increase)*timesteps_years/(log_size_increase*size_bins_vals[ind_min_detritivore_size]) - 
           (timesteps_years/log_size_increase)*(1/log(10))*(growth_det[ind_min_detritivore_size, i])*detritivores[ind_min_detritivore_size, i] - 
           timesteps_years*tot_mort_det[ind_min_detritivore_size, i]*detritivores[ind_min_detritivore_size, i]
       }
@@ -673,15 +708,15 @@ sizemodel <- function(params, ERSEM_det_input = F, temp_effect = T,
       
       #output fisheries catches per yr at size
       catch_pred[ind_min_fish_pred:numb_size_bins, i+1] <- fishing_mort_pred[ind_min_fish_pred:numb_size_bins, i+1]*predators[ind_min_fish_pred:numb_size_bins, i+1] *
-        10^log10_size_bins[ind_min_fish_pred:numb_size_bins] 
+        size_bins_vals[ind_min_fish_pred:numb_size_bins] 
       #output fisheries catches per yr at size
       catch_det[ind_min_det:numb_size_bins, i+1] <- fishing_mort_det[ind_min_det:numb_size_bins, i+1]*detritivores[ind_min_det:numb_size_bins, i+1] *
-        10^log10_size_bins[ind_min_det:numb_size_bins] 
+        size_bins_vals[ind_min_det:numb_size_bins] 
     }
     #end time iteration
     
     return(list(predators = predators[,],
-                growth_pred = growth_pred[,],
+                growth_int_pred = growth_int_pred[,],
                 pred_mort_pred = pred_mort_pred[,],
                 detritivores = detritivores[,], 
                 growth_det = growth_det[,],
