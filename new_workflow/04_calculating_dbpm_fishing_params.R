@@ -18,7 +18,7 @@ dbpm_inputs <- file.path("/g/data/vf71/la6889/dbpm_inputs/east_antarctica",
 set.seed(1234)
 
 #Number of rows to be included in fishing parameters data frame
-num_iter <- 100
+num_iter <- 1
 
 #Construct a hypercube with random numbers. Columns represent five specific 
 #parameters needed to run DBPM
@@ -53,7 +53,7 @@ params <- read_json("new_workflow/outputs/dbpm_size_params.json",
 
 
 
-
+#attach(params)
 
 
 
