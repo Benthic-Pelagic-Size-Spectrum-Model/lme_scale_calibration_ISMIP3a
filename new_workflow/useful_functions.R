@@ -449,21 +449,25 @@ sizemodel <- function(params, ERSEM_det_input = F, temp_effect = T,
       detritivores[ind_min_fish_det:numb_size_bins, 1]*
       size_bins_vals[ind_min_fish_det:numb_size_bins] 
     
+    
+    #Temperature effects taken out of loop because they do not need to be 
+    #recalculated at every time step
+    if(temp_effect){
+      pel_tempeffect <- exp(c1-activation_energy/
+                              (boltzmann*(sea_surf_temp+273)))
+      ben_tempeffect <- exp(c1-activation_energy/
+                              (boltzmann*(sea_floor_temp+273)))
+    }else{
+      pel_tempeffect <- 1
+      ben_tempeffect <- 1
+    }
+    
     #iteration over time, N [days]
     for(i in 1:numb_time_steps){
       
       #--------------------------------
       # Calculate Growth and Mortality
       #--------------------------------
-      if(temp_effect){
-        pel_tempeffect <- exp(c1-activation_energy/
-                                (boltzmann*(sea_surf_temp+273)))
-        ben_tempeffect <- exp(c1-activation_energy/
-                                (boltzmann*(sea_floor_temp+273)))
-      }else{
-        pel_tempeffect <- 1
-        ben_tempeffect <- 1
-      }
       
       # feeding rates
       # yr-1
