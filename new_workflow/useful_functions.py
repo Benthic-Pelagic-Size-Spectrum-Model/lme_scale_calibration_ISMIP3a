@@ -285,3 +285,71 @@ def gridded_spinup(file_path, start_spin, end_spin, spinup_period,
         spinup_da.to_zarr(f_out, consolidated = True, mode = 'w')
     
     return spinup_da
+
+### DPBM functions ----
+# Build a lookup table for diet preference. Looks at all combinations of predator 
+# and prey body size: diet preference (in the predator spectrum only)
+def phi_f(q, log10_pred_prey_ratio, log_prey_pref):
+    phi = np.where(q > 0, 
+                   np.exp(-(q-log10_pred_prey_ratio)*(q-log10_pred_prey_ratio)/
+                          (2*log_prey_pref**2))/(log_prey_pref*np.sqrt(2.0*np.pi)),
+                   0) 
+    return phi
+
+
+# Function to build lookup tables for (constant) growth
+# Considers components which remain constant
+def gphi_f(pred_prey_matrix, log10_pred_prey_ratio, log_prey_pref):
+    gphi = 10**(-pred_prey_matrix)*phi_f(pred_prey_matrix, log10_pred_prey_ratio, 
+                                         log_prey_pref)
+    return gphi
+
+
+# Function to build lookup tables for (constant) mortality
+def mphi_f(rev_pred_prey_matrix, log10_pred_prey_ratio, log_prey_pref, 
+           metabolic_req_pred):
+    mphi = (10**(metabolic_req_pred*rev_pred_prey_matrix)*
+            phi_f(rev_pred_prey_matrix, log10_pred_prey_ratio, log_prey_pref))
+    return mphi
+
+
+# Function to build lookup table for components of 10^(alpha*x)
+def expax_f(log10_size_bins, metabolic_req_pred):
+    expax = list(10**(np.array(log10_size_bins)*metabolic_req_pred))
+    return expax
+
+
+# Create predator-prey combination matrix
+# The square matrix holds the log(predatorsize/preysize) for all combinations of
+# predator-prey sizes
+def pred_prey_matrix(log10_size_bins):
+    '''
+    Inputs:
+    - log10_size_bins (numpy array) Containing the log of all sizes of predator and
+    prey items
+    
+    Outputs:
+    ppm (numpy array) Contains all combinations of predator-prey sizes
+    '''
+    
+    ppm = np.empty([len(log10_size_bins), len(log10_size_bins)])
+    for i, j in enumerate(log10_size_bins):
+        ppm[:, i] = log10_size_bins[i] - log10_size_bins
+    return ppm
+
+
+# Initialising matrices using size classes and time as dimensions
+def init_da(log10_size_bins, time):
+    '''
+    Inputs:
+    - log10_size_bins (numpy array) Containing the log of all sizes of predator and
+    prey items
+    - time (numpy array) Containing dates to be included in final data array
+    
+    Outputs:
+    da (data array) Containing zeroes with size classes and time as dimensions
+    '''
+    data_start = np.zeros((len(log10_size_bins), len(time)))
+    da = xr.DataArray(data = data_start, dims = ['size_class', 'time'], 
+                      coords = {'size_class': log10_size_bins, 'time': time})
+    return da
