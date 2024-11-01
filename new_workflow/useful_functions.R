@@ -234,7 +234,7 @@ sizeparam <- function(dbpm_inputs, fishing_params, dx = 0.1, xmin = -12,
                                  param$min_log10_plankton)/dx)+1
   
   # index in F vector corresponding to smallest size fished in V (Fref.v)
-  param$ind_min_det <- ((param$min_fishing_size_detritivore-
+  param$ind_min_fish_det <- ((param$min_fishing_size_detritivore-
                            param$min_log10_plankton)/dx)+1
   
   #short hand for matrix indexing (idx)
@@ -402,8 +402,8 @@ sizemodel <- function(params, ERSEM_det_input = F, temp_effect = T,
     
     # set up with the initial values from param
     #(phyto+zoo)plankton size spectrum - set initial consumer size spectrum (U)
-    predators[1:120, 1] <- plank_pred_sizes[1:120]       
-    # set initial detritivore spectrum  (V)
+    predators[1:120, 1] <- plank_pred_sizes[1:120]
+    # set initial detritivore spectrum (V)
     detritivores[ind_min_detritivore_size:120, 1] <- 
       detritivore_sizes[ind_min_detritivore_size:120]
     # set initial detritus biomass density (g.m^-3) (W)
@@ -435,7 +435,7 @@ sizemodel <- function(params, ERSEM_det_input = F, temp_effect = T,
     # detritivores to be estimated along with ind_min_det and ind_min_fish_pred
     fishing_mort_pred[ind_min_fish_pred:numb_size_bins, 1] <- 
       fish_mort_pred*effort[1]
-    fishing_mort_det[ind_min_det:numb_size_bins, 1] <- 
+    fishing_mort_det[ind_min_fish_det:numb_size_bins, 1] <- 
       fish_mort_detritivore*effort[1]
     
     #output fisheries catches per yr at size (Y_u, Y_v)
@@ -444,10 +444,10 @@ sizemodel <- function(params, ERSEM_det_input = F, temp_effect = T,
       predators[ind_min_fish_pred:numb_size_bins, 1]*
       size_bins_vals[ind_min_fish_pred:numb_size_bins] 
     #output fisheries catches per yr at size
-    catch_det[ind_min_det:numb_size_bins, 1] <- 
-      fishing_mort_det[ind_min_det:numb_size_bins, 1]*
-      detritivores[ind_min_det:numb_size_bins, 1]*
-      size_bins_vals[ind_min_det:numb_size_bins] 
+    catch_det[ind_min_fish_det:numb_size_bins, 1] <- 
+      fishing_mort_det[ind_min_fish_det:numb_size_bins, 1]*
+      detritivores[ind_min_fish_det:numb_size_bins, 1]*
+      size_bins_vals[ind_min_fish_det:numb_size_bins] 
     
     #iteration over time, N [days]
     for(i in 1:numb_time_steps){
@@ -725,10 +725,10 @@ sizemodel <- function(params, ERSEM_det_input = F, temp_effect = T,
         predators[ind_min_fish_pred:numb_size_bins, i+1]*
         size_bins_vals[ind_min_fish_pred:numb_size_bins] 
       #output fisheries catches per yr at size
-      catch_det[ind_min_det:numb_size_bins, i+1] <- 
-        fishing_mort_det[ind_min_det:numb_size_bins, i+1]*
-        detritivores[ind_min_det:numb_size_bins, i+1]*
-        size_bins_vals[ind_min_det:numb_size_bins] 
+      catch_det[ind_min_fish_det:numb_size_bins, i+1] <- 
+        fishing_mort_det[ind_min_fish_det:numb_size_bins, i+1]*
+        detritivores[ind_min_fish_det:numb_size_bins, i+1]*
+        size_bins_vals[ind_min_fish_det:numb_size_bins] 
     }
     #end time iteration
     

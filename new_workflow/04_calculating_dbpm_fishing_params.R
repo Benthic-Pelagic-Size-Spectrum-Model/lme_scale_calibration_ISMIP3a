@@ -4,6 +4,7 @@ library(arrow)
 library(lhs)
 library(dplyr)
 library(jsonlite)
+library(lubridate)
 source("new_workflow/useful_functions.R")
 
 
@@ -54,10 +55,40 @@ params <- read_json("new_workflow/outputs/dbpm_size_params.json",
 
 result_set <- sizemodel(params)
 
-
-
-
 # attach(params)
+
+
+
+
+#Line 357
+initial_date <- min(as_date(dbpm_inputs$time))-month(1)
+test_pred <- array(0, c(numb_size_bins, numb_time_steps+1)) |> 
+  data.frame()
+colnames(test_pred) <- c(initial_date, as_date(dbpm_inputs$time))
+row.names(test_pred) <- as.character(log10_size_bins)
+
+test_pred[which(log10_size_bins < 0), initial_date]
+plank_pred_sizes
+
+
+
+
+test_pred <- expand.grid(time = c(initial_date, as_date(dbpm_inputs$time)), 
+                         log10_size = log10_size_bins) |> 
+  mutate(vals = NA)
+
+#Line 405
+test_pred |> 
+  mutate(vals = case_when(time == initial_date & log10_size < 0 ~ )
+
+
+plank_pred_sizes[1:120]
+
+
+
+log10_size_bins
+
+
 
 
 
