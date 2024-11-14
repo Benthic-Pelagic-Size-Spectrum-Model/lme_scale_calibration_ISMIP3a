@@ -449,7 +449,6 @@ sizemodel <- function(params, ERSEM_det_input = F, temp_effect = T,
       detritivores[ind_min_fish_det:numb_size_bins, 1]*
       size_bins_vals[ind_min_fish_det:numb_size_bins] 
     
-    
     #Temperature effects taken out of loop because they do not need to be 
     #recalculated at every time step
     if(temp_effect){
@@ -461,6 +460,15 @@ sizemodel <- function(params, ERSEM_det_input = F, temp_effect = T,
       pel_tempeffect <- 1
       ben_tempeffect <- 1
     }
+
+    #To be applied to feeding rates for pelagics and benthic groups
+    feed_multiplier <- hr_volume_search*10^(log10_size_bins*metabolic_req_pred)
+      
+    #Ingested food
+    growth_prop <- 1-defecate_prop
+
+    # High quality food
+    high_prop <- 1-def_low
     
     #iteration over time, N [days]
     for(i in 1:numb_time_steps){
@@ -472,7 +480,6 @@ sizemodel <- function(params, ERSEM_det_input = F, temp_effect = T,
       # feeding rates
       # yr-1
       #(f_pel)
-      feed_multiplier <- hr_volume_search*10^(log10_size_bins*metabolic_req_pred)
       pred_growth <- (predators[, i]*log_size_increase)%*%(constant_growth)
       
       feed_rate_pel <- pel_tempeffect[i]*
@@ -493,14 +500,12 @@ sizemodel <- function(params, ERSEM_det_input = F, temp_effect = T,
       feed_rate_det <- ben_tempeffect[i] *(detritus_multiplier)/
         (1+handling*detritus_multiplier)
       
-      # Predator growth integral 
-      # yr-1 (GG_u)
-      growth_prop <- (1-defecate_prop)
-      
+      # Predator growth integral (GG_u)
+      # yr-1 
       growth_int_pred[, i] <- growth_prop*growth_pred*
-        (feed_rate_pel)+(1-def_low)*growth_detritivore*(feed_rate_bent)
+        feed_rate_pel+high_prop*growth_detritivore*(feed_rate_bent)
       
-      # Reproduction
+      # Reproduction (R_u)
       # yr-1
       if(dynamic_reproduction){
         reprod_pred[, i] <- growth_prop*(1-(growth_pred+energy_pred))*
@@ -526,12 +531,12 @@ sizemodel <- function(params, ERSEM_det_input = F, temp_effect = T,
       
       # Benthos growth integral
       # yr-1
-      growth_det[, i] <- (1-def_low)*growth_detritus*feed_rate_det
+      growth_det[, i] <- high_prop*growth_detritus*feed_rate_det
       
       #reproduction
       # yr-1
       if(dynamic_reproduction){
-        reprod_det[, i] <- (1-def_low)*(1-(growth_detritus+energy_detritivore))*
+        reprod_det[, i] <- high_prop*(1-(growth_detritus+energy_detritivore))*
           (feed_rate_det)
       }
       
