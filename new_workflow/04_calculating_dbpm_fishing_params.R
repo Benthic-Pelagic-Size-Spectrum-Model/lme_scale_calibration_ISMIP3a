@@ -1,8 +1,8 @@
 
 # Loading libraries -------------------------------------------------------
+library(dplyr)
 library(arrow)
 library(lhs)
-library(dplyr)
 library(jsonlite)
 library(lubridate)
 source("new_workflow/useful_functions.R")
@@ -15,26 +15,19 @@ dbpm_inputs <- file.path("/g/data/vf71/la6889/dbpm_inputs/east_antarctica",
   read_parquet()
 
 
-# Defining initial fishing parameters -------------------------------------
-set.seed(1234)
+# Searching best fishing parameters values for LME ------------------------
+test <- LHSsearch(num_iter = 20, 
+                  forcing_file = dbpm_inputs, 
+                  gridded_forcing = NULL, 
+                  best_val_folder = "new_workflow/outputs/best_fish_vals")
 
-#Number of rows to be included in fishing parameters data frame
-num_iter <- 1
+test
 
-#Construct a hypercube with random numbers. Columns represent five specific 
-#parameters needed to run DBPM
-fishing_params <- data.frame(randomLHS(num_iter, 5))
-#Renaming columns 
-colnames(fishing_params) <- c("fmort_u", "fmort_v", "fminx_u", "fminx_v", 
-                              "search_vol")
 
-#Adjust range of mi size params, others go from 0-1
-fishing_params <- fishing_params |> 
-  mutate(fminx_u = fminx_u*2, 
-         fminx_v = fminx_v*2,
-         # adjust range of search vol, others go from 0-1
-         search_vol = search_vol+0.001)
 
+
+result <- run_model(fishing_params, dbpm_inputs)
+test <- getError(fishing_params, dbpm_inputs)
 
 # Getting DBPM parameters -------------------------------------------------
 params <- sizeparam(dbpm_inputs, fishing_params, xmin_consumer_u = -3, 
@@ -53,9 +46,22 @@ params <- read_json("new_workflow/outputs/dbpm_size_params.json",
                     simplifyVector = T)
 
 
-result_set <- sizemodel(params)
+# result_set <- sizemodel(params)
+
+
 
 # attach(params)
+
+
+no_iter <- 100
+
+test <- LHSsearch(num_iter = no_iter, 
+           forcing_file = dbpm_inputs, 
+           gridded_forcing = NULL, 
+           best_val_folder = "new_workflow/outputs/best_fish_vals")
+
+
+
 
 
 
