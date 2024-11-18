@@ -7,8 +7,10 @@
 
 
 # Loading libraries -------------------------------------------------------
-# library(dplyr)
-
+library(tidyr)
+library(dplyr)
+library(stringr)
+library(arrow)
 
 # Getting DBPM model parameters ready -------------------------------------
 sizeparam <- function(dbpm_inputs, fishing_params, dx = 0.1, xmin = -12, 
@@ -47,7 +49,6 @@ sizeparam <- function(dbpm_inputs, fishing_params, dx = 0.1, xmin = -12,
   # Outputs:
   # er (numeric vector) Export ratio
   
-  
   # Creating empty list to store DBPM parameters:
   param <- list()
   
@@ -64,10 +65,10 @@ sizeparam <- function(dbpm_inputs, fishing_params, dx = 0.1, xmin = -12,
   param$numb_time_steps <- param$n_years*tstepspryr
   
   # export ratio (er)
-  param$export_ratio <- dbpm_inputs$export_ratio
+  # param$export_ratio <- dbpm_inputs$export_ratio
   # fraction of sinking detritus reaching the seafloor (from export ratio input)
   # (sinking.rate)
-  param$sinking_rate <- param$export_ratio 
+  param$sinking_rate <- dbpm_inputs$export_ratio 
   
   # plankton parameters
   # intercept of phyto-zooplankton spectrum (pp)
@@ -302,7 +303,7 @@ expax_f <- function(log10_size_bins, metabolic_req_pred){
 
 
 # Run model per grid cell or averaged over an area ------
-sizemodel <- function(params, ERSEM_det_input = F, temp_effect = T, 
+sizemodel <- function(params, ERSEM_det_input = F, temp_effect = T,
                       use_init = F){
   with(params,{
     #--------------------------------------------------------------------------
@@ -517,24 +518,23 @@ sizemodel <- function(params, ERSEM_det_input = F, temp_effect = T,
       #Satiation level of predator for pelagic prey
       sat_pel <- ifelse(feed_rate_pel > 0,
                         feed_rate_pel/(
-                          (feed_multiplier*pref_pelagic)*
-                            (predators[,i]*log_size_increase)%*%(constant_growth)),
+                          (feed_multiplier*pref_pelagic)*pred_growth),
                         0)
-      # yr-1
+      # yr-1 (PM_u)
       pred_mort_pred[, i] <- as.vector(
         (pref_pelagic*hr_volume_search*met_req_log10_size_bins)*
           (predators[, i]*sat_pel*log_size_increase)%*%(constant_mortality))
       
-      # yr-1
+      # yr-1 (Z_u)
       tot_mort_pred[, i] <- pred_mort_pred[, i]+
         pel_tempeffect[i]*other_mort_pred+senes_mort_pred+fishing_mort_pred[, i]
       
       # Benthos growth integral
-      # yr-1
+      # yr-1 (GG_v)
       growth_det[, i] <- high_prop*growth_detritus*feed_rate_det
       
       #reproduction
-      # yr-1
+      # yr-1 (R_v)
       if(dynamic_reproduction){
         reprod_det[, i] <- high_prop*(1-(growth_detritus+energy_detritivore))*
           (feed_rate_det)
@@ -599,7 +599,8 @@ sizemodel <- function(params, ERSEM_det_input = F, temp_effect = T,
                         (sum(ben_tempeffect[i]*other_mort_det*detritivores[, i]*
                                size_bins_vals*log_size_increase) + 
                            sum(ben_tempeffect[i]*senes_mort_det*
-                                 detritivores[, i]*size_bins_vals*log_size_increase)))
+                                 detritivores[, i]*size_bins_vals*
+                                 log_size_increase)))
         }else{
           input_w <- sum(ben_tempeffect[i]*other_mort_det*detritivores[, i]*
                            size_bins_vals*log_size_increase)+ 
@@ -608,7 +609,7 @@ sizemodel <- function(params, ERSEM_det_input = F, temp_effect = T,
         }
         
         # get burial rate from Dunne et al. 2007 equation 3
-        burial <- input_w*(0.013 + 0.53*input_w^2/(7+input_w)^2)
+        burial <- input_w*(0.013+0.53*input_w^2/(7+input_w)^2)
         
         # losses from detritivory + burial rate (not including remineralisation
         # bc that goes to p.p. after sediment, we are using realised p.p. as
@@ -632,7 +633,7 @@ sizemodel <- function(params, ERSEM_det_input = F, temp_effect = T,
       Ai_u[idx] <- (1/log(10))*-growth_int_pred[idx-1, i]*
         timesteps_years/log_size_increase
       Bi_u[idx] <- 1+(1/log(10))*growth_int_pred[idx, i]*
-        timesteps_years/log_size_increase +tot_mort_pred[idx, i]*timesteps_years
+        timesteps_years/log_size_increase+tot_mort_pred[idx, i]*timesteps_years
       Si_u[idx] <- predators[idx, i]
       
       # Boundary condition at upstream end 
@@ -648,112 +649,299 @@ sizemodel <- function(params, ERSEM_det_input = F, temp_effect = T,
           ui0[i]*10^(slope_phy_zoo[i]*log10_size_bins)[1:ind_min_pred_size] 
       }else{
         predators[1:ind_min_pred_size, i+1] <-
-          ui0[i+1]*10^(slope_phy_zoo[i+1]*log10_size_bins)[1:(ind_min_pred_size)] 
+          ui0[i+1]*10^(slope_phy_zoo[i+1]*log10_size_bins)[1:ind_min_pred_size]
       }
+      
       
       # apply transfer efficiency of 10% *plankton density at same size
       # reproduction from energy allocation
-      if(dynamic_reproduction){
-        predators[ind_min_pred_size, i+1] <- predators[ind_min_pred_size, i] +
-          (sum(reprod_pred[(ind_min_pred_size+1):numb_size_bins, i]*
-                 size_bins_vals[(ind_min_pred_size+1):numb_size_bins]*
-                 predators[(ind_min_pred_size+1):numb_size_bins, i]*
-                 log_size_increase)*timesteps_years)/
-          (log_size_increase*size_bins_vals[ind_min_pred_size])-
-          (timesteps_years/log_size_increase)*(1/log(10))*
-          (growth_int_pred[ind_min_pred_size, i])*
-          predators[ind_min_pred_size, i]-timesteps_years*
-          tot_mort_pred[ind_min_pred_size, i]*predators[ind_min_pred_size, i]
-      }
-      
-      #main loop calculation
-      for(j in (ind_min_pred_size+1):(numb_size_bins)){
-        predators[j, i+1] <- (Si_u[j]-Ai_u[j]*predators[j-1, i+1])/Bi_u[j]
-      }
-      
-      #----------------------------------------------
-      # Benthic Detritivore Density (nos.m-2) 
-      Ai_v <- Bi_v <- Si_v <- array(0, c(numb_size_bins, 1))
-      #shorthand for matrix referencing
-      idx <- (ind_min_detritivore_size+1):numb_size_bins
-      #Check if `idx` is meant to be overwritten. If not, then change variable
-      #name as shown below and change this variable between lines 690 and 694
-      #(seven replaceaments in total)
-      # idx_ben_det <- (ind_min_detritivore_size+1):numb_size_bins
-      
-      Ai_v[idx] <- (1/log(10))*-growth_det[idx-1,i]*timesteps_years/
-        log_size_increase 
-      Bi_v[idx] <- 1+(1/log(10))*growth_det[idx, i]*timesteps_years/
-        log_size_increase +tot_mort_det[idx, i]*timesteps_years
-      Si_v[idx] <- detritivores[idx, i]
-      
-      #boundary condition at upstream end
-      Ai_v[ind_min_detritivore_size] <- 0
-      Bi_v[ind_min_detritivore_size] <- 1
-      Si_v[ind_min_detritivore_size] <-
-        detritivores[ind_min_detritivore_size, i]  
-      
-      #invert matrix
-      #recruitment at smallest detritivore mass  
-      #hold constant continuation of plankton with sinking rate multiplier 
-      detritivores[1:ind_min_detritivore_size, i+1] <-
-        detritivores[1:ind_min_detritivore_size, i]
-      
-      # apply a very low of transfer efficiency 1%* total biomass of detritus
-      #divided by minimum size
-      if(dynamic_reproduction){
-        detritivores[ind_min_detritivore_size, i+1] <- 
-          detritivores[ind_min_detritivore_size, i]+
-          sum(reprod_det[(ind_min_detritivore_size+1):numb_size_bins, i]*
-                size_bins_vals[(ind_min_detritivore_size+1):numb_size_bins]*
-                detritivores[(ind_min_detritivore_size+1):numb_size_bins, i]*
-                log_size_increase)*timesteps_years/
-          (log_size_increase*size_bins_vals[ind_min_detritivore_size])-
-          (timesteps_years/log_size_increase)*(1/log(10))*
-          (growth_det[ind_min_detritivore_size, i])*
-          detritivores[ind_min_detritivore_size, i]- 
-          timesteps_years*tot_mort_det[ind_min_detritivore_size, i]*
-          detritivores[ind_min_detritivore_size, i]
-      }
-      
-      #loop calculation
-      for(j in (ind_min_detritivore_size+1):(numb_size_bins)){ 
-        detritivores[j, i+1] <- (Si_v[j]-Ai_v[j]*detritivores[j-1, i+1])/Bi_v[j]
-      }		
-      rm(j)
-      
-      # increment fishing 
-      fishing_mort_pred[ind_min_fish_pred:numb_size_bins, i+1] <- 
-        fish_mort_pred*effort[i+1]
-      fishing_mort_det[ind_min_det:numb_size_bins, i+1] <- 
-        fish_mort_detritivore*effort[i+1]
-      
-      #output fisheries catches per yr at size
-      catch_pred[ind_min_fish_pred:numb_size_bins, i+1] <- 
-        fishing_mort_pred[ind_min_fish_pred:numb_size_bins, i+1]*
-        predators[ind_min_fish_pred:numb_size_bins, i+1]*
-        size_bins_vals[ind_min_fish_pred:numb_size_bins] 
-      #output fisheries catches per yr at size
-      catch_det[ind_min_fish_det:numb_size_bins, i+1] <- 
-        fishing_mort_det[ind_min_fish_det:numb_size_bins, i+1]*
-        detritivores[ind_min_fish_det:numb_size_bins, i+1]*
-        size_bins_vals[ind_min_fish_det:numb_size_bins] 
+    if(dynamic_reproduction){
+      predators[ind_min_pred_size, i+1] <- predators[ind_min_pred_size, i] +
+        (sum(reprod_pred[(ind_min_pred_size+1):numb_size_bins, i]*
+               size_bins_vals[(ind_min_pred_size+1):numb_size_bins]*
+               predators[(ind_min_pred_size+1):numb_size_bins, i]*
+               log_size_increase)*timesteps_years)/
+        (log_size_increase*size_bins_vals[ind_min_pred_size])-
+        (timesteps_years/log_size_increase)*(1/log(10))*
+        (growth_int_pred[ind_min_pred_size, i])*
+        predators[ind_min_pred_size, i]-timesteps_years*
+        tot_mort_pred[ind_min_pred_size, i]*predators[ind_min_pred_size, i]
     }
-    #end time iteration
-    
-    return(list(predators = predators[,],
-                growth_int_pred = growth_int_pred[,],
-                pred_mort_pred = pred_mort_pred[,],
-                detritivores = detritivores[,], 
-                growth_det = growth_det[,],
-                pred_mort_det = pred_mort_det[,],
-                catch_pred = catch_pred[,],
-                catch_det = catch_det[,],
-                detritus = detritus[],
-                params = params))
-  })  
+
+    #main loop calculation
+    for(j in (ind_min_pred_size+1):(numb_size_bins)){
+      predators[j, i+1] <- (Si_u[j]-Ai_u[j]*predators[j-1, i+1])/Bi_u[j]
+    }
+
+    #----------------------------------------------
+    # Benthic Detritivore Density (nos.m-2)
+    Ai_v <- Bi_v <- Si_v <- array(0, c(numb_size_bins, 1))
+    #shorthand for matrix referencing
+    idx <- (ind_min_detritivore_size+1):numb_size_bins
+    #Check if `idx` is meant to be overwritten. If not, then change variable
+    #name as shown below and change this variable between lines 690 and 694
+    #(seven replacements in total)
+    # idx_ben_det <- (ind_min_detritivore_size+1):numb_size_bins
+
+    Ai_v[idx] <- (1/log(10))*-growth_det[idx-1,i]*timesteps_years/
+      log_size_increase
+    Bi_v[idx] <- 1+(1/log(10))*growth_det[idx, i]*timesteps_years/
+      log_size_increase+tot_mort_det[idx, i]*timesteps_years
+    Si_v[idx] <- detritivores[idx, i]
+
+    #boundary condition at upstream end
+    Ai_v[ind_min_detritivore_size] <- 0
+    Bi_v[ind_min_detritivore_size] <- 1
+    Si_v[ind_min_detritivore_size] <-
+      detritivores[ind_min_detritivore_size, i]
+
+    #invert matrix
+    #recruitment at smallest detritivore mass
+    #hold constant continuation of plankton with sinking rate multiplier
+    detritivores[1:ind_min_detritivore_size, i+1] <-
+      detritivores[1:ind_min_detritivore_size, i]
+
+    # apply a very low of transfer efficiency 1%* total biomass of detritus
+    #divided by minimum size
+    if(dynamic_reproduction){
+      detritivores[ind_min_detritivore_size, i+1] <-
+        detritivores[ind_min_detritivore_size, i]+
+        sum(reprod_det[(ind_min_detritivore_size+1):numb_size_bins, i]*
+              size_bins_vals[(ind_min_detritivore_size+1):numb_size_bins]*
+              detritivores[(ind_min_detritivore_size+1):numb_size_bins, i]*
+              log_size_increase)*timesteps_years/
+        (log_size_increase*size_bins_vals[ind_min_detritivore_size])-
+        (timesteps_years/log_size_increase)*(1/log(10))*
+        (growth_det[ind_min_detritivore_size, i])*
+        detritivores[ind_min_detritivore_size, i]-
+        timesteps_years*tot_mort_det[ind_min_detritivore_size, i]*
+        detritivores[ind_min_detritivore_size, i]
+    }
+
+    #loop calculation
+    for(j in (ind_min_detritivore_size+1):(numb_size_bins)){
+      detritivores[j, i+1] <- (Si_v[j]-Ai_v[j]*detritivores[j-1, i+1])/Bi_v[j]
+    }
+    rm(j)
+
+    # increment fishing
+    fishing_mort_pred[ind_min_fish_pred:numb_size_bins, i+1] <-
+      fish_mort_pred*effort[i+1]
+    fishing_mort_det[ind_min_fish_det:numb_size_bins, i+1] <-
+      fish_mort_detritivore*effort[i+1]
+
+    #output fisheries catches per yr at size
+    catch_pred[ind_min_fish_pred:numb_size_bins, i+1] <-
+      fishing_mort_pred[ind_min_fish_pred:numb_size_bins, i+1]*
+      predators[ind_min_fish_pred:numb_size_bins, i+1]*
+      size_bins_vals[ind_min_fish_pred:numb_size_bins]
+    #output fisheries catches per yr at size
+    catch_det[ind_min_fish_det:numb_size_bins, i+1] <-
+      fishing_mort_det[ind_min_fish_det:numb_size_bins, i+1]*
+      detritivores[ind_min_fish_det:numb_size_bins, i+1]*
+      size_bins_vals[ind_min_fish_det:numb_size_bins]
+  }
+  #end time iteration
+
+  return(list(predators = predators[,],
+              growth_int_pred = growth_int_pred[,],
+              pred_mort_pred = pred_mort_pred[,],
+              detritivores = detritivores[,],
+              growth_det = growth_det[,],
+              pred_mort_det = pred_mort_det[,],
+              catch_pred = catch_pred[,],
+              catch_det = catch_det[,],
+              detritus = detritus[],
+              params = params))
+  })
   # end with(params)
 }
 #end size-based model function
 
+
+# Running model with time series ----
+run_model <- function(fishing_params, dbpm_inputs, withinput = T){
+  #Inputs:
+  # fishing_params (list) - Fishing parameters produced by the `sizeparam` 
+  # function
+  # dbpm_inputs (data frame) - Climate and fishing forcing data produced in
+  # script 03_processing_effort_fishing_inputs.R
+  # withinput (boolean) - Default is TRUE. ????
+  #
+  #Output:
+  # If withinput set to TRUE:
+  # input (data frame) - ????
+  # If withinput set to FALSE:
+  # result_set (data frame) - ???
+  
+  params <- sizeparam(dbpm_inputs, fishing_params, xmin_consumer_u = -3, 
+                      xmin_consumer_v = -3, tstepspryr = 12)
+  
+  # run model through time
+  # TO DO IN SIZEMODEL CODE: make fishing function like one in model template
+  result_set <- sizemodel(params)
+  size_bins <- 10^params$log10_size_bins
+  
+  if(withinput){
+    lims_ubio <- params$ind_min_pred_size:params$numb_size_bins
+    # JB:  changed inputs to m2 so no need to divide by depth here
+    # added 1:params$Neq to same 2040 time steps instead of 2041
+    time_steps <- 1:params$numb_time_steps
+    
+    dbpm_inputs$total_pred_biomass <- 
+      apply(result_set$predators[lims_ubio, time_steps]*
+              params$log_size_increase*size_bins[lims_ubio], 2, sum)
+    
+    lims_vbio <- params$ind_min_detritivore_size:params$numb_size_bins
+    dbpm_inputs$total_detritivore_biomass <- 
+      apply(result_set$detritivores[lims_vbio, time_steps]*
+              params$log_size_increase*size_bins[lims_vbio], 2, sum)
+    
+    dbpm_inputs$total_detritus <- result_set$detritus[time_steps]
+    
+    #sum catches (currently in grams per m3 per year, across size classes) 
+    # keep as grams per m2, then be sure to convert observed from tonnes per m2
+    # per year to g.^-m2.^-yr (for each month)
+    dbpm_inputs$total_pred_catch <- 
+      apply(result_set$catch_pred[, time_steps]*params$log_size_increase,
+            2, sum)
+    dbpm_inputs$total_detritivore_catch <-
+      apply(result_set$catch_det[, time_steps]*params$log_size_increase, 
+            2, sum)
+    
+    #Calculate total catch
+    dbpm_inputs <- dbpm_inputs |>
+      mutate(total_catch = total_pred_catch + total_detritivore_catch)
+    
+    return(dbpm_inputs)
+    
+  }else{
+    return(result_set)
+  }
+}
+
+# Comparing observed and predicted fish biomass ----
+getError <- function(fishing_params, dbpm_inputs, year_int = 1950){
+  #Inputs:
+  # fishing_params (data frame) - Contains fishing parameters
+  # dbpm_inputs (data frame) - Climate and fishing forcing data
+  # year_int (numeric) - Default is 1949. Used to subset results from this
+  # year onwards
+  #
+  #Output:
+  # rmse (numeric) - RMSE value between observed and predicted catch
+  
+  #Running model for specific LME
+  result <- run_model(fishing_params, dbpm_inputs)
+  
+  #Aggregate data by year (mean to conserve units)
+  error_calc <- result |> 
+    filter(year >= year_int) |> 
+    group_by(year) |> 
+    summarise(mean_total_catch_yr = mean(total_catch),
+              mean_obs_catch_yr = mean(catch_tonnes_area_m2, na.rm = T)) |> 
+    #Converting units from tonnes to g
+    mutate(mean_obs_catch_yr = mean_obs_catch_yr*1e6,
+           #calculate and output error 
+           #convert from tonnes to grams (m^-2*yr^-1)
+           squared_error = (mean_obs_catch_yr-mean_total_catch_yr)^2)
+  
+  #Calculate RMSE 
+  sum_se <- sum(error_calc$squared_error, na.rm = T)
+  count <- sum(!is.na(error_calc$squared_error))
+  rmse <- sqrt(sum_se/count)
+  
+  #Return RMSE
+  return(rmse)
+}
+
+#Carry out LHS param search
+LHSsearch <- function(num_iter = 1, search_vol = "estimated",
+                      forcing_file = NULL, gridded_forcing = NULL, 
+                      best_val_folder = NULL){
+  #Inputs:
+  # num_iter (numeric) - Number of individual runs. Default is 1.
+  # search_vol (???) - Default is "estimated". ???
+  # forcing_file (character) - Full path to forcing file. This must be 
+  # non-gridded data
+  # gridded_forcing (character) - Full path to folder containing gridded forcing
+  # files
+  # best_val_folder (character) - Optional. If provided, it muste be the full
+  # path to the folder where LHS search results will be saved
+  #
+  #Output:
+  # bestvals (data frame) - Contains the values for LHS parameters that resulted
+  # in the best performing model based on RMSE values
+  
+  #Making function reproducible
+  set.seed(1234)
+  
+  #Construct a hypercube with random numbers. Columns represent five specific 
+  #parameters needed to run DBPM
+  fishing_params <- data.frame(randomLHS(num_iter, 5))
+  #Renaming columns 
+  colnames(fishing_params) <- c("fmort_u", "fmort_v", "fminx_u", "fminx_v", 
+                                "search_vol")
+  
+  #Adjust range of mi size params, others go from 0-1
+  fishing_params <- fishing_params |> 
+    mutate(fminx_u = fminx_u*2, 
+           fminx_v = fminx_v*2)
+  
+  if(is.numeric(search_vol)){
+    fishing_params <- fishing_params |> 
+      mutate(search_vol = search_vol)
+  }else{
+    # adjust range of search vol, others go from 0-1
+    fishing_params <- fishing_params |> 
+      mutate(search_vol = search_vol+0.001)
+  }
+  
+  # use below to select a constant value for search.vol
+  if(!is.null(forcing_file)){
+    dbpm_inputs <- forcing_file
+  }
+  if(!is.null(gridded_forcing)){
+    dbpm_inputs <- gridded_forcing
+  }
+  
+  # parallelise using 75% of cores available using mclapply
+  no_cores <- round((detectCores()*.75), 0)
+  fishing_params$rmse <- mclapply(1:nrow(fishing_params), 
+                                  FUN = function(i) getError(fishing_params[i,],
+                                                             dbpm_inputs), 
+                                  mc.cores = no_cores) |> 
+    unlist()
+  
+  #Getting name of region from dbpm inputs
+  region_name <- unique(dbpm_inputs$region)
+  
+  # check this time param set with lowest error
+  bestvals <- fishing_params |> 
+    filter(rmse == min(rmse, na.rm = T)) |> 
+    mutate(region = region_name)
+  
+  #Print row with lowest RMSE
+  print(bestvals)
+  
+  #If folder to save values is provided - Save results
+  if(!is.null(best_val_folder)){
+    #Ensure folder exists
+    if(!dir.exists(best_val_folder)){
+      dir.create(best_val_folder, recursive = T)
+    }
+    
+    #File path to save output
+    fout <- file.path(best_val_folder, 
+                      paste0("best-fishing-parameters_", 
+                             str_replace(region_name, " ", "-"),
+                             "_searchvol_", search_vol, "_numb-iter_", 
+                             num_iter, ".parquet"))
+    #Save output
+    bestvals |> 
+      write_parquet(fout)
+  }
+  
+  return(bestvals)
+}
 
