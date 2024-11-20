@@ -36,13 +36,16 @@ params_calibration <- params_calibration |>
   left_join(params_correlation, by = join_by(region)) |> 
   relocate(region, .before = fmort_u)
 
-params_calibration
+params_calibration |> 
+  write_parquet(file.path(figure_folder, 
+                          "best-fishing-parameters_FAO-58_searchvol_estimated_numb-iter_100.parquet"))
 
 ## Optimising underperforming regions --------------------------------------
 # Since correlation is below 0.5 and the plots comparing estimates and obs do 
 # not look like a great fit, we will calculate fishing parameters again 
 no_iter <- 1000
-params_calibration <- LHSsearch(num_iter = no_iter, forcing_file = dbpm_inputs, 
+params_calibration <- LHSsearch(num_iter = no_iter, seed = 42,
+                                forcing_file = dbpm_inputs, 
                                 gridded_forcing = NULL, 
                                 best_val_folder = 
                                   file.path("new_workflow/outputs",

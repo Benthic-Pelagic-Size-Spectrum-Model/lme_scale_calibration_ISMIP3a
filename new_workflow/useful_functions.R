@@ -1,6 +1,6 @@
 ###############################################################################
 # Supporting DBPM functions
-# Functions have been adapted from previous DBPM work
+# Functions have been adapted from previous DBPM work by JLB, CN, JB and others
 # 
 # Edited by: Denisse Fierro Arcos
 # Date of update: 2024-11-20
@@ -934,12 +934,14 @@ getError <- function(fishing_params, dbpm_inputs, year_int = 1950, corr = F,
 }
 
 #Carry out LHS param search
-LHSsearch <- function(num_iter = 1, search_vol = "estimated",
+LHSsearch <- function(num_iter = 1, search_vol = "estimated", seed = 1234,
                       forcing_file = NULL, gridded_forcing = NULL, 
                       best_val_folder = NULL){
   #Inputs:
-  # num_iter (numeric) - Number of individual runs. Default is 1.
+  # num_iter (integer) - Number of individual runs. Default is 1.
   # search_vol (???) - Default is "estimated". ???
+  # seed (positive integer) - Default is 1234. Value used to initialise random-
+  # number generation
   # forcing_file (character) - Full path to forcing file. This must be 
   # non-gridded data
   # gridded_forcing (character) - Full path to folder containing gridded forcing
@@ -952,7 +954,7 @@ LHSsearch <- function(num_iter = 1, search_vol = "estimated",
   # in the best performing model based on RMSE values
   
   #Making function reproducible
-  set.seed(1234)
+  set.seed(seed)
   
   #Construct a hypercube with random numbers. Columns represent five specific 
   #parameters needed to run DBPM
