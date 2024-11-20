@@ -11,6 +11,9 @@ library(tidyr)
 library(dplyr)
 library(stringr)
 library(arrow)
+library(parallel)
+library(ggplot2)
+library(patchwork)
 
 # Getting DBPM model parameters ready -------------------------------------
 sizeparam <- function(dbpm_inputs, fishing_params, dx = 0.1, xmin = -12, 
@@ -821,17 +824,35 @@ run_model <- function(fishing_params, dbpm_inputs, withinput = T){
 }
 
 # Comparing observed and predicted fish biomass ----
-getError <- function(fishing_params, dbpm_inputs, year_int = 1950){
+getError <- function(fishing_params, dbpm_inputs, year_int = 1950, corr = F,
+                     figure_folder = NULL){
   #Inputs:
   # fishing_params (data frame) - Contains fishing parameters
   # dbpm_inputs (data frame) - Climate and fishing forcing data
   # year_int (numeric) - Default is 1949. Used to subset results from this
   # year onwards
+  # corr (boolean) - Default is FALSE. If set to TRUE, the correlation between 
+  # predicted and observed values is calculated
+  # figure_folder (character) - Optional. Full path to the folder where figures
+  # comparing observed and predicted data will be stored
   #
   #Output:
+  # If corr set to FALSE:
   # rmse (numeric) - RMSE value between observed and predicted catch
+  # If corr set to TRUE:
+  # corr_nas (numeric) - Correlation between observed and predicted catch
   
-  #Running model for specific LME
+  #If a path to save figures is provided, ensure correlation is calculated
+  if(!is.null(figure_folder)){
+    if(!corr){
+      corr <- T
+    }
+  }
+  
+  #Getting name of region from dbpm inputs
+  region_name <- unique(dbpm_inputs$region)
+  
+  #Running model
   result <- run_model(fishing_params, dbpm_inputs)
   
   #Aggregate data by year (mean to conserve units)
@@ -846,13 +867,67 @@ getError <- function(fishing_params, dbpm_inputs, year_int = 1950){
            #convert from tonnes to grams (m^-2*yr^-1)
            squared_error = (mean_obs_catch_yr-mean_total_catch_yr)^2)
   
-  #Calculate RMSE 
-  sum_se <- sum(error_calc$squared_error, na.rm = T)
-  count <- sum(!is.na(error_calc$squared_error))
-  rmse <- sqrt(sum_se/count)
-  
-  #Return RMSE
-  return(rmse)
+  if(corr){
+    #Calculate correlation between observed and predicted catches
+    corr_nas <- data.frame(cor = cor(error_calc$mean_obs_catch_yr, 
+                                     error_calc$mean_total_catch_yr, 
+                                     use = "complete.obs"),
+                           #Get number of rows with NA values
+                           catchNA = sum(is.na(error_calc$mean_total_catch_yr)),
+                           region = region_name)
+    
+    #If a path to save figures is provided, create figures and save 
+    if(!is.null(figure_folder)){
+      if(!dir.exists(figure_folder)){
+        dir.create(figure_folder)
+      }
+      #Plotting predicted and observed catches over time
+      p1 <- ggplot()+
+        geom_line(data = error_calc, aes(x = year, y = mean_total_catch_yr))+
+        geom_point(data = error_calc, aes(x = year, y = mean_obs_catch_yr))+
+        scale_x_continuous(breaks = seq(min(error_calc$year), 
+                                        max(error_calc$year), by = 10))+
+        theme_classic()+ 
+        theme(axis.text = element_text(colour = "grey20", size = 12),
+              text = element_text(size = 15))+
+        labs(x = "Year", y = bquote("Total catch (g*"~yr^-1*"*"*m^-2*")"))
+      
+      #Plotting predicted vs observed catches
+      p2 <- ggplot()+
+        geom_point(data = error_calc, 
+                   aes(x = mean_total_catch_yr, y = mean_obs_catch_yr))+
+        geom_abline(slope = 1, intercept = 0)+
+        theme_classic()+
+        theme(axis.text = element_text(colour = "grey20", size = 12),
+              text = element_text(size = 15))+
+        labs(x = "Predicted", y = "Observed")
+      
+      #Creating a single plot
+      p3 <- p1+p2+
+        plot_annotation(title = region_name,
+                        theme = theme(plot.title = element_text(size = 16, 
+                                                                hjust = 0.5)))
+      
+      #Creating path to save figure
+      f_out <- file.path(figure_folder, paste0("dbpm_pred_obs_catches_", 
+                                               region_name, ".png"))
+      
+      #Saving composite figure
+      ggsave(filename = f_out, plot = p3, width = 15, height = 10)
+    }
+    
+    #Return correlation values
+    return(corr_nas)
+    
+  }else{
+    #Calculate RMSE 
+    sum_se <- sum(error_calc$squared_error, na.rm = T)
+    count <- sum(!is.na(error_calc$squared_error))
+    rmse <- sqrt(sum_se/count)
+    
+    #Return RMSE
+    return(rmse)
+  }
 }
 
 #Carry out LHS param search

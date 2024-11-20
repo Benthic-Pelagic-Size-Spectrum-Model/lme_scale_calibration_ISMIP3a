@@ -15,19 +15,40 @@ dbpm_inputs <- file.path("/g/data/vf71/la6889/dbpm_inputs/east_antarctica",
   read_parquet()
 
 
-# Searching best fishing parameters values for LME ------------------------
-test <- LHSsearch(num_iter = 20, 
-                  forcing_file = dbpm_inputs, 
-                  gridded_forcing = NULL, 
-                  best_val_folder = "new_workflow/outputs/best_fish_vals")
+# Searching best fishing parameters values for area of interest -----------
+no_iter <- 100
+params_calibration <- LHSsearch(num_iter = no_iter, forcing_file = dbpm_inputs, 
+                                gridded_forcing = NULL, 
+                                best_val_folder = 
+                                  file.path("new_workflow/outputs",
+                                            "best_fish_vals"))
 
-test
+## Creating plots with fishing parameters calculated above --------------
+#Path to folder where figures will be stored
+figure_folder <- "new_workflow/outputs/best_fish_vals"
+
+# Calculate errors and correlations with tuned fishing parameters and save plot
+params_correlation  <- corr_calib_plots(params_calibration, dbpm_inputs, 
+                                        figure_folder)
+
+#Adding correlation to fishing parameter data frame
+params_calibration <- params_calibration |> 
+  left_join(params_correlation, by = join_by(region)) |> 
+  relocate(region, .before = fmort_u)
+
+params_calibration
+
+## Optimising underperforming regions --------------------------------------
+# Since correlation is below 0.5 and the plots comparing estimates and obs do 
+# not look like a great fit, we will calculate fishing parameters again 
+no_iter <- 1000
+params_calibration <- LHSsearch(num_iter = no_iter, forcing_file = dbpm_inputs, 
+                                gridded_forcing = NULL, 
+                                best_val_folder = 
+                                  file.path("new_workflow/outputs",
+                                            "best_fish_vals"))
 
 
-
-
-result <- run_model(fishing_params, dbpm_inputs)
-test <- getError(fishing_params, dbpm_inputs)
 
 # Getting DBPM parameters -------------------------------------------------
 params <- sizeparam(dbpm_inputs, fishing_params, xmin_consumer_u = -3, 
@@ -53,14 +74,27 @@ params <- read_json("new_workflow/outputs/dbpm_size_params.json",
 # attach(params)
 
 
-no_iter <- 100
+# Correlation and calibration plots ----
+corr_calib_plots <- function(fishing_params, dbpm_inputs, 
+                             figure_folder = NULL){
+  #Inputs:
+  # fishing_params (named numeric vector) - Single column with named rows 
+  # containing LHS parameters
+  # forcing_file (character) - Full path to forcing file. This must be 
+  # non-gridded data
+  # figure_folder (character) - Optional. Full path to the folder where figures 
+  # comparing observed and predicted data will be stored
+  #
+  #Output:
+  #corr_nas (data.frame) - Contains the correlation between predicted and
+  #observed values
 
-test <- LHSsearch(num_iter = no_iter, 
-           forcing_file = dbpm_inputs, 
-           gridded_forcing = NULL, 
-           best_val_folder = "new_workflow/outputs/best_fish_vals")
-
-
+  #Calculate correlations with tuned fishing parameters and save plots
+  corr_nas <- getError(fishing_params, dbpm_inputs, year_int = 1950,
+                       corr = T, figure_folder)
+  
+  return(corr_nas)
+}
 
 
 
