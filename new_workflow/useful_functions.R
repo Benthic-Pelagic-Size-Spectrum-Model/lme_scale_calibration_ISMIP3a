@@ -3,7 +3,7 @@
 # Functions have been adapted from previous DBPM work
 # 
 # Edited by: Denisse Fierro Arcos
-# Date of update: 2024-10-23
+# Date of update: 2024-11-20
 
 
 # Loading libraries -------------------------------------------------------
@@ -366,7 +366,8 @@ sizemodel <- function(params, ERSEM_det_input = F, temp_effect = T,
     #matrix for keeping track of growth (GG_v, GG_u) and reproduction (R_v, R_u) 
     #from ingested food:
     reprod_det <- reprod_pred <- array(0, c(numb_size_bins, numb_time_steps+1))
-    growth_det <- growth_int_pred <- array(0, c(numb_size_bins, numb_time_steps+1))
+    growth_det <- growth_int_pred <- array(0, c(numb_size_bins, 
+                                                numb_time_steps+1))
     
     #matrix for keeping track of predation mortality (PM_v, PM_u)
     pred_mort_det <- array(0, c(numb_size_bins, numb_time_steps+1))
@@ -435,8 +436,9 @@ sizemodel <- function(params, ERSEM_det_input = F, temp_effect = T,
     
     #Fishing mortality (THESE PARAMETERS NEED TO BE ESTIMATED!) (FVec.u, FVec.v)
     # from Benoit & Rochet 2004 
-    # here fish_mort_pred and fish_mort_pred= fixed catchability term for predators and 
-    # detritivores to be estimated along with ind_min_det and ind_min_fish_pred
+    # here fish_mort_pred and fish_mort_pred= fixed catchability term for 
+    # predators and detritivores to be estimated along with ind_min_det and 
+    # ind_min_fish_pred
     fishing_mort_pred[ind_min_fish_pred:numb_size_bins, 1] <- 
       fish_mort_pred*effort[1]
     fishing_mort_det[ind_min_fish_det:numb_size_bins, 1] <- 
@@ -530,7 +532,7 @@ sizemodel <- function(params, ERSEM_det_input = F, temp_effect = T,
       
       # yr-1 (Z_u)
       tot_mort_pred[, i] <- pred_mort_pred[, i]+
-        pel_tempeffect[i]*other_mort_pred+senes_mort_pred+fishing_mort_pred[, i]
+        pel_tempeffect[i]*other_mort_pred+senes_mort_pred+fishing_mort_pred[,i]
       
       # Benthos growth integral
       # yr-1 (GG_v)
@@ -579,7 +581,7 @@ sizemodel <- function(params, ERSEM_det_input = F, temp_effect = T,
         predators[, i]+def_low*(feed_rate_bent)*size_bins_vals*predators[, i]
       
       #------------------------------------------------
-      # Increment values of detritus, predators & detritivores for next time step  
+      # Increment values of detritus, predators & detritivores for next timestep  
       #------------------------------------------------
       
       #Detritus Biomass Density Pool - fluxes in and out (g.m-2.yr-1) of 
@@ -659,7 +661,7 @@ sizemodel <- function(params, ERSEM_det_input = F, temp_effect = T,
       # apply transfer efficiency of 10% *plankton density at same size
       # reproduction from energy allocation
     if(dynamic_reproduction){
-      predators[ind_min_pred_size, i+1] <- predators[ind_min_pred_size, i] +
+      predators[ind_min_pred_size, i+1] <- predators[ind_min_pred_size, i]+
         (sum(reprod_pred[(ind_min_pred_size+1):numb_size_bins, i]*
                size_bins_vals[(ind_min_pred_size+1):numb_size_bins]*
                predators[(ind_min_pred_size+1):numb_size_bins, i]*
@@ -819,6 +821,7 @@ run_model <- function(fishing_params, dbpm_inputs, withinput = T){
     return(dbpm_inputs)
     
   }else{
+    
     return(result_set)
   }
 }
@@ -1020,3 +1023,25 @@ LHSsearch <- function(num_iter = 1, search_vol = "estimated",
   return(bestvals)
 }
 
+
+# Correlation and calibration plots ----
+corr_calib_plots <- function(fishing_params, dbpm_inputs, 
+                             figure_folder = NULL){
+  #Inputs:
+  # fishing_params (named numeric vector) - Single column with named rows 
+  # containing LHS parameters
+  # forcing_file (character) - Full path to forcing file. This must be 
+  # non-gridded data
+  # figure_folder (character) - Optional. Full path to the folder where figures 
+  # comparing observed and predicted data will be stored
+  #
+  #Output:
+  #corr_nas (data.frame) - Contains the correlation between predicted and
+  #observed values
+  
+  #Calculate correlations with tuned fishing parameters and save plots
+  corr_nas <- getError(fishing_params, dbpm_inputs, year_int = 1950,
+                       corr = T, figure_folder)
+  
+  return(corr_nas)
+}
