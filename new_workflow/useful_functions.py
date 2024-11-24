@@ -274,9 +274,8 @@ def gridded_spinup(file_path, start_spin, end_spin, spinup_period,
         da = da.mean('time')
 
     #Create spinup data array
-    spinup_da = xr.concat([da, da], dim = 'time')
-    while len(spinup_da.time) < len(spinup_period):
-        spinup_da = xr.concat([spinup_da, da], dim = 'time')
+    spinup_da = [da] * len(spinup_period)
+    spinup_da = xr.concat(spinup_da, dim = 'time')
     spinup_da['time'] = spinup_period
     
     #Updating chunks
