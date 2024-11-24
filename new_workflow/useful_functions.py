@@ -242,8 +242,8 @@ def GetPPIntSlope(file_paths, mmin = 10**(-14.25), mmid = 10**(-10.184),
 
 
 # Calculate spinup from gridded data
-def gridded_spinup(file_path, start_spin, end_spin, spinup_period,
-                  **kwargs):
+def gridded_spinup(file_path, start_spin, end_spin, spinup_period, 
+                   mean_spinup = False, **kwargs):
     '''
     Inputs:
     - file_path (character) File path pointing to zarr file from which spinup
@@ -253,6 +253,8 @@ def gridded_spinup(file_path, start_spin, end_spin, spinup_period,
     - spinup_period (pandas Datetime array) New time labels for spinup period.
     Must be a multiple of spinup range (i.e., difference between start and end
     spin)
+    - mean_spinup (boolean) Default is False. If set to True, then the spinup
+    period will be based on the mean value over the spin period.
     **Optional**: 
     - file_out (character) File path to save results
 
@@ -267,6 +269,9 @@ def gridded_spinup(file_path, start_spin, end_spin, spinup_period,
     [var] = list(da.keys())
     #Select period to be used for spinup
     da = da[var].sel(time = slice(str(start_spin), str(end_spin)))
+    #If spinup should be created based on mean values over spinup period
+    if mean_spinup:
+        da = da.mean('time')
 
     #Create spinup data array
     spinup_da = xr.concat([da, da], dim = 'time')
