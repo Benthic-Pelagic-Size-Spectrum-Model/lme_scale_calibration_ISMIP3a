@@ -980,9 +980,14 @@ sizemodel <- function(params, ERSEM_det_input = F, temp_effect = T,
     # predators and detritivores to be estimated along with ind_min_det and 
     # ind_min_fish_pred
     fishing_mort_pred[ind_min_fish_pred:numb_size_bins,] <- 
-      fish_mort_pred*effort
+      matrix(rep((fish_mort_pred*effort), 
+                 length(ind_min_fish_pred:numb_size_bins)), 
+             nrow = length(ind_min_fish_pred:numb_size_bins), byrow = T)
+    
     fishing_mort_det[ind_min_fish_det:numb_size_bins,] <- 
-      fish_mort_detritivore*effort
+      matrix(rep((fish_mort_detritivore*effort), 
+                 length(ind_min_fish_det:numb_size_bins)),
+             nrow = length(ind_min_fish_det:numb_size_bins), byrow = T)
     
     #output fisheries catches per yr at size (Y_u, Y_v)
     catch_pred[ind_min_fish_pred:numb_size_bins, 1] <-
