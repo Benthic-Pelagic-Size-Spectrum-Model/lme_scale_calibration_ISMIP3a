@@ -1538,7 +1538,7 @@ LHSsearch <- function(num_iter = 1, search_volume = "estimated", seed = 1234,
     fout <- file.path(best_val_folder, 
                       paste0("best-fishing-parameters_", 
                              str_replace(region_name, " ", "-"),
-                             "_searchvol_", search_vol, "_numb-iter_", 
+                             "_searchvol_", search_volume, "_numb-iter_", 
                              num_iter, ".parquet"))
     #Save output
     bestvals |> 
