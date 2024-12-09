@@ -831,8 +831,6 @@ gridded_sizemodel <- function(params, ERSEM_det_input = F, U_mat, V_mat, W_mat,
 }#end gridded size-based model function
 
   
-  
-
 # Run model per grid cell or averaged over an area ------
 sizemodel <- function(params, ERSEM_det_input = F, temp_effect = T,
                       use_init = F){
@@ -1301,19 +1299,19 @@ run_model <- function(fishing_params, dbpm_inputs, withinput = T){
   size_bins <- 10^params$log10_size_bins
   
   if(withinput){
-    lims_ubio <- params$ind_min_pred_size:params$numb_size_bins
+    lims_pred_bio <- params$ind_min_pred_size:params$numb_size_bins
     # JB:  changed inputs to m2 so no need to divide by depth here
     # added 1:params$Neq to same 2040 time steps instead of 2041
-    time_steps <- 1:params$numb_time_steps
+    time_steps <- 2:(params$numb_time_steps+1)
     
     dbpm_inputs$total_pred_biomass <- 
-      apply(result_set$predators[lims_ubio, time_steps]*
-              params$log_size_increase*size_bins[lims_ubio], 2, sum)
+      apply(result_set$predators[lims_pred_bio, time_steps]*
+              params$log_size_increase*size_bins[lims_pred_bio], 2, sum)
     
-    lims_vbio <- params$ind_min_detritivore_size:params$numb_size_bins
+    lims_det_bio <- params$ind_min_detritivore_size:params$numb_size_bins
     dbpm_inputs$total_detritivore_biomass <- 
-      apply(result_set$detritivores[lims_vbio, time_steps]*
-              params$log_size_increase*size_bins[lims_vbio], 2, sum)
+      apply(result_set$detritivores[lims_det_bio, time_steps]*
+              params$log_size_increase*size_bins[lims_det_bio], 2, sum)
     
     dbpm_inputs$total_detritus <- result_set$detritus[time_steps]
     
