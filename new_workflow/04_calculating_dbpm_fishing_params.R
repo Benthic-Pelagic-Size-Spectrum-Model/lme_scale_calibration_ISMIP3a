@@ -60,8 +60,8 @@ params_calibration |>
 ## Optimising underperforming regions --------------------------------------
 # Since correlation is below 0.5 and the plots comparing estimates and obs do 
 # not look like a great fit, we will calculate fishing parameters again 
-no_iter <- 1000
-params_calibration_optim <- LHSsearch(num_iter = no_iter, seed = 123,
+no_iter <- 500
+params_calibration_optim <- LHSsearch(num_iter = no_iter, seed = 42,
                                       forcing_file = dbpm_inputs, 
                                       gridded_forcing = NULL, 
                                       best_val_folder = results_folder, 
