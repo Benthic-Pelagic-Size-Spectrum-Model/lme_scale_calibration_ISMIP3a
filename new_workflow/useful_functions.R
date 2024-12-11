@@ -1259,6 +1259,11 @@ sizemodel <- function(params, ERSEM_det_input = F, temp_effect = T,
       detritivores[ind_min_fish_det:numb_size_bins, 2:(numb_time_steps+1)]*
       size_bins_vals[ind_min_fish_det:numb_size_bins]
     
+    # Subsetting predator and detritivore results to include relevant size 
+    # classes
+    predators <- predators[ind_min_pred_size:numb_size_bins,]
+    detritivores <- detritivores[ind_min_detritivore_size:numb_size_bins,]
+    
     return(list(predators = predators[,],
                 growth_int_pred = growth_int_pred[,],
                 pred_mort_pred = pred_mort_pred[,],
@@ -1301,16 +1306,17 @@ run_model <- function(fishing_params, dbpm_inputs, withinput = T){
   if(withinput){
     lims_pred_bio <- params$ind_min_pred_size:params$numb_size_bins
     # JB:  changed inputs to m2 so no need to divide by depth here
-    # added 1:params$Neq to same 2040 time steps instead of 2041
+    # Timesteps start from index 2 because the first time step contains 
+    # initialisation values
     time_steps <- 2:(params$numb_time_steps+1)
     
     dbpm_inputs$total_pred_biomass <- 
-      apply(result_set$predators[lims_pred_bio, time_steps]*
+      apply(result_set$predators[, time_steps]*
               params$log_size_increase*size_bins[lims_pred_bio], 2, sum)
     
     lims_det_bio <- params$ind_min_detritivore_size:params$numb_size_bins
     dbpm_inputs$total_detritivore_biomass <- 
-      apply(result_set$detritivores[lims_det_bio, time_steps]*
+      apply(result_set$detritivores[, time_steps]*
               params$log_size_increase*size_bins[lims_det_bio], 2, sum)
     
     dbpm_inputs$total_detritus <- result_set$detritus[time_steps]
@@ -1535,7 +1541,7 @@ LHSsearch <- function(num_iter = 1, search_volume = "estimated", seed = 1234,
     #File path to save output
     fout <- file.path(best_val_folder, 
                       paste0("best-fishing-parameters_", 
-                             str_replace(region_name, " ", "-"),
+                             str_replace(str_to_lower(region_name), " ", "-"),
                              "_searchvol_", search_volume, "_numb-iter_", 
                              num_iter, ".parquet"))
     #Save output
@@ -1587,21 +1593,23 @@ plotsizespectrum <- function(modeloutput, params, timeaveraged = F){
     det_size <- ind_min_detritivore_size:numb_size_bins
     # plot changes in the two size spectra over time
     if(timeaveraged){
-      predators <- rowMeans(modeloutput$predators, na.rm = T)
-      detritivores <- rowMeans(modeloutput$detritivores, na.rm = T)
+      predators <- rowMeans(modeloutput$predators[, 2:(numb_time_steps+1)],
+                            na.rm = T)
+      detritivores <- rowMeans(modeloutput$detritivores[, 2:(numb_time_steps+1)], 
+                               na.rm = T)
     }else{
-      predators <- modeloutput$predators[, numb_time_steps]
-      detritivores <- modeloutput$detritivores[, numb_time_steps]
+      predators <- modeloutput$predators[, (numb_time_steps+1)]
+      detritivores <- modeloutput$detritivores[, (numb_time_steps+1)]
     }
     
     maxy <- max(log10(predators), na.rm = T)
     miny <- -20
     
-    plot(log10_size_bins[pred_size], log10(predators[pred_size]), type = "l", 
+    plot(log10_size_bins[pred_size], log10(predators), type = "l", 
          col = "#004488", cex = 1.6, ylab = "", xlab = "",
          xlim = c(min_log10_detritivore, max_log10_pred), 
          ylim = c(miny, maxy))
-    points(log10_size_bins[det_size], log10(detritivores[det_size]), lty = 2,
+    points(log10_size_bins[det_size], log10(detritivores), lty = 2,
            type = "l", col = "#cc3311", cex = 1.6, ylab = "", xlab = "")
     title(ylab = expression("log abundance density [m"^-3* "]"), line = 2.5,
           xlab = "log body mass [g]")

@@ -834,22 +834,22 @@ def sizemodel(params, dbpm_input, ERSEM_det_input = False, temp_effect = True,
             detritivores.isel(size_class = j).\
             loc[{'time': t}] = ((Si_v[j]-Ai_v[j]*detritivores.isel(size_class = j-1).
                                  sel(time = t))/Bi_v[j])
-       
+
     #output fisheries catches per yr at size
-    catch_all = xr.concat([xr.zeros_like(catch_pred.isel(time = 0)),
-                           (fishing_mort_pred*predators*
-                            (10**log10_size_bins_mat))], dim = 'time')
-    catch_pred = xr.where((catch_pred.size_class >= log10_size_bins[ind_min_fish_pred]) &
-                          (catch_pred.size_class < max(log10_size_bins)) &
-                          (catch_pred.time > catch_pred.time.min()), catch_all, 
-                          catch_pred)
+    (catch_pred.isel(size_class = slice(ind_min_fish_pred, None)).
+     loc[:,dbpm_input_time]) = ((fishing_mort_pred*predators*size_bin_vals).
+                               isel(size_class = slice(ind_min_fish_pred, None)))
     
     #output fisheries catches per yr at size
-    catch_all = xr.concat([xr.zeros_like(catch_det.isel(time = 0)),
-                           (fishing_mort_det*detritivores*size_bin_vals)], dim = 'time')
-    catch_det = xr.where((catch_det.size_class >= log10_size_bins[ind_min_fish_det]) &
-                         (catch_det.size_class < max(log10_size_bins)) &
-                         (catch_det.time > catch_det.time.min()), catch_all, catch_det)
+    (catch_det.isel(size_class = slice(ind_min_fish_det, None)).
+     loc[:,dbpm_input_time]) = ((fishing_mort_det*detritivores*size_bin_vals).
+                               isel(size_class = slice(ind_min_fish_det, None)))
+
+    # Subsetting predator and detritivore results to include relevant size 
+    # classes
+    predators = predators.isel(size_class = slice(ind_min_pred_size, None))
+    detritivores = detritivores.isel(size_class = slice(ind_min_detritivore_size,
+                                                        None))
 
     return_list = {'predators': predators, 'growth_int_pred': growth_int_pred,
                    'pred_mort_pred': pred_mort_pred, 'detritivores': detritivores,
