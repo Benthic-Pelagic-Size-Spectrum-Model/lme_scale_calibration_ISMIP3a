@@ -2,7 +2,6 @@
 # Spectrum Model (DBPM)
 
 # Loading libraries -------------------------------------------------------
-library(data.table)
 library(dplyr)
 library(arrow)
 library(purrr)
@@ -12,7 +11,7 @@ library(ggplot2)
 # Loading DBPM climate inputs ---------------------------------------------
 # We will load climate inputs to merge wih catch and effort data before saving
 # results
-forcing_folder <- file.path("/g/data/vf71/la6889/dbpm_inputs/east_antarctica",
+forcing_folder <- file.path("/g/data/vf71/la6889/dbpm_inputs/east_antarctica/",
                             "monthly_weighted")
 
 clim_forcing_file <- list.files(forcing_folder, pattern = "obsclim|spinup",
@@ -32,7 +31,7 @@ depth_area <- clim_forcing_file |>
 effort_data <- file.path("/g/data/vf71/fishmip_inputs/ISIMIP3a/DKRZ_EffortFiles",
                          "effort_isimip3a_histsoc_1841_2010.csv") |> 
   #Keep only columns with relevant information
-  fread(select = c("Year", "fao_area", "NomActive")) |> 
+  read_csv_arrow(col_select = c("Year", "fao_area", "NomActive")) |> 
   #Selecting data for area of interest - FAO 58
   filter(fao_area == 58) |> 
   # calculate sum of effort by area
@@ -52,7 +51,7 @@ effort_data <- file.path("/g/data/vf71/fishmip_inputs/ISIMIP3a/DKRZ_EffortFiles"
 #Catches data
 catch_data <- file.path("/g/data/vf71/fishmip_inputs/ISIMIP3a/DKRZ_EffortFiles",
                         "catch-validation_isimip3a_histsoc_1850_2004.csv") |> 
-  fread(select = c("Year", "fao_area", "Reported", "IUU")) |>
+  read_csv_arrow(col_select = c("Year", "fao_area", "Reported", "IUU")) |>
   #Selecting area of interest
   filter(fao_area == 58) |> 
   # catch is in tonnes. This was checked in "FishingEffort" project
