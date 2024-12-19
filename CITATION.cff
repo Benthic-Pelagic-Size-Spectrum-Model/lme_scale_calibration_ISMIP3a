@@ -18,7 +18,7 @@ authors:
 - name: "Fisheries and Marine Ecosystem Model Intercomparison Project (Fish-MIP)"
 
 title: "Dynamic Benthic Pelagic Model (DBPM) calibration - ISIMIP3A protocol"
-version: 2.0.1
+version: 2.0.0
 doi: TBA
 date-released: TBA
 url: "https://github.com/Benthic-Pelagic-Size-Spectrum-Model/lme_scale_calibration_ISMIP3a"
