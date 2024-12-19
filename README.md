@@ -29,17 +29,17 @@ You can also run these scripts in your own computer or a different server, but y
   
 ## Getting an NCI account
 1. [Create an NCI user account](https://access-hive.org.au/getting_started/first_steps/#create-an-nci-user-account)  
-  * You should use your Australian institution’s email account when signing up  
-  * When it asks for a project to join:  
-    * If possible, contact the NCI scheme manager at your institution to find out what NCI project you should use to sign up for your NCI account. This account will provide you with computing power.    
+      * You should use your Australian institution’s email account when signing up  
+      * When it asks for a project to join:  
+        * If possible, contact the NCI scheme manager at your institution to find out what NCI project you should use to sign up for your NCI account. This account will provide you with computing power.    
 2. [Join relevant NCI projects](https://access-hive.org.au/getting_started/first_steps/#join-relevant-nci-projects)
-  * Request to join the following NCI projects:  
-    * vf71 - for access to GFDL-MOM6-COBALT2 outputs in analysis ready data format 
-    * hh5 – for the Python conda environment   
-  * Note that it can take a few business day get approved as a project member
+      * Request to join the following NCI projects:  
+        * vf71 - for access to GFDL-MOM6-COBALT2 outputs in analysis ready data format 
+        * hh5 – for the Python conda environment   
+      * Note that it can take a few business day get approved as a project member
 3. [Verify that you can log into NCI’s Gadi](https://access-hive.org.au/getting_started/first_steps/#login-to-gadi)  
-  * Note that it usually takes more than 30 minutes for your account to be created  
-  * You are also welcome to follow along with the [instructions to set up ssh keys](https://access-hive.org.au/getting_started/first_steps/#automatic-login), but this is optional.  
+      * Note that it usually takes more than 30 minutes for your account to be created  
+      * You are also welcome to follow along with the [instructions to set up ssh keys](https://access-hive.org.au/getting_started/first_steps/#automatic-login), but this is optional.  
 
 ## Accessing forcing data 
 ### Ocean outputs from GFDL-MOM6-COBALT2
