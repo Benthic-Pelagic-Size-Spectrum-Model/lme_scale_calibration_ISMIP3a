@@ -3,7 +3,7 @@
 # Functions have been adapted from previous DBPM work by JLB, CN, JB and others
 # 
 # Edited by: Denisse Fierro Arcos
-# Date of update: 2024-11-20
+# Date of update: 2024-12-19
 
 
 # Loading libraries -------------------------------------------------------
@@ -20,35 +20,39 @@ library(patchwork)
 sizeparam <- function(dbpm_inputs, fishing_params, dx = 0.1, xmin = -12, 
                       xmin_consumer_u = -7, xmin_consumer_v = -7, xmax = 6, 
                       tstepspryr = 48, Ngrid = NA, use_init = FALSE, 
-                      u_initial = NA, v_initial = NA, w_initial = NA, 
-                      equilibrium = FALSE){
+                      pred_initial = NA, detritivore_initial = NA, 
+                      detrititus_initial = NA, equilibrium = FALSE,
+                      gridded = FALSE){
   
   #Inputs:
   # - dbpm_inputs (data frame) Containing climate and fishing data needed as 
-  # inputs for DBPM. This is produced by script "03_processing_effort_fishing_inputs.R"
+  #   inputs for DBPM. This is produced by script 
+  #   "03_processing_effort_fishing_inputs.R"
   # - fishing_params (data frame) Containing fishing parameters: "f_u", "f_v",
-  # "f_minu", "f_minv", and "search_vol"
+  #   "f_minu", "f_minv", and "search_vol"
   # - dx (numeric) Default value is 0.1. Size increment after discretization for 
-  # integration (log body weight)
+  #   integration (log body weight)
   # - xmin (numeric) Default value is -12. Minimum log10 body size of plankton
   # - xmin_consumer_u (numeric) Default value is -7. Minimum log10 body size in 
-  # dynamics predators
+  #   dynamics predators
   # - xmin_consumer_v (numeric) Default value is -7. Minimum log10 body size in
-  # dynamics benthic detritivores
+  #   dynamics benthic detritivores
   # - xmax (numeric). Default value is 6. Maximum log10 body size of predators
   # - tstepspryr (numeric) Default value is 48. Number of time steps to include 
-  # within a year
+  #   within a year
   # - Ngrid (numeric) Optional. Number of grid cells.
   # - use_init (boolean). Default value is FALSE. If set to TRUE, the 
-  # initialisation values for predators (U_initial), detritivores (V.initial) 
-  # and detritus (W.initial) will be used
-  # - u_initial (numeric). Optional. Default is NA. Initialisation value for
-  # predators. If provided, 'use_init' must be set to TRUE
-  # - v_initial (numeric). Optional. Default is NA. Initialisation value for
-  # detritivores. If provided, 'use_init' must be set to TRUE
-  # - w_initial (numeric). Optional. Default is NA. Initialisation value for
-  # detritus If provided, 'use_init' must be set to TRUE
+  #   initialisation values for predators (U_initial), detritivores (V.initial) 
+  #   and detritus (W.initial) will be used
+  # - pred_initial (numeric). Optional. Default is NA. Initialisation value for
+  #   predators. If provided, 'use_init' must be set to TRUE
+  # - detritivore_initial (numeric). Optional. Default is NA. Initialisation 
+  #   value for detritivores. If provided, 'use_init' must be set to TRUE
+  # - detrititus_initial (numeric). Optional. Default is NA. Initialisation 
+  #   value for detritus If provided, 'use_init' must be set to TRUE
   # - equilibrium (boolean). Default value is FALSE.
+  # - gridded(boolean). Default value is FALSE. If set to TRUE, it will provide
+  #   params for non-gridded model run.
   #
   # Outputs:
   # er (numeric vector) Export ratio
@@ -56,8 +60,25 @@ sizeparam <- function(dbpm_inputs, fishing_params, dx = 0.1, xmin = -12,
   # Creating empty list to store DBPM parameters:
   param <- list()
   
-  # depth
-  param$depth <- mean(dbpm_inputs$depth)
+  if(!gridded){
+    # depth
+    param$depth <- mean(dbpm_inputs$depth)  
+    # export ratio (er) replaced by fraction of sinking detritus reaching the 
+    # seafloor (from export ratio input) (sinking.rate)
+    param$sinking_rate <- dbpm_inputs$export_ratio 
+    # plankton parameters
+    # intercept of phyto-zooplankton spectrum (pp)
+    param$int_phy_zoo <- dbpm_inputs$intercept
+    # slope of phyto-zooplankton spectrum (r.plank)
+    param$slope_phy_zoo <- dbpm_inputs$slope
+    # temperature parameters 
+    # sea-surface temperature - degrees Celsius (sst)
+    param$sea_surf_temp <- dbpm_inputs$tos
+    # near sea-floor temperature - degrees Celsius (sft)
+    param$sea_floor_temp <- dbpm_inputs$tob
+  }
+  # If gridded is selected, the above parameters are not included because there
+  # are zarr files already available with this information
   
   # number of years to run model (tmax)
   param$n_years <- length(unique(dbpm_inputs$year))
@@ -67,24 +88,6 @@ sizeparam <- function(dbpm_inputs, fishing_params, dx = 0.1, xmin = -12,
   
   # number of time bins (Neq)
   param$numb_time_steps <- param$n_years*tstepspryr
-  
-  # export ratio (er)
-  # param$export_ratio <- dbpm_inputs$export_ratio
-  # fraction of sinking detritus reaching the seafloor (from export ratio input)
-  # (sinking.rate)
-  param$sinking_rate <- dbpm_inputs$export_ratio 
-  
-  # plankton parameters
-  # intercept of phyto-zooplankton spectrum (pp)
-  param$int_phy_zoo <- dbpm_inputs$intercept
-  # slope of phyto-zooplankton spectrum (r.plank)
-  param$slope_phy_zoo <- dbpm_inputs$slope
-  
-  # temperature parameters 
-  # sea-surface temperature - degrees Celsius (sst)
-  param$sea_surf_temp <- dbpm_inputs$tos
-  # near sea-floor temperature - degrees Celsius (sft)
-  param$sea_floor_temp <- dbpm_inputs$tob
   
   # get rescaled effort
   param$effort <- dbpm_inputs$nom_active_area_m2_relative
@@ -98,15 +101,6 @@ sizeparam <- function(dbpm_inputs, fishing_params, dx = 0.1, xmin = -12,
   param$min_fishing_size_pred <- fishing_params$fminx_u 
   # minimum log10 body size fished for detritivores (min.fishing.size.v)
   param$min_fishing_size_detritivore <- fishing_params$fminx_v 
-  
-  # Coordinates
-  if("lat" %in% names(dbpm_inputs)){
-    param$lat <- dbpm_inputs$lat
-    param$lon <- dbpm_inputs$lon
-  }else{
-    param$lat <- NA
-    param$lon <- NA
-  }
   
   # Benthic-pelagic coupling parameters
   
@@ -226,13 +220,12 @@ sizeparam <- function(dbpm_inputs, fishing_params, dx = 0.1, xmin = -12,
   param$numb_size_bins <- length(param$log10_size_bins)
   
   # index for minimum log10 predator size (ref)
-  param$ind_min_pred_size <- which(param$log10_size_bins == param$min_log10_pred)
-    #((param$min_log10_pred-param$min_log10_plankton)/dx)+1
+  param$ind_min_pred_size <-
+    which(param$log10_size_bins == param$min_log10_pred)
   
   # index for minimum log10 detritivore size (ref.det)
-  param$ind_min_detritivore_size <- which(param$log10_size_bins == 
-                                            param$min_log10_detritivore)
-    #((param$min_log10_detritivore-param$min_log10_plankton)/dx)+1 
+  param$ind_min_detritivore_size <- 
+    which(param$log10_size_bins == param$min_log10_detritivore)
   
   # index in F vector corresponding to smallest size fished in U (Fref.u)
   param$ind_min_fish_pred <- ((param$min_fishing_size_pred-
@@ -245,15 +238,12 @@ sizeparam <- function(dbpm_inputs, fishing_params, dx = 0.1, xmin = -12,
   #short hand for matrix indexing (idx)
   param$idx <- 2:param$numb_size_bins
   
-  # number of grid cells (Ngrid)
-  param$numb_grid_cells <- Ngrid 
-  
   # (phyto+zoo)plankton + pelagic predator size spectrum (U.init)
   param$plank_pred_sizes <- 10^param$int_phy_zoo[1]*
     10^(param$slope_phy_zoo[1]*param$log10_size_bins)
   
   # set initial detritivore spectrum (V.init)
-  param$detritivore_sizes <- param$sinking_rate[1]*10^param$int_phy_zoo[1] * 
+  param$detritivore_sizes <- param$sinking_rate[1]*10^param$int_phy_zoo[1]* 
     10^(param$slope_phy_zoo[1]*param$log10_size_bins)
   
   # abritrary initial value for detritus (W.init)
@@ -261,11 +251,11 @@ sizeparam <- function(dbpm_inputs, fishing_params, dx = 0.1, xmin = -12,
   
   if(use_init){
     #(U.init)
-    param$init_pred <- u_initial
+    param$init_pred <- pred_initial
     #(V.init)
-    param$init_detritivores <- v_initial
+    param$init_detritivores <- detritivore_initial
     #(W.init)
-    param$init_detritus <- w_initial
+    param$init_detritus <- detrititus_initial
   }
   
   param$equilibrium <- equilibrium
@@ -430,8 +420,8 @@ gridded_sizemodel <- function(params, ERSEM_det_input = F, U_mat, V_mat, W_mat,
     # Numerical integration 
     # set up with the initial values from param - same for all grid cells
     for (j in 1:numb_grid_cells){
-      # set up with the initial values from param
-      #(phyto+zoo)plankton size spectrum - set initial consumer size spectrum (U)
+      # set up with the initial values from param (phyto+zoo)plankton size 
+      # spectrum - set initial consumer size spectrum (U)
       predators[j, 1:120, 1] <- plank_pred_sizes[1:120]
       # set initial detritivore spectrum (V)
       detritivores[j, ind_min_detritivore_size:120, 1] <-
@@ -442,7 +432,6 @@ gridded_sizemodel <- function(params, ERSEM_det_input = F, U_mat, V_mat, W_mat,
 
     if(use_init){
       for (j in 1:numb_grid_cells){
-        # set up with the initial values from previous run
         # set initial consumer size spectrum from previous run
         predators[j, ind_min_pred_size:numb_size_bins, 1] <-
           plank_pred_sizes[ind_min_pred_size:numb_size_bins]
@@ -952,7 +941,6 @@ sizemodel <- function(params, ERSEM_det_input = F, temp_effect = T,
     detritus[1] <- init_detritus
     
     if(use_init){
-      # set up with the initial values from previous run
       # set initial consumer size spectrum from previous run
       predators[ind_min_pred_size:numb_size_bins, 1] <- 
         plank_pred_sizes[ind_min_pred_size:numb_size_bins]
@@ -974,7 +962,7 @@ sizemodel <- function(params, ERSEM_det_input = F, temp_effect = T,
     
     #Fishing mortality (THESE PARAMETERS NEED TO BE ESTIMATED!) (FVec.u, FVec.v)
     # from Benoit & Rochet 2004 
-    # here fish_mort_pred and fish_mort_pred= fixed catchability term for 
+    # here fish_mort_pred and fish_mort_pred = fixed catchability term for 
     # predators and detritivores to be estimated along with ind_min_det and 
     # ind_min_fish_pred
     fishing_mort_pred[ind_min_fish_pred:numb_size_bins,] <- 
@@ -1027,35 +1015,31 @@ sizemodel <- function(params, ERSEM_det_input = F, temp_effect = T,
     #iteration over time, N [days]
     for(i in 1:numb_time_steps){
       # Calculate Growth and Mortality
-      # feeding rates
-      # yr-1
-      #(f_pel)
+      # feeding rates yr-1 (f_pel)
       pred_growth <- (predators[,i]*log_size_increase)%*%(constant_growth)
       
       feed_rate_pel <- pel_tempeffect[i]*as.vector(
         (feed_mult_pel*pred_growth)/(1+handling*feed_mult_pel*pred_growth)) 
-      # yr-1
-      #(f_ben)
+      
+      # yr-1 (f_ben)
       detrit_growth <- (detritivores[,i]*log_size_increase)%*%(constant_growth)
       
       feed_rate_bent <- pel_tempeffect[i]* 
         as.vector((feed_mult_ben*detrit_growth)/ 
                     (1+handling*feed_mult_ben*detrit_growth))
-      # yr-1
-      #(f_det)
+      
+      # yr-1 (f_det)
       detritus_multiplier <- (1/size_bins_vals)*hr_vol_filter_benthos*
         10^(log10_size_bins*metabolic_req_detritivore)*detritus[i]
       
       feed_rate_det <- ben_tempeffect[i]*(detritus_multiplier)/
         (1+handling*detritus_multiplier)
       
-      # Predator growth integral (GG_u)
-      # yr-1 
+      # Predator growth integral (GG_u) yr-1 
       growth_int_pred[, i] <- growth_prop*growth_pred*
         feed_rate_pel+high_prop*growth_detritivore*(feed_rate_bent)
       
-      # Reproduction (R_u)
-      # yr-1
+      # Reproduction (R_u) yr-1
       if(dynamic_reproduction){
         reprod_pred[, i] <- growth_prop*(1-(growth_pred+energy_pred))*
           (feed_rate_pel)+growth_prop*
@@ -1102,7 +1086,8 @@ sizemodel <- function(params, ERSEM_det_input = F, temp_effect = T,
                                      (pref_benthos*hr_volume_search*
                                         met_req_log10_size_bins)*
                                        (predators[, i]*sat_ben*
-                                          log_size_increase)%*%(constant_mortality)),
+                                          log_size_increase)%*%
+                                       (constant_mortality)),
                                    0)
       
       # yr-1 (Z_v)
@@ -1260,9 +1245,14 @@ sizemodel <- function(params, ERSEM_det_input = F, temp_effect = T,
       size_bins_vals[ind_min_fish_det:numb_size_bins]
     
     # Subsetting predator and detritivore results to include relevant size 
-    # classes
-    predators <- predators[ind_min_pred_size:numb_size_bins,]
-    detritivores <- detritivores[ind_min_detritivore_size:numb_size_bins,]
+    # classes and ignore initialisation values (i.e., first timestep)
+    predators <- predators[ind_min_pred_size:numb_size_bins, 
+                           2:(numb_time_steps+1)]
+    detritivores <- detritivores[ind_min_detritivore_size:numb_size_bins,
+                                 2:(numb_time_steps+1)]
+    
+    #Ignoring initialisation values (i.e., first timestep) for detritus
+    detritus <- detritus[2:(numb_time_steps+1)]
     
     return(list(predators = predators[,],
                 growth_int_pred = growth_int_pred[,],
@@ -1311,15 +1301,15 @@ run_model <- function(fishing_params, dbpm_inputs, withinput = T){
     time_steps <- 2:(params$numb_time_steps+1)
     
     dbpm_inputs$total_pred_biomass <- 
-      apply(result_set$predators[, time_steps]*
-              params$log_size_increase*size_bins[lims_pred_bio], 2, sum)
+      apply(result_set$predators*params$log_size_increase*
+              size_bins[lims_pred_bio], 2, sum)
     
     lims_det_bio <- params$ind_min_detritivore_size:params$numb_size_bins
     dbpm_inputs$total_detritivore_biomass <- 
-      apply(result_set$detritivores[, time_steps]*
-              params$log_size_increase*size_bins[lims_det_bio], 2, sum)
+      apply(result_set$detritivores*params$log_size_increase*
+              size_bins[lims_det_bio], 2, sum)
     
-    dbpm_inputs$total_detritus <- result_set$detritus[time_steps]
+    dbpm_inputs$total_detritus <- result_set$detritus
     
     #sum catches (currently in grams per m3 per year, across size classes) 
     # keep as grams per m2, then be sure to convert observed from tonnes per m2
@@ -1456,8 +1446,8 @@ LHSsearch <- function(num_iter = 1, search_volume = "estimated", seed = 1234,
                       best_param = T, best_val_folder = NULL){
   #Inputs:
   # num_iter (integer) - Number of individual runs. Default is 1.
-  # search_volume (character or numeric) - Default is "estimated". It also takes a
-  # number that will be used as the area searched by predators for prey
+  # search_volume (character or numeric) - Default is "estimated". It also takes
+  # a number that will be used as the area searched by predators for prey
   # seed (positive integer) - Default is 1234. Value used to initialise random-
   # number generation
   # forcing_file (character) - Full path to forcing file. This must be 
@@ -1565,8 +1555,8 @@ corr_calib_plots <- function(fishing_params, dbpm_inputs,
   # comparing observed and predicted data will be stored
   #
   #Output:
-  #corr_nas (data.frame) - Contains the correlation between predicted and
-  #observed values
+  # corr_nas (data.frame) - Contains the correlation between predicted and
+  # observed values
   
   #Calculate correlations with tuned fishing parameters and save plots
   corr_nas <- getError(fishing_params, dbpm_inputs, year_int = 1950,
@@ -1593,13 +1583,11 @@ plotsizespectrum <- function(modeloutput, params, timeaveraged = F){
     det_size <- ind_min_detritivore_size:numb_size_bins
     # plot changes in the two size spectra over time
     if(timeaveraged){
-      predators <- rowMeans(modeloutput$predators[, 2:(numb_time_steps+1)],
-                            na.rm = T)
-      detritivores <- rowMeans(modeloutput$detritivores[, 2:(numb_time_steps+1)], 
-                               na.rm = T)
+      predators <- rowMeans(modeloutput$predators, na.rm = T)
+      detritivores <- rowMeans(modeloutput$detritivores, na.rm = T)
     }else{
-      predators <- modeloutput$predators[, (numb_time_steps+1)]
-      detritivores <- modeloutput$detritivores[, (numb_time_steps+1)]
+      predators <- modeloutput$predators[, numb_time_steps]
+      detritivores <- modeloutput$detritivores[, numb_time_steps]
     }
     
     maxy <- max(log10(predators), na.rm = T)
