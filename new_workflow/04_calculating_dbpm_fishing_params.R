@@ -9,7 +9,7 @@ library(purrr)
 
 # Loading DBPM climate and fishing inputs ---------------------------------
 region_int <- "fao-58"
-dbpm_inputs <- file.path("/g/data/vf71/la6889/dbpm_inputs/east_antarctica", 
+dbpm_inputs <- file.path("/g/data/vf71/la6889/dbpm_inputs/east_antarctica/", 
                          "monthly_weighted", 
                          paste0("dbpm_clim-fish-inputs_", region_int, 
                                 "_1841-2010.parquet")) |> 
@@ -118,3 +118,90 @@ params <- read_json(paste0("new_workflow/outputs/dbpm_size_params_",
                            region_int, ".json"), 
                     simplifyVector = T)
 
+
+
+
+
+# Calculating fishing parameters for gridded model ------------------------
+calc_grid_params <- function(meta, f.effort = NULL, start_cond = NULL){
+  #Inputs:
+  #meta (named character vector) - Single column with named rows: region 
+  #(unique ID for LME), base_out (path to folder where outputs will be saved),
+  #grid (full file path including filename to be used to save gridded inputs),
+  #non_grid (full file path including filename to be used to save non-gridded 
+  #inputs)
+  #f.effort (named numeric vector) - Optional. If inputs are provided, fisheries
+  #effort will be set using bestvals_LME. Otherwise, fisheries effort is set 
+  #to 0.
+  #start_cond (numeric vector) - Optional. Minimum and maximum years to be 
+  #used in calculating steady_state for the model.
+  #
+  #Output:
+  #This function does not return anything. Instead the output is saved in the 
+  #base folder provided in the meta parameter
+  
+  LMEnumber <- meta["region"]
+  #Ensuring values are numeric
+  if(!is.numeric(f.effort)){
+    stop("Values provided in the 'f.effort' parameter must be numeric.")
+  }
+  
+  LME_path_full <- meta["base_out"]
+  if(!dir.exists(LME_path_full)){
+    dir.create(LME_path_full)
+  }
+  
+  # get initial values from LME-scale results
+  lme_input_init <- fread(meta["non_grid"])
+  
+  #Run initial model with best parameters
+  initial_results <- run_model(vals = f.effort, input = lme_input_init, 
+                               withinput = F)
+  
+  #Calculate starting conditions
+  #Check if year range was given
+  if(!is.null(start_cond)){
+    ind <- which(lme_input_init$year >= min(start_cond) & 
+                   lme_input_init$year <= max(start_cond))
+  }else{
+    ind <- which(lme_input_init$year >= 1861 & lme_input_init$year <= 1960)
+  }
+  
+  #Add parameters for initial and end year to calculate starting conditions
+  #Adding 1 to ignore initialisation values
+  U.initial <- rowMeans(initial_results$U[, ind+1])
+  V.initial <- rowMeans(initial_results$V[, ind+1])
+  W.initial <- mean(initial_results$W[ind+1])
+  
+  #Getting name of files to be used as gridded inputs
+  lme_inputs_grid <- merging_gridded_inputs(LME_path_full) 
+  
+  if(!is.null(f.effort)){
+    f.u <- f.effort["f.u"]
+    f.v <- f.effort["f.v"]
+    f.minu <- f.effort["f.minu"]
+    f.minv <- f.effort["f.minv"]
+  }else{ 
+    f.u <- f.v <- f.minu <- f.minv <- 0 
+  }
+  
+  #Get total number of years
+  tmax <- length(unique(lme_inputs_grid$year))
+  
+  # set up params for each month, across grid cells
+  gridded_params <- sizeparam(equilibrium = FALSE, dx = 0.1, 
+                              xmin.consumer.u = -3, xmin.consumer.v = -3,
+                              tmax = tmax, tstepspryr = 12,
+                              search_vol = f.effort["search.vol"], 
+                              fmort.u = f.u, fminx.u = f.minu, fmort.v = f.v, 
+                              fminx.v = f.minv, use.init = TRUE,
+                              pred_initial = U.initial, 
+                              detritivore_initial = V.initial, 
+                              detrititus_initial = W.initial, 
+                              Ngrid = nrow(lme_inputs_grid$depth))
+  
+  # save inputs and parameters object needed for plotting 
+  save(gridded_params, 
+       file = file.path(LME_path_full, 
+                        paste0("grid_inputs_params_LME_", LMEnumber, ".RData")))
+}
