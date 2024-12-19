@@ -25,6 +25,7 @@ Plots created in this script can be used to visually inspect the fit of predicte
   
 # Running this repository
 The scripts in this repository were developed in NCI's Gadi, so the easiest way to run these script is to clone this repository to Gadi. However, before you can do this, you will need an NCI account, which are only available for researchers with an email address from an Australian institution. Further down in this document, we include information about how to create an NCI account if you do not have one already. Remember, you must have an email address for an Australian institution to create an NCI account.  
+  
 You can also run these scripts in your own computer or a different server, but you will need need access to the forcing data (i.e., GFDL-MOM6-COBALT2 outputs and fishing data) to run them. We include information about how to access these data.  
   
 ## Getting an NCI account
