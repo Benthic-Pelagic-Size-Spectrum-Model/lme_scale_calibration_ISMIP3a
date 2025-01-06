@@ -1246,10 +1246,15 @@ sizemodel <- function(params, ERSEM_det_input = F, temp_effect = T,
     
     # Subsetting predator and detritivore results to include relevant size 
     # classes and ignore initialisation values (i.e., first timestep)
-    predators <- predators[ind_min_pred_size:numb_size_bins, 
-                           2:(numb_time_steps+1)]
-    detritivores <- detritivores[ind_min_detritivore_size:numb_size_bins,
-                                 2:(numb_time_steps+1)]
+    if(!use_init){
+      predators <- predators[,2:(numb_time_steps+1)]
+      detritivores <- detritivores[,2:(numb_time_steps+1)]
+    }else{
+      predators <- predators[ind_min_pred_size:numb_size_bins, 
+                             2:(numb_time_steps+1)]
+      detritivores <- detritivores[ind_min_detritivore_size:numb_size_bins,
+                                   2:(numb_time_steps+1)]
+    }
     
     #Ignoring initialisation values (i.e., first timestep) for detritus
     detritus <- detritus[2:(numb_time_steps+1)]
