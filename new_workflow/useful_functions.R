@@ -60,6 +60,11 @@ sizeparam <- function(dbpm_inputs, fishing_params, dx = 0.1, xmin = -12,
   # Creating empty list to store DBPM parameters:
   param <- list()
   
+  # If gridded is selected, the parameters below from "depth" to 
+  # "sea_floor_temp" are not included because there are zarr files available 
+  # with this information. "pref_benthos" and "pref_pelagic" need to be 
+  # calculated from gridded files.
+  
   if(!gridded){
     # depth
     param$depth <- mean(dbpm_inputs$depth)  
@@ -76,9 +81,16 @@ sizeparam <- function(dbpm_inputs, fishing_params, dx = 0.1, xmin = -12,
     param$sea_surf_temp <- dbpm_inputs$tos
     # near sea-floor temperature - degrees Celsius (sft)
     param$sea_floor_temp <- dbpm_inputs$tob
+    
+    # set predator coupling to benthos, depth dependent - 0.75 above 500 m, 0.5
+    # between 500-1800 and 0 below 	1800m (suggestions of values from Clive
+    # Trueman based on stable isotope work, and proportion of biomass, 	Rockall 
+    # Trough studies) (pref.ben)
+    param$pref_benthos <- 0.8*exp(-1/250*param$depth)
+    
+    # preference for pelagic prey (pref.pel)
+    param$pref_pelagic <- 1-param$pref_benthos 
   }
-  # If gridded is selected, the above parameters are not included because there
-  # are zarr files already available with this information
   
   # number of years to run model (tmax)
   param$n_years <- length(unique(dbpm_inputs$year))
@@ -108,15 +120,6 @@ sizeparam <- function(dbpm_inputs, fishing_params, dx = 0.1, xmin = -12,
   # volume searched constant m3.yr-1 for fish. need to check this value, its
   # quite large. (A.u)
   param$hr_volume_search <- fishing_params$search_vol
-  
-  # set predator coupling to benthos, depth dependent - 0.75 above 500 m, 0.5
-  # between 500-1800 and 0 below 	1800m (suggestions of values from Clive
-  # Trueman based on stable isotope work, and proportion of biomass, 	Rockall 
-  # Trough studies) (pref.ben)
-  param$pref_benthos <- 0.8*exp(-1/250*param$depth)
-  
-  # preference for pelagic prey (pref.pel)
-  param$pref_pelagic <- 1-param$pref_benthos 
   
   # detritus coupling on? 1 = yes, 0 = no (det.coupling)
   param$detritus_coupling <- TRUE
@@ -233,21 +236,10 @@ sizeparam <- function(dbpm_inputs, fishing_params, dx = 0.1, xmin = -12,
   
   # index in F vector corresponding to smallest size fished in V (Fref.v)
   param$ind_min_fish_det <- ((param$min_fishing_size_detritivore-
-                           param$min_log10_plankton)/dx)+1
+                                param$min_log10_plankton)/dx)+1
   
   #short hand for matrix indexing (idx)
   param$idx <- 2:param$numb_size_bins
-  
-  # (phyto+zoo)plankton + pelagic predator size spectrum (U.init)
-  param$plank_pred_sizes <- 10^param$int_phy_zoo[1]*
-    10^(param$slope_phy_zoo[1]*param$log10_size_bins)
-  
-  # set initial detritivore spectrum (V.init)
-  param$detritivore_sizes <- param$sinking_rate[1]*10^param$int_phy_zoo[1]* 
-    10^(param$slope_phy_zoo[1]*param$log10_size_bins)
-  
-  # abritrary initial value for detritus (W.init)
-  param$init_detritus <- 0.00001
   
   if(use_init){
     #(U.init)
@@ -256,13 +248,27 @@ sizeparam <- function(dbpm_inputs, fishing_params, dx = 0.1, xmin = -12,
     param$init_detritivores <- detritivore_initial
     #(W.init)
     param$init_detritus <- detrititus_initial
+  }else{
+    # arbitrary initial value for detritus (W.init)
+    param$init_detritus <- 0.00001
+    # If gridded is selected and no initial values for predators or detritivores
+    # area provided, then the parameters below are not included in the output.
+    # These will need to calculated from gridded files
+    if(!gridded){
+      # set initial detritivore spectrum (V.init)
+      param$init_detritivores <- param$sinking_rate[1]*10^param$int_phy_zoo[1]* 
+        10^(param$slope_phy_zoo[1]*param$log10_size_bins)
+      
+      # (phyto+zoo)plankton + pelagic predator size spectrum (U.init)
+      param$init_pred <- 10^param$int_phy_zoo[1]*
+        10^(param$slope_phy_zoo[1]*param$log10_size_bins)
+    }
   }
   
   param$equilibrium <- equilibrium
   
   return(param)
 }
-
 
 # Build a lookup table for diet preference ------
 # Looks at all combinations of predator and prey body size: diet preference 
@@ -422,10 +428,10 @@ gridded_sizemodel <- function(params, ERSEM_det_input = F, U_mat, V_mat, W_mat,
     for (j in 1:numb_grid_cells){
       # set up with the initial values from param (phyto+zoo)plankton size 
       # spectrum - set initial consumer size spectrum (U)
-      predators[j, 1:120, 1] <- plank_pred_sizes[1:120]
+      predators[j, 1:120, 1] <- init_pred[1:120]
       # set initial detritivore spectrum (V)
       detritivores[j, ind_min_detritivore_size:120, 1] <-
-        detritivore_sizes[ind_min_detritivore_size:120]
+        init_detritivores[ind_min_detritivore_size:120]
       # set initial detritus biomass density (g.m^-3) (W)
       detritus[j, 1] <- init_detritus
     }
@@ -434,10 +440,10 @@ gridded_sizemodel <- function(params, ERSEM_det_input = F, U_mat, V_mat, W_mat,
       for (j in 1:numb_grid_cells){
         # set initial consumer size spectrum from previous run
         predators[j, ind_min_pred_size:numb_size_bins, 1] <-
-          plank_pred_sizes[ind_min_pred_size:numb_size_bins]
+          init_pred[ind_min_pred_size:numb_size_bins]
         # set initial detritivore spectrum from previous run
         detritivores[j, ind_min_detritivore_size:numb_size_bins, 1] <-
-          detritivore_sizes[ind_min_detritivore_size:numb_size_bins]
+          init_detritivores[ind_min_detritivore_size:numb_size_bins]
       }}
 
     #intrinsic natural mortality (OM.u, OM.v)
@@ -929,24 +935,24 @@ sizemodel <- function(params, ERSEM_det_input = F, temp_effect = T,
     predators[1:(ind_min_pred_size-1), 1:numb_time_steps] <- 
       (ui0*10^(slope_phy_zoo_mat*log10_size_bins_mat))[1:(ind_min_pred_size-1),]
     predators[ind_min_pred_size:120, 1] <- 
-      plank_pred_sizes[ind_min_pred_size:120]
+      init_pred[ind_min_pred_size:120]
     
     #remove time series of intercept of plankton size spectrum not in use
     rm(ui0)
     
     # set initial detritivore spectrum (V)
     detritivores[ind_min_detritivore_size:120, 1] <- 
-      detritivore_sizes[ind_min_detritivore_size:120]
+      init_detritivores[ind_min_detritivore_size:120]
     # set initial detritus biomass density (g.m^-3) (W)
     detritus[1] <- init_detritus
     
     if(use_init){
       # set initial consumer size spectrum from previous run
       predators[ind_min_pred_size:numb_size_bins, 1] <- 
-        plank_pred_sizes[ind_min_pred_size:numb_size_bins]
+        init_pred[ind_min_pred_size:numb_size_bins]
       # set initial detritivore spectrum from previous run
       detritivores[ind_min_detritivore_size:numb_size_bins, 1] <- 
-        detritivore_sizes[ind_min_detritivore_size:numb_size_bins] 
+        init_detritivores[ind_min_detritivore_size:numb_size_bins] 
     }
     
     #other (intrinsic) natural mortality (OM.u, OM.v)
