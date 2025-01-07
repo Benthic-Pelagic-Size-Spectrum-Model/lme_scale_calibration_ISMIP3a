@@ -365,6 +365,38 @@ def init_da(log10_size_bins, time):
                       coords = {'size_class': log10_size_bins, 'time': time})
     return da
 
+# Gravity model
+# Redistribute total effort across grid cells according to proportion of biomass in that 
+# grid cell using graivity model, Walters & Bonfil, 1999, Gelchu & Pauly 2007 ideal free
+# distribution - Blanchard et al 2008
+def gravitymodel(effort, prop_b, depth, n_iter):
+    '''
+    Inputs:
+    - effort (Data array) Fishing effort for a single time step
+    - prop_b (Data array) Proportion of total fishable biomass for each grid cell at a 
+    single time step
+    - depth (Data array) Bathymetry of the area of interest
+    - n_iter (integer) Number of iterations needed to redistribute fishing effort
+    
+    Outputs:
+    eff (data array) Containing redistributed fishing effort
+    '''
+
+    eff = effort
+    d = (1-(depth/depth.max()))
+
+    #Initialise loop
+    i = 1
+    while(i <= n_iter):
+        suit = prop_b*d
+        rel_suit = suit/suit.sum()
+        neweffort = eff+(rel_suit*eff)
+        mult = eff.sum()/neweffort.sum()
+        eff = neweffort*mult
+        i += i
+
+    return eff
+
 
 # Run model per grid cell or averaged over an area ------
 def sizemodel(params, dbpm_input, ERSEM_det_input = False, temp_effect = True,
