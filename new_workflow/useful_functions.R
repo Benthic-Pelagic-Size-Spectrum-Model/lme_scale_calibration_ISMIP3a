@@ -932,8 +932,9 @@ sizemodel <- function(params, ERSEM_det_input = F, temp_effect = T,
     
     #recruitment at smallest consumer mass
     #continuation of plankton hold constant
-    predators[1:(ind_min_pred_size-1), 1:numb_time_steps] <- 
+    predators[1:(ind_min_pred_size-1), 2:(numb_time_steps+1)] <- 
       (ui0*10^(slope_phy_zoo_mat*log10_size_bins_mat))[1:(ind_min_pred_size-1),]
+    predators[,1] <- predators[,2]
     predators[ind_min_pred_size:120, 1] <- 
       init_pred[ind_min_pred_size:120]
     
