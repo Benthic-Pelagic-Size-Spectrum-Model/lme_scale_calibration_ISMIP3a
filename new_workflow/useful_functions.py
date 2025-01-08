@@ -559,9 +559,6 @@ def sizemodel(params, dbpm_input, ERSEM_det_input = False, temp_effect = True,
         (fishing_mort_det.size_class < fishing_mort_det.size_class.max()),
         fishing_mort_det, 0)
 
-    #Remove variables not needed
-    del effort
-    
     #output fisheries catches per yr at size - predators (Y_u)
     catch_pred = fishing_mort_pred*size_bin_vals
     #Adding an initialisation timestep with same values as initial timestep
