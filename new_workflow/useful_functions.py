@@ -297,6 +297,67 @@ def gridded_spinup(file_path, start_spin, end_spin, spinup_period,
     
     return spinup_da
 
+
+#Format gridded_params in Python friendly way
+def gridded_param_python(gridded_params):
+    '''
+    Inputs:
+    - gridded_params (dictionary) Containing the output from the `sizeparam` function in R.
+    Stored as a `json` file.
+
+    Outputs:
+    griddded_python (dictionary) Containing gridded_params in a Python friendly format. New
+    entries calculated as needed, and entries not used in the DBPM gridded model were removed.
+    '''
+
+    gridded_python = {'timesteps_years': gridded_params['timesteps_years'][0],
+                      'numb_time_steps': gridded_params['numb_time_steps'][0],
+                      'effort': gridded_params['effort'],
+                      'fish_mort_pred': gridded_params['fish_mort_pred'][0],
+                      'fish_mort_detritivore': gridded_params['fish_mort_detritivore'][0],
+                      'hr_volume_search': gridded_params['hr_volume_search'][0],
+                      'detritus_coupling': gridded_params['detritus_coupling'][0],
+                      'log10_pred_prey_ratio': gridded_params['log10_pred_prey_ratio'][0],
+                      'log_prey_pref': gridded_params['log_prey_pref'][0],
+                      'hr_vol_filter_benthos': gridded_params['hr_vol_filter_benthos'][0],
+                      'metabolic_req_pred': gridded_params['metabolic_req_pred'][0],
+                      'metabolic_req_detritivore': gridded_params['metabolic_req_detritivore'][0],
+                      'defecate_prop': gridded_params['defecate_prop'][0],
+                      'growth_prop': 1-(gridded_params['defecate_prop'][0]),
+                      'def_low': gridded_params['def_low'][0],
+                      'high_prop': 1-(gridded_params['def_low'][0]),
+                      'growth_pred': gridded_params['growth_pred'][0],
+                      'growth_detritivore': gridded_params['growth_detritivore'][0],
+                      'growth_detritus': gridded_params['growth_detritus'][0],
+                      'energy_pred': gridded_params['energy_pred'][0],
+                      'energy_detritivore': gridded_params['energy_detritivore'][0],
+                      'handling': gridded_params['handling'][0],
+                      'dynamic_reproduction': gridded_params['dynamic_reproduction'][0],
+                      'c1': gridded_params['c1'][0],
+                      'activation_energy': gridded_params['activation_energy'][0],
+                      'boltzmann': gridded_params['boltzmann'][0],
+                      'natural_mort': gridded_params['natural_mort'][0],
+                      'size_senescence': gridded_params['size_senescence'][0],
+                      'exp_senescence_mort': gridded_params['exp_senescence_mort'][0],
+                      'const_senescence_mort': gridded_params['const_senescence_mort'][0],
+                      'log_size_increase': gridded_params['log_size_increase'][0],
+                      'log10_size_bins': gridded_params['log10_size_bins'],
+                      'numb_size_bins':  gridded_params['numb_size_bins'][0],
+                      'ind_min_pred_size': (gridded_params['ind_min_pred_size'][0])-1,
+                      'ind_min_detritivore_size': (gridded_params['ind_min_detritivore_size'][0])-1,
+                      'idx_new': list(range(gridded_params['ind_min_detritivore_size'][0]+1,
+                                            gridded_params['numb_size_bins'][0])),
+                      'ind_min_fish_pred': int(gridded_params['ind_min_fish_pred'][0]-1),
+                      'ind_min_fish_det': int(gridded_params['ind_min_fish_det'][0]-1),
+                      'idx': (np.array(gridded_params['idx'])-1).tolist(),
+                      'init_pred': gridded_params['init_pred'],
+                      'init_detritivores': gridded_params['init_detritivores'],
+                      'init_detritus': gridded_params['init_detritus'][0]
+                     }
+    
+    return gridded_python
+
+
 ### DPBM functions ----
 # Build a lookup table for diet preference. Looks at all combinations of predator 
 # and prey body size: diet preference (in the predator spectrum only)
@@ -364,6 +425,7 @@ def init_da(log10_size_bins, time):
     da = xr.DataArray(data = data_start, dims = ['size_class', 'time'], 
                       coords = {'size_class': log10_size_bins, 'time': time})
     return da
+
 
 # Gravity model
 # Redistribute total effort across grid cells according to proportion of biomass in that 
