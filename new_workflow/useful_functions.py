@@ -474,101 +474,7 @@ def sizemodel(params, dbpm_input, ERSEM_det_input = False, temp_effect = True,
     Outputs:
     - return_list (dictionary) xxxx
     '''
-    # time series of intercept of plankton size spectrum (estimated from GCM, 
-    # biogeophysical model output or satellite data).
-    #Number of time steps per year in dataset
-    [timesteps_years] = params['timesteps_years']
-    #Number of size bins 
-    [numb_size_bins] = params['numb_size_bins']
-    #Number of time steps
-    [numb_time_steps] = params['numb_time_steps']
-    #Index for minimum detritivore size
-    [ind_min_detritivore_size] = np.array(params['ind_min_detritivore_size'])-1
-    #Index for detritivores
-    idx_new = np.arange(ind_min_detritivore_size+1, numb_size_bins)
-    #Size bins
-    log10_size_bins = np.array(params['log10_size_bins'])
-    log10_size_bins_mat = xr.DataArray(data = log10_size_bins, 
-                                       dims = ['size_class'], 
-                                       coords = {'size_class': log10_size_bins})
-    size_bin_vals = 10**log10_size_bins_mat
-    [log_size_increase] = params['log_size_increase']
-    #Time
-    time = np.array(pd.date_range(dbpm_input.time.min()-pd.DateOffset(months = 1),
-                                  dbpm_input.time.max(), freq = 'MS'),
-                    dtype = 'datetime64[ns]')
-    dbpm_input_time = np.array(dbpm_input.time, dtype = 'datetime64[ns]')
-    #Effort
-    effort = xr.DataArray(data = params['effort'], dims = 'time', 
-                          coords = {'time': dbpm_input_time})
-    [log10_pred_prey_ratio] = params['log10_pred_prey_ratio']
-    [log_prey_pref] = params['log_prey_pref']
-    [metabolic_req_pred] = params['metabolic_req_pred']
-    [metabolic_req_detritivore] = params['metabolic_req_detritivore']
     
-    #Index for minimum predator size
-    [ind_min_pred_size] = np.array(params['ind_min_pred_size'])-1
-    #Index for minimum size of detritivore fished
-    [ind_min_fish_det] = (np.array(params['ind_min_fish_det'])-1).astype('int')
-    #Index for minimum size of predator fished
-    [ind_min_fish_pred] = (np.array(params['ind_min_fish_pred'])-1).astype('int')
-    #Indexes for predator density
-    idx = np.array(params['idx'])-1
-    
-    #Sinking rate
-    sinking_rate = xr.DataArray(data = params['sinking_rate'], dims = 'time', 
-                                coords = {'time': dbpm_input_time})
-      
-    #Build look up tables
-    #lookup tables for terms in the integrals which remain constant over time (gphi, mphi)
-    constant_growth = gphi_f(pred_prey_matrix(log10_size_bins), log10_pred_prey_ratio, 
-                             log_prey_pref)
-    constant_mortality = mphi_f(-pred_prey_matrix(log10_size_bins), log10_pred_prey_ratio, 
-                                log_prey_pref, metabolic_req_pred)
-    
-    #lookup table for components of 10^(metabolic_req_pred*log10_size_bins) (expax)
-    met_req_log10_size_bins = expax_f(log10_size_bins_mat, metabolic_req_pred)
-
-    #Numerical integration
-    # set up with the initial values from param - same for all grid cells
-    #(phyto+zoo)plankton size spectrum (U) 
-    #Creating data arrays from params
-    ui0 = xr.DataArray(data = (10**np.array(params['int_phy_zoo']*numb_size_bins).
-                               reshape(numb_size_bins, numb_time_steps)),
-                       dims = ['size_class', 'time'], 
-                       coords = {'size_class': log10_size_bins, 'time': dbpm_input_time})
-    slope_phy_zoo_mat = xr.DataArray(data = params['slope_phy_zoo'],
-                                     dims = ['time'], coords = {'time': dbpm_input_time})
-    # set up with the initial values from param
-    predators = ui0*(10**(slope_phy_zoo_mat*log10_size_bins_mat))
-    predators = xr.where(predators.size_class < log10_size_bins[ind_min_pred_size],
-                         predators, 0)
-    predators.loc[{'size_class': log10_size_bins[ind_min_pred_size:120],
-                   'time': predators.time.min()}] = params['plank_pred_sizes'][ind_min_pred_size:120]
-    predators = xr.concat([predators, xr.zeros_like(predators.isel(time = 0))], 
-                          dim = 'time')
-    predators['time'] = time
-    #Remove variables not needed
-    del ui0, slope_phy_zoo_mat
-    
-    # set initial detritivore spectrum (V)
-    detritivores = xr.zeros_like(predators)
-    detritivores.loc[{'size_class': log10_size_bins[ind_min_detritivore_size:120],
-                      'time': detritivores.time.min()}] = params['detritivore_sizes'][ind_min_detritivore_size:120]
-    
-    # set initial detritus biomass density (g.m^-3) (W)
-    detritus = xr.DataArray(data = np.append(np.array(params['init_detritus']), 
-                                             np.repeat(np.array(0), numb_time_steps)),
-                            dims = 'time', coords = {'time': time})
-
-    if use_init:
-        # set up with the initial values from previous run
-        predators.loc[{'size_class': log10_size_bins[ind_min_pred_size:],
-                       'time': predators.time.min()}] = params['plank_pred_sizes'][ind_min_pred_size:]
-        # set up with the initial detritivore spectrum from previous run
-        detritivores.loc[{'size_class': log10_size_bins[ind_min_detritivore_size:],
-                          'time': detritivores.time.min()}] = params['detritivore_sizes'][ind_min_detritivore_size:]
-
     #data arrays for keeping track of growth (GG_v, GG_u) and reproduction (R_v, R_u) 
     #from ingested food:
     reprod_det = xr.zeros_like(predators)
@@ -584,86 +490,6 @@ def sizemodel(params, dbpm_input, ERSEM_det_input = False, temp_effect = True,
     tot_mort_det = xr.zeros_like(predators)
     tot_mort_pred = xr.zeros_like(predators)
     
-    #intrinsic natural mortality (OM.u, OM.v)
-    other_mort_pred = xr.DataArray(data = params['natural_mort']*
-                                   10**(-0.25*log10_size_bins),
-                                   dims = ['size_class'], 
-                                   coords = {'size_class': log10_size_bins})
-    other_mort_det = params['natural_mort']*10**(-0.25*log10_size_bins_mat)
-    
-    #senescence mortality rate to limit large fish from building up in the system
-    #same function as in Law et al 2008, with chosen parameters gives similar M2 values
-    #as in Hall et al. 2006 (SM.u, SM.v)
-    senes_mort_det = (params['const_senescence_mort']*
-                      10**(params['exp_senescence_mort']*
-                           (log10_size_bins_mat-params['size_senescence'])))
-    senes_mort_pred = (params['const_senescence_mort']*
-                       10**(params['exp_senescence_mort']*
-                            (log10_size_bins_mat-params['size_senescence'])))
-
-    #Fishing mortality (THESE PARAMETERS NEED TO BE ESTIMATED!) (FVec.u, FVec.v)
-    # from Benoit & Rochet 2004 
-    # here fish_mort_pred and fish_mort_pred= fixed catchability term for predators and 
-    # detritivores to be estimated along with ind_min_det and ind_min_fish_pred
-    fishing_mort_pred = ((effort*params['fish_mort_pred']).
-                         expand_dims(dim = {'size_class': log10_size_bins}))
-
-    fishing_mort_pred = xr.where(
-        (fishing_mort_pred.size_class >= log10_size_bins[ind_min_fish_pred]) &
-        (fishing_mort_pred.size_class < fishing_mort_pred.size_class.max()),
-        fishing_mort_pred, 0)
-    
-    fishing_mort_det = ((effort*params['fish_mort_detritivore']).
-                        expand_dims(dim = {'size_class': log10_size_bins}))
-
-    fishing_mort_det = xr.where(
-        (fishing_mort_det.size_class >= log10_size_bins[ind_min_fish_det]) &
-        (fishing_mort_det.size_class < fishing_mort_det.size_class.max()),
-        fishing_mort_det, 0)
-
-    #output fisheries catches per yr at size - predators (Y_u)
-    catch_pred = fishing_mort_pred*size_bin_vals
-    #Adding an initialisation timestep with same values as initial timestep
-    catch_pred = xr.concat([catch_pred.isel(time = 0), catch_pred], dim = 'time')
-    #Correcting timesteps
-    catch_pred['time'] = time
-    #Multiplying by predators within predator size class and first time step
-    catch_pred = xr.where((catch_pred.size_class >= log10_size_bins[ind_min_fish_pred]) &
-                          (catch_pred.size_class < max(log10_size_bins)) & 
-                          (catch_pred.time == min(time)),
-                          catch_pred*predators, 0)
-    
-    #output fisheries catches per yr at size - detritivores (Y_v)
-    catch_det = fishing_mort_det*size_bin_vals
-    #Adding an initialisation timestep with same values as timestep 1
-    catch_det = xr.concat([catch_det.isel(time = 0), catch_det], dim = 'time')
-    #Correcting timesteps
-    catch_det['time'] = time
-    #Multiplying by predators within predator size class and first time step
-    catch_det = xr.where((catch_det.size_class >= log10_size_bins[ind_min_fish_det]) &
-                         (catch_det.size_class < max(log10_size_bins)) &
-                         (catch_det.time == min(time)), 
-                         catch_det*detritivores, 0)
-
-    if temp_effect:
-        #Adding time dimension to temperature effect for pelagic group
-        pel_tempeffect = xr.DataArray(data = np.exp(params['c1']-params['activation_energy']/
-                                                    (params['boltzmann']*
-                                                     (np.array(params['sea_surf_temp'])+273))),
-                                      dims = ['time'],
-                                      coords = {'time': dbpm_input_time})
-        
-        #Adding time dimension to temperature effect for benthic group
-        ben_tempeffect = xr.DataArray(data = np.exp(params['c1']-params['activation_energy']/
-                                                    (params['boltzmann']*
-                                                     (np.array(params['sea_floor_temp'])+
-                                                      273))),
-                                      dims = ['time'],
-                                      coords = {'time': dbpm_input_time})
-    else:
-        pel_tempeffect = 1
-        ben_tempeffect = 1
-    
     #To be applied to feeding rates for pelagics and benthic groups
     feed_mult_pel = (params['hr_volume_search']*
                      10**(log10_size_bins_mat*metabolic_req_pred)*
@@ -672,11 +498,6 @@ def sizemodel(params, dbpm_input, ERSEM_det_input = False, temp_effect = True,
     feed_mult_ben = (params['hr_volume_search']*
                      10**(log10_size_bins_mat*metabolic_req_pred)*
                      params['pref_benthos'])
-    
-    # Ingested food
-    growth_prop = 1-np.array(params['defecate_prop'])
-    # High quality food
-    high_prop = 1-np.array(params['def_low'])
 
     #iteration over time, N [days]
     for i in range(0, numb_time_steps):
