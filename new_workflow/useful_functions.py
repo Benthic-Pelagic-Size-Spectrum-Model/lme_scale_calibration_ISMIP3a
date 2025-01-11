@@ -460,6 +460,50 @@ def gravitymodel(effort, prop_b, depth, n_iter):
     return eff
 
 
+# Calculate fishing mortality and effort ------
+def effort_mortality(pred_bio, det_bio, effort, depth,
+                     fm_pred, fm_det, log10_size_bins,
+                     gridded_params):
+    '''
+    Inputs:
+    - pred_bio (2D data array) Pelagic predator biomass
+    - det_bio (2D data array) Bethic detritivore biomass
+    - effort (2D data array) Fishing effort
+    - depth (2D data array) Bathymetry of the area of interest
+    - fm_pred (2D data array) Fishing mortality for predators
+    - fm_det (2D data array) Fishing mortality for detritivores
+    - log10_size_bins (1D data array) Size classes
+    - gridded_params (dictionary) DBPM parameters
+
+    Outputs:
+    - return_list (dictionary) xxxx
+    '''
+    pred_bio = ((pred_bio*log10_size_bins*
+                 gridded_params['log_size_increase']).
+                 isel(size_class = 
+                      slice(gridded_params['ind_min_fish_pred'],
+                            -1))).sum('size_class')
+
+    det_bio = ((det_bio*log10_size_bins*
+                gridded_params['log_size_increase']).
+                     isel(size_class = 
+                          slice(gridded_params['ind_min_fish_det'],
+                                -1))).sum('size_class')
+
+    prop_b = ((pred_bio+det_bio)/
+              (pred_bio+det_bio)).sum().drop_vars('time')
+
+    #Calculate new effort
+    new_effort = gravitymodel(effort, prop_b, depth, 1)
+
+    #Calculate new fishing mortality
+    fishing_mort_pred = fm_pred*new_effort
+    fishing_mort_det = fm_det*new_effort
+
+    #Return effort and mortality
+    return new_effort, fishing_mort_pred, fishing_mort_det
+
+
 # Run model per grid cell or averaged over an area ------
 def sizemodel(params, dbpm_input, ERSEM_det_input = False, temp_effect = True,
               use_init = False):
