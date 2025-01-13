@@ -11,6 +11,7 @@ import numpy as np
 import os
 from glob import glob
 import pandas as pd
+import json
 
 
 #Transforming netCDF files to zarr
@@ -427,7 +428,7 @@ def init_da(log10_size_bins, time):
     return da
 
 
-# Gravity model
+# Gravity model ----
 # Redistribute total effort across grid cells according to proportion of biomass in that 
 # grid cell using graivity model, Walters & Bonfil, 1999, Gelchu & Pauly 2007 ideal free
 # distribution - Blanchard et al 2008
@@ -461,22 +462,20 @@ def gravitymodel(effort, prop_b, depth, n_iter):
 
 
 # Calculate fishing mortality and effort ------
-def effort_mortality(pred_bio, det_bio, effort, depth,
-                     fm_pred, fm_det, log10_size_bins,
-                     gridded_params):
+def effort_calculation(pred_bio, det_bio, effort, depth,
+                       log10_size_bins, gridded_params):
     '''
     Inputs:
     - pred_bio (2D data array) Pelagic predator biomass
     - det_bio (2D data array) Bethic detritivore biomass
     - effort (2D data array) Fishing effort
     - depth (2D data array) Bathymetry of the area of interest
-    - fm_pred (2D data array) Fishing mortality for predators
-    - fm_det (2D data array) Fishing mortality for detritivores
     - log10_size_bins (1D data array) Size classes
     - gridded_params (dictionary) DBPM parameters
 
     Outputs:
-    - return_list (dictionary) xxxx
+    - new_effort (2D data array) Fishing effort calculated for
+    next time strp
     '''
     pred_bio = ((pred_bio*log10_size_bins*
                  gridded_params['log_size_increase']).
@@ -496,320 +495,546 @@ def effort_mortality(pred_bio, det_bio, effort, depth,
     #Calculate new effort
     new_effort = gravitymodel(effort, prop_b, depth, 1)
 
-    #Calculate new fishing mortality
-    fishing_mort_pred = fm_pred*new_effort
-    fishing_mort_det = fm_det*new_effort
-
-    #Return effort and mortality
-    return new_effort, fishing_mort_pred, fishing_mort_det
+    #Return effort
+    return new_effort
 
 
 # Run model per grid cell or averaged over an area ------
-def sizemodel(params, dbpm_input, ERSEM_det_input = False, temp_effect = True,
-              use_init = False):
+def gridded_sizemodel(base_folder, sinking_rate, depth, 
+                      log10_size_bins_mat, region, out_folder,
+                      ERSEM_det_input = False):
     '''
     Inputs:
-    - params (dictionary) Output from 'sizemodel' function
-    - dbpm_input (data frame) xxx
-    - ERSEM_det_input (boolean) Default is False. xxxx
-    - temp_effect (boolean) Default is True. xxxx
-    - use_init (boolean) Default is False. xxxx
+    - xxxx
 
     Outputs:
     - return_list (dictionary) xxxx
     '''
+
+    #Gridded parameters
+    gridded_params = json.load(open(
+        os.path.join(base_folder, 'gridded_params_python.json')))
+
+    #Loading data from base folder
+    effort = xr.open_zarr(
+        glob(os.path.join(base_folder, 
+                          'effort_*'))[0])['effort']
     
-    #data arrays for keeping track of growth (GG_v, GG_u) and reproduction (R_v, R_u) 
-    #from ingested food:
-    reprod_det = xr.zeros_like(predators)
-    reprod_pred = xr.zeros_like(predators)
-    growth_det = xr.zeros_like(predators)
-    growth_int_pred = xr.zeros_like(predators)
+    pref_benthos = xr.open_zarr(glob(
+        os.path.join(base_folder, 
+                     'pref-benthos_*'))[0])['pref_benthos']
     
-    #data arrays for keeping track of predation mortality (PM_v, PM_u)
-    pred_mort_det = xr.zeros_like(predators)
-    pred_mort_pred = xr.zeros_like(predators)
-        
-    #data arrays for keeping track of total mortality (Z_v, Z_u)
-    tot_mort_det = xr.zeros_like(predators)
-    tot_mort_pred = xr.zeros_like(predators)
+    pref_pelagic = xr.open_zarr(glob(
+        os.path.join(base_folder, 
+                     'pref-pelagic_*'))[0])['pref_pelagic']
+    
+    constant_growth = xr.open_zarr(glob(
+        os.path.join(base_folder, 
+                     'const-growth_*'))[0])['constant_growth']
+    
+    constant_mortality = xr.open_zarr(glob(
+        os.path.join(base_folder, 
+                     'const-mort_*'))[0])['constant_mortality']
+     
+    consume_pelagic = xr.open_zarr(glob(
+        os.path.join(base_folder, 
+                     'consume-pelagic_*'))[0])['consume_pelagic']
+    
+    consume_benthos = xr.open_zarr(glob(
+        os.path.join(base_folder,
+                     'consume-benthos_*'))[0])['consume_benthos']
+    predators = xr.open_zarr(glob(
+        os.path.join(base_folder, 
+                     'predators_*'))[0])['predators']
+    
+    detritivores = xr.open_zarr(glob(
+        os.path.join(base_folder, 
+                     'detritivores_*'))[0])['detritivores']
+    
+    detritus = xr.open_zarr(glob(
+        os.path.join(base_folder, 
+                     'detritus_*'))[0])['detritus']
+    
+    fish_mort_pred = xr.open_zarr(glob(
+        os.path.join(base_folder,
+                     'fish-mort-pred_*'))[0])['fish_mort_pred']
+    
+    fish_mort_det = xr.open_zarr(glob(
+        os.path.join(base_folder,
+                     'fish-mort-det_*'))[0])['fish_mort_det']
+    
+    pel_tempeffect = xr.open_zarr(glob(
+        os.path.join(base_folder, 'pel-temp-eff_*'))[0])['pel_temp_eff']
+    
+    ben_tempeffect = xr.open_zarr(glob(
+        os.path.join(base_folder, 'ben-temp-eff_*'))[0])['ben_temp_eff']
+
+    # Calculating intrinsic natural mortality (OM.u, OM.v)
+    other_mort_det = (gridded_params['natural_mort']*
+                      10**(-0.25*log10_size_bins_mat))
+    other_mort_pred = (gridded_params['natural_mort']*
+                       10**(-0.25*log10_size_bins_mat))
+
+    # Senescence mortality rate to limit large fish from building up in the
+    # system. Same function as in Law et al 2008. Using chosen parameters
+    # below gives similar M2 values as in Hall et al. 2006 (SM.u, SM.v)
+    senes_mort_det = (gridded_params['const_senescence_mort']*
+                      10**(gridded_params['exp_senescence_mort']*
+                           (log10_size_bins_mat-
+                            gridded_params['size_senescence'])))
+    senes_mort_pred = (gridded_params['const_senescence_mort']*
+                       10**(gridded_params['exp_senescence_mort']*
+                            (log10_size_bins_mat-
+                             gridded_params['size_senescence'])))
+
+    #Preparing most used parameters from gridded parameters
+    log10_size_bins = np.array(gridded_params['log10_size_bins'])
+    size_bin_vals = 10**log10_size_bins_mat
+    log_size_increase = gridded_params['log_size_increase']
+    ind_min_pred_size = gridded_params['ind_min_pred_size']
+    ind_min_detritivore_size = gridded_params['ind_min_detritivore_size']
+
+    #Calculating multipliers that do not require iteration
+    #Size bin related
+    size_bin_multi = size_bin_vals*log_size_increase
+    ts_size_inc = gridded_params['timesteps_years']/log_size_increase
     
     #To be applied to feeding rates for pelagics and benthic groups
-    feed_mult_pel = (params['hr_volume_search']*
-                     10**(log10_size_bins_mat*metabolic_req_pred)*
-                     params['pref_pelagic'])
-
-    feed_mult_ben = (params['hr_volume_search']*
-                     10**(log10_size_bins_mat*metabolic_req_pred)*
-                     params['pref_benthos'])
-
-    #iteration over time, N [days]
-    for i in range(0, numb_time_steps):
-        t = dbpm_input_time[i]
-        ts = time[i]
-        #Select relevant timestep from predators and detritivores
-        pred_short = predators.sel(time = ts)
-        detrit_short = detritivores.sel(time = ts)
-        
-        # Calculate Growth and Mortality
-        # feeding rates pelagics yr-1 (f_pel)
-        pred_growth = (feed_mult_pel*np.dot((pred_short*log_size_increase),
-                                            constant_growth))
-        feed_rate_pel = (pel_tempeffect.sel(time = t)*
-                         (pred_growth/(1+params['handling']*pred_growth)))
-        
-        # feeding rates benthics yr-1 (f_ben)
-        detrit_growth = (feed_mult_ben*np.dot((detrit_short*log_size_increase),
-                                              constant_growth))
-        feed_rate_bent = (pel_tempeffect.sel(time = t)*
-                          (detrit_growth/(1+params['handling']*detrit_growth)))
-        
-        # feeding rates detritivores yr-1 (f_det)
-        detritus_multiplier = ((1/size_bin_vals)*params['hr_vol_filter_benthos']*
-                               10**(log10_size_bins_mat*metabolic_req_detritivore)*
-                               detritus.sel(time = ts))
-        feed_rate_det = (ben_tempeffect.sel(time = t)*detritus_multiplier/
-                         (1+params['handling']*detritus_multiplier))
-        
-        # Predator growth integral yr-1 (GG_u)
-        growth_int_pred.loc[{'time': ts}] = (growth_prop*params['growth_pred']*
-                                             feed_rate_pel+high_prop*
-                                             params['growth_detritivore']*feed_rate_bent)
-        
-        # Reproduction yr-1 (R_u)
-        if params['dynamic_reproduction']:
-            reprod_pred.loc[{'time': ts}] = (growth_prop*
-                                             (1-(np.array(params['growth_pred'])+
-                                                 params['energy_pred']))*
-                                             feed_rate_pel+growth_prop*
-                                             (1-(np.array(params['growth_detritivore'])+
-                                                 params['energy_detritivore']))*
-                                             feed_rate_bent)
-        
-        # Predator death integrals 
-        #Satiation level of predator for pelagic prey
-        sat_pel = xr.where(feed_rate_pel > 0, feed_rate_pel/pred_growth, 0)
-        
-        # yr-1 (PM_u)
-        pred_mort_pred.loc[{'time': ts}] = ((params['pref_pelagic']*
-                                             met_req_log10_size_bins*
-                                             params['hr_volume_search'])*
-                                             np.dot((pred_short*sat_pel*
-                                                     log_size_increase), 
-                                                    constant_mortality))
-        
-        # yr-1 (Z_u)
-        tot_mort_pred.loc[{'time': ts}] = (pred_mort_pred.sel(time = ts)+
-                                           pel_tempeffect.sel(time = t)*
-                                           other_mort_pred+senes_mort_pred+
-                                           fishing_mort_pred.sel(time = t))
-        
-        # Benthos growth integral yr-1 (GG_v)
-        growth_det.loc[{'time': ts}] = high_prop*params['growth_detritus']*feed_rate_det
-        
-        #reproduction yr-1 (R_v)
-        if params['dynamic_reproduction']:
-            reprod_det.loc[{'time': ts}] = (high_prop*
-                                            (1-(np.array(params['growth_detritus'])+
-                                                params['energy_detritivore']))*
-                                            feed_rate_det)
-        
-        # Benthos death integral
-        # Satiation level of predator for benthic prey 
-        divisor = ((params['hr_volume_search']*
-                    10**(log10_size_bins_mat*metabolic_req_detritivore)*
-                    params['pref_benthos'])*
-                   np.dot((detrit_short*log_size_increase), 
-                          constant_growth))
-        sat_ben = xr.where(feed_rate_bent > 0, feed_rate_bent/divisor, 0)
-        
-        # yr-1 (PM_v)
-        pred_mort_det.loc[{'time': ts}] = xr.where(sat_ben > 0, 
-                                                   ((params['pref_benthos']*
-                                                     met_req_log10_size_bins*
-                                                     params['hr_volume_search'])*
-                                                    np.dot((pred_short*sat_ben*
-                                                            log_size_increase),
-                                                           constant_mortality)), 0)
-        
-        # yr-1 (Z_v)
-        tot_mort_det.loc[{'time': ts}] = (pred_mort_det.sel(time = ts)+
-                                          ben_tempeffect.sel(time = t)*
-                                          other_mort_det+senes_mort_det+
-                                          fishing_mort_det.sel(time = t))
-        
-        #detritus output (g.m-2.yr-1)
-        # losses from detritivore scavenging/filtering only:
-        output_w = (size_bin_vals*feed_rate_det*detrit_short*log_size_increase).sum()
-        
-        #total biomass density defecated by pred (g.m-2.yr-1)
-        defbypred = (params['defecate_prop']*feed_rate_pel*size_bin_vals*
-                     pred_short+params['def_low']*feed_rate_bent*size_bin_vals*
-                     pred_short)
-        
-        # Increment values of detritus, predators & detritivores for next time step  
-        #Detritus Biomass Density Pool - fluxes in and out (g.m-2.yr-1) of 
-        #detritus pool and solve for detritus biomass density in next time step 
-        if not ERSEM_det_input:
-            #considering pelagic faeces as input as well as dead bodies from both 
-            #pelagic and benthic communities and phytodetritus (dying sinking
-            #phytoplankton)
-            if params['detritus_coupling']:
-                # pelagic spectrum inputs (sinking dead bodies and faeces) - export 
-                # ratio used for "sinking rate" + benthic spectrum inputs (dead stuff
-                # already on/in seafloor)
-                input_w = (sinking_rate.sel(time = t)*
-                           ((defbypred.isel(size_class = slice(ind_min_pred_size,
-                                                               numb_size_bins))*
-                             log_size_increase).sum()+
-                            (pel_tempeffect.sel(time = t)*other_mort_pred*
-                             pred_short*size_bin_vals*log_size_increase).sum()+
-                            (pel_tempeffect.sel(time = t)*senes_mort_pred*
-                             pred_short*size_bin_vals*log_size_increase).sum())+
-                           ((ben_tempeffect.sel(time = t)*other_mort_det*
-                             detrit_short*size_bin_vals*log_size_increase).sum()+
-                            (ben_tempeffect.sel(time = t)*senes_mort_det*
-                             detrit_short*size_bin_vals*log_size_increase).sum()))
-            else:
-                input_w = ((ben_tempeffect.sel(time = t)*other_mort_det*
-                            detrit_short*size_bin_vals*log_size_increase).sum()+
-                           (ben_tempeffect.sel(time = t)*senes_mort_det*detrit_short*
-                            size_bin_vals*log_size_increase).sum())
-        
-            # get burial rate from Dunne et al. 2007 equation 3
-            burial = input_w*(0.013+0.53*input_w**2/(7+input_w)**2)
-        
-            # losses from detritivory + burial rate (not including remineralisation
-            # bc that goes to p.p. after sediment, we are using realised p.p. as
-            # inputs to the model) 
-            dW = input_w-(output_w+burial)
-        
-            #biomass density of detritus g.m-2
-            detritus.loc[{'time': t}] = detritus.sel(time = ts)+dW*timesteps_years
-        else:
-            detritus.loc[{'time': t}] = detritus.sel(time = ts)
-        
-        # Pelagic Predator Density (nos.m-2)- solve for time + timesteps_years using
-        # implicit time Euler upwind finite difference (help from Ken Andersen 
-        # and Richard Law)
-        
-        # Matrix setup for implicit differencing 
-        Ai_u = np.zeros(numb_size_bins)
-        Bi_u = np.zeros(numb_size_bins)
-        Si_u = np.zeros(numb_size_bins)
-        
-        Ai_u[idx] = ((1/np.log(10))*
-                     -growth_int_pred.isel(size_class = slice(None, -1)).
-                     sel(time = ts)*timesteps_years/log_size_increase)
-        Bi_u[idx] = (1+(1/np.log(10))*
-                     growth_int_pred.isel(size_class = slice(1, None)).
-                     sel(time = ts)*timesteps_years/log_size_increase+
-                     tot_mort_pred.isel(size_class = slice(1, None)).
-                     sel(time = ts)*timesteps_years)
-        Si_u[idx] = pred_short.isel(size_class = slice(1, None))
-        
-        # Boundary condition at upstream end
-        Ai_u[ind_min_pred_size] = 0
-        Bi_u[ind_min_pred_size] = 1
-        Si_u[ind_min_pred_size] = pred_short.isel(size_class = ind_min_pred_size)
-        
-        # apply transfer efficiency of 10% *plankton density at same size
-        # reproduction from energy allocation
-        if params['dynamic_reproduction']:
-            predators.isel(size_class = ind_min_pred_size).\
-            loc[{'time': t}] = (pred_short.isel(size_class = ind_min_pred_size)+
-                                ((reprod_pred.sel(time = ts)*size_bin_vals*
-                                  pred_short*log_size_increase).
-                                 isel(size_class = slice(ind_min_pred_size+1, None)).
-                                 sum()*timesteps_years)/
-                                (log_size_increase*
-                                 size_bin_vals.isel(size_class = ind_min_pred_size))-
-                                (timesteps_years/log_size_increase)*(1/np.log(10))*
-                                ((growth_int_pred.sel(time = ts)*pred_short).
-                                 isel(size_class = ind_min_pred_size))-
-                                timesteps_years*
-                                ((tot_mort_pred.sel(time = ts)*pred_short).
-                                 isel(size_class = ind_min_pred_size)))
-
-        #main loop calculation
-        for j in range((ind_min_pred_size+1), numb_size_bins):
-            predators.isel(size_class = j).\
-            loc[{'time': t}] = ((Si_u[j]-Ai_u[j]*predators.sel(time = t).
-                                 isel(size_class = j-1))/Bi_u[j])
-
-        # Benthic Detritivore Density (nos.m-2) 
-        Ai_v = np.zeros(numb_size_bins)
-        Bi_v = np.zeros(numb_size_bins)
-        Si_v = np.zeros(numb_size_bins)
-        
-        #shorthand for matrix referencing
-        Ai_v[idx_new] = ((1/np.log(10))*
-                         -growth_det.isel(size_class = idx_new-1).sel(time = ts)*
-                         timesteps_years/log_size_increase)
-        Bi_v[idx_new] = (1+(1/np.log(10))*
-                         growth_det.isel(size_class = idx_new).sel(time = ts)*
-                         timesteps_years/log_size_increase+
-                         tot_mort_det.isel(size_class = idx_new).
-                         sel(time = ts)*timesteps_years)
-        Si_v[idx_new] = detrit_short.isel(size_class = idx_new)
-        
-        #boundary condition at upstream end
-        Ai_v[ind_min_detritivore_size] = 0
-        Bi_v[ind_min_detritivore_size] = 1
-        Si_v[ind_min_detritivore_size] = (detrit_short.
-                                          isel(size_class = ind_min_detritivore_size))
-        
-        #invert matrix
-        #recruitment at smallest detritivore mass  
-        #hold constant continuation of plankton with sinking rate multiplier 
-        (detritivores.isel(size_class = slice(None, ind_min_detritivore_size+1)).
-         loc[{'time': t}]) = (detrit_short.
-                              isel(size_class = slice(None, 
-                                                      ind_min_detritivore_size+1)))
-        
-        # apply a very low of transfer efficiency 1%* total biomass of detritus
-        #divided by minimum size
-        if params['dynamic_reproduction']:
-            (detritivores.isel(size_class = ind_min_detritivore_size).
-             loc[{'time': t}]) = (detrit_short.
-                                  isel(size_class = ind_min_detritivore_size)+
-                                  ((reprod_det.sel(time = ts)*size_bin_vals*
-                                    detrit_short*log_size_increase).
-                                   isel(size_class = idx_new).sum()*timesteps_years)/
-                                  (log_size_increase*size_bin_vals.
-                                   isel(size_class = ind_min_detritivore_size))-
-                                  (timesteps_years/log_size_increase)*(1/np.log(10))*
-                                  ((growth_det.sel(time = ts)*detrit_short).
-                                   isel(size_class = ind_min_detritivore_size))-
-                                  timesteps_years*
-                                  ((tot_mort_det.sel(time = ts)*detrit_short).
-                                   isel(size_class = ind_min_detritivore_size)))
-
-        #loop calculation
-        for j in idx_new:
-            detritivores.isel(size_class = j).\
-            loc[{'time': t}] = ((Si_v[j]-Ai_v[j]*detritivores.isel(size_class = j-1).
-                                 sel(time = t))/Bi_v[j])
-
-    #output fisheries catches per yr at size
-    (catch_pred.isel(size_class = slice(ind_min_fish_pred, None)).
-     loc[:,dbpm_input_time]) = ((fishing_mort_pred*predators*size_bin_vals).
-                               isel(size_class = slice(ind_min_fish_pred, None)))
+    feed_mult_pel = (gridded_params['hr_volume_search']*
+                     (10**(log10_size_bins_mat*
+                           gridded_params['metabolic_req_pred']))*
+                     pref_pelagic)
     
-    #output fisheries catches per yr at size
-    (catch_det.isel(size_class = slice(ind_min_fish_det, None)).
-     loc[:,dbpm_input_time]) = ((fishing_mort_det*detritivores*size_bin_vals).
-                               isel(size_class = slice(ind_min_fish_det, None)))
+    feed_mult_ben = (gridded_params['hr_volume_search']*
+                     (10**(log10_size_bins_mat*
+                           gridded_params['metabolic_req_pred']))*
+                    pref_benthos)
 
-    # Subsetting predator and detritivore results to include relevant size 
-    # classes
-    predators = predators.isel(size_class = slice(ind_min_pred_size, None))
-    detritivores = detritivores.isel(size_class = slice(ind_min_detritivore_size,
-                                                        None))
+    # Choosing first time step for predators, detritivores and detritus 
+    # to initialise model
+    pred_short = predators.isel(time = 0)
+    detrit_short = detritivores.isel(time = 0)
+    detritus_short = detritus.isel(time = 0)
 
-    return_list = {'predators': predators, 'growth_int_pred': growth_int_pred,
-                   'pred_mort_pred': pred_mort_pred, 'detritivores': detritivores,
-                   'growth_det': growth_det, 'pred_mort_det': pred_mort_det,
-                   'catch_pred': catch_pred, 'catch_det': catch_det, 
-                   'detritus': detritus, 'params': params}
-    return return_list
+    #Looping through time
+    for i in range(0, len(sinking_rate.time)):
+        # Fishing mortality (FVec.u, FVec.v)
+        # from Benoit & Rochet 2004
+        # here fish_mort_pred and fish_mort_pred= fixed catchability term for
+        # predators and detritivores to be estimated along with ind_min_det 
+        # and ind_min_fish_pred
+        fishing_mort_pred = fish_mort_pred*effort.isel(time = i+1)
+        fishing_mort_det = fish_mort_det*effort.isel(time = i+1)
+
+        # Feeding rates
+        # Predators (f_pel)
+        pred_growth = (((pred_short*log_size_increase).
+                       dot(constant_growth).
+                       rename({'sc': 'size_class'}))*feed_mult_pel)
+        feed_rate_pel = (pel_tempeffect.isel(time = i)*
+                         (pred_growth/
+                          (1+gridded_params['handling']*pred_growth)))
+
+        # Detritivores (f_ben)
+        detrit_growth = ((detrit_short*log_size_increase).
+                         dot(constant_growth).
+                         rename({'sc': 'size_class'}))*feed_mult_ben
+        feed_rate_bent = (pel_tempeffect.isel(time = i)*
+                          (detrit_growth/(1+gridded_params['handling']*
+                                          detrit_growth)))
+        del detrit_growth
+
+        # Feeding rates
+        detritus_multiplier = ((1/size_bin_vals)*
+                               gridded_params['hr_vol_filter_benthos']*
+                               10**(log10_size_bins_mat*
+                                    gridded_params['metabolic_req_detritivore'])*
+                               detritus_short)
+        feed_rate_det = (ben_tempeffect.isel(time = i)*
+                         detritus_multiplier/
+                         (1+gridded_params['handling']*
+                          detritus_multiplier))
+        del detritus_multiplier
+
+        # Calculate Growth and Mortality
+        # Predator growth integral (GG_u)
+        growth_int_pred = (gridded_params['growth_prop']*
+                           gridded_params['growth_pred']*
+                           feed_rate_pel+gridded_params['high_prop']*
+                           gridded_params['growth_detritivore']*
+                           feed_rate_bent)
+        
+        # Reproduction (R_u)
+        if gridded_params['dynamic_reproduction']:
+            reprod_pred = (gridded_params['growth_prop']*
+                           (1-(gridded_params['growth_pred']+
+                               gridded_params['energy_pred']))*
+                           feed_rate_pel+
+                           gridded_params['growth_prop']*
+                           (1-(gridded_params['growth_detritivore']+
+                               gridded_params['energy_detritivore']))*
+                           feed_rate_bent)
+            reprod_pred = (reprod_pred.
+                           isel(size_class = slice(ind_min_pred_size+1,
+                                           None)))
+        
+        # Predator death integrals
+        # Satiation level of predator for pelagic prey (sat.pel)
+        sat_pel = xr.where(feed_rate_pel > 0, 
+                           feed_rate_pel/pred_growth, 0)
+        del pred_growth
+
+        # Predation mortality
+        # Predators (PM.u)
+        pred_mort_pred = (consume_pelagic*
+                          ((pred_short*sat_pel*log_size_increase).
+                           dot(constant_mortality)).
+                          rename({'sc': 'size_class'}))
+        del sat_pel
+        
+        # Total mortality
+        # Predators (Z.u)
+        tot_mort_pred = (pred_mort_pred+ pel_tempeffect.isel(time = i)*
+                         other_mort_pred+senes_mort_pred+
+                         fishing_mort_pred).drop_vars('time')
+
+        # Saving predation mortality
+        # Getting year and month from dataset
+        pred_mort_pred['time'] = predators.time[i].values
+        pred_mort_pred.name = 'pred_mort_pred'
+        yr = str(pred_mort_pred.time.dt.year.values)
+        mth = "{:02d}".format(pred_mort_pred.time.dt.month.values)
+        # Creating file name
+        fn = f'pred_mort_pred_15arcmin_{region}_{yr}-{mth}.nc'
+        pred_mort_pred.to_netcdf(os.path.join(out_folder, fn))
+
+        del pred_mort_pred, yr, mth, fn
+
+        # Benthos growth integral yr-1 (GG_v)
+        growth_int_det = (gridded_params['high_prop']*
+                          gridded_params['growth_detritus']*
+                          feed_rate_det)
+        # Reproduction (R_v)
+        if gridded_params['dynamic_reproduction']:
+            reprod_det = (gridded_params['high_prop']*
+                          (1-(gridded_params['growth_detritus']+
+                              gridded_params['energy_detritivore']))*
+                          feed_rate_det)
+            reprod_det = (reprod_det.
+                          isel(size_class = slice(ind_min_detritivore_size+1,
+                                                  None))).drop_vars('time')
+
+        # Benthos death integral (sat_ben)
+        # Satiation level of predator for benthic prey
+        calc_growth = ((gridded_params['hr_volume_search']*
+                        (10**(log10_size_bins_mat*
+                              gridded_params['metabolic_req_detritivore']))*
+                        pref_benthos)*
+                       ((detrit_short*log_size_increase).
+                        dot(constant_growth)).
+                       rename({'sc': 'size_class'}))
+        sat_ben = xr.where(feed_rate_bent > 0, 
+                           feed_rate_bent/calc_growth, 0)
+        del calc_growth
+
+        # Predation mortality
+        # Detritivores (PM.v)
+        pred_mort_det = xr.where(sat_ben > 0, 
+                                 (consume_benthos*
+                                  ((pred_short*sat_ben*log_size_increase).
+                                   dot(constant_mortality)).
+                                  rename({'sc': 'size_class'})), 0)
+        del sat_ben
+
+        # Total mortality
+        # Detritivores (Z.v)
+        tot_mort_det = (pred_mort_det+ben_tempeffect.isel(time = i)*
+                        other_mort_det+senes_mort_det+
+                        fishing_mort_det).drop_vars('time')
+
+        # Saving predation mortality
+        # Getting year and month from dataset
+        pred_mort_det['time'] = predators.time[i].values
+        pred_mort_det.name = 'pred_mort_det'
+        yr = str(pred_mort_det.time.dt.year.values)
+        mth = "{:02d}".format(pred_mort_det.time.dt.month.values)
+        fn = f'pred_mort_det_15arcmin_{region}_{yr}-{mth}.nc'
+        pred_mort_det.to_netcdf(os.path.join(out_folder, fn))
+        del pred_mort_det, yr, mth, fn
+
+        # Redistribute total effort across grid cells 
+        if i+1 < gridded_params['numb_time_steps']:
+            new_eff = effort_calculation(pred_short, detrit_short, 
+                                         effort.isel(time = i+1), depth,
+                                         log10_size_bins_mat, 
+                                         gridded_params)
+        # Calculate new fishing mortality
+        fishing_mort_pred = fish_mort_pred*new_eff
+        fishing_mort_det = fish_mort_det*new_eff
+
+        # Adding new effort to next time step 
+        effort = xr.where(effort.time == effort.time[i+1],
+                          new_eff, effort)
+        new_eff['time'] = effort.time[i+1].values
+        new_eff.name = 'effort'
+
+        # Saving new effort
+        yr = str(new_eff.time.dt.year.values)
+        mth = "{:02d}".format(new_eff.time.dt.month.values)
+        fn = f'effort_15arcmin_{region}_{yr}-{mth}.nc'
+        new_eff.to_netcdf(os.path.join(out_folder, fn))
+        del new_eff
+
+        # Detritus output (g.m-2.yr-1)
+        # losses from detritivore scavenging/filtering only:
+        output_w = (size_bin_multi*detrit_short*
+                    feed_rate_det).sum('size_class')
+        del feed_rate_det
+
+        # Total biomass density defecated by pred (g.m-2.yr-1)
+        defbypred = ((gridded_params['defecate_prop']*feed_rate_pel*
+                      size_bin_vals*pred_short+gridded_params['def_low']*
+                      feed_rate_bent*size_bin_vals*pred_short).
+                     isel(size_class = slice(ind_min_pred_size, None)))
+        del feed_rate_pel, feed_rate_bent
+
+        # Increment values of detritus, predators & detritivores for next 
+        # timestep
+        # Detritus Biomass Density Pool - fluxes in and out (g.m-2.yr-1) of
+        # detritus pool. Solve for detritus biomass density in next timestep 
+        if not ERSEM_det_input:
+            # Considering pelagic faeces as input as well as dead bodies 
+            # from both pelagic and benthic communities and phytodetritus
+            # (dying sinking phytoplankton)
+            if gridded_params['detritus_coupling']:
+                # Pelagic spectrum inputs (sinking dead bodies and faeces): 
+                # Export ratio used for "sinking rate" + benthic spectrum 
+                # inputs (dead stuff already on/in seafloor)
+                input_w = (sinking_rate.isel(time = i)* 
+                           ((defbypred*log_size_increase).
+                            sum('size_class')+
+                            (pel_tempeffect.isel(time = i)*other_mort_pred*
+                             pred_short*size_bin_multi).sum('size_class')+ 
+                            (pel_tempeffect.isel(time = i)*senes_mort_pred*
+                             pred_short*size_bin_multi).sum('size_class'))+
+                           ((ben_tempeffect.isel(time = i)*other_mort_det*
+                             detrit_short*size_bin_multi).sum('size_class')+ 
+                            (ben_tempeffect.isel(time = i)*senes_mort_det*
+                             detrit_short*size_bin_multi).sum('size_class')))
+            else:
+                input_w = ((ben_tempeffect.isel(time = i)*other_mort_det*
+                             detrit_short*size_bin_multi).sum('size_class')+ 
+                            (ben_tempeffect.isel(time = i)*senes_mort_det*
+                             detrit_short*size_bin_multi).sum('size_class'))
+
+            # Get burial rate from Dunne et al. 2007 equation 3
+            burial = input_w*(0.013+0.53*input_w**2/(7+input_w)**2)
+            # Losses from detritivory + burial rate (not including 
+            # remineralisation because that goes to p.p. after sediment, 
+            # we are using realised p.p. as inputs to the model) 
+            dW = input_w-(output_w+burial)
+            # Biomass density of detritus g.m-2
+            detritus_short = (detritus_short+dW*
+                              gridded_params['timesteps_years'])
+            detritus_short['time'] = detritus.time[i+1].values
+            
+            # Saving detritus
+            detrit_short.name = 'detritus'
+            yr = str(detritus_short.time.dt.year.values)
+            mth = "{:02d}".format(detritus_short.time.dt.month.values)
+            fn = f'detritus_15arcmin_{region}_{yr}-{mth}.nc'
+            detritus_short.to_netcdf(os.path.join(out_folder, fn))
+            del output_w, defbypred, input_w, burial, dW, yr, mth, fn
+
+        # Pelagic Predator Density (nos.m-2) solved for time using implicit 
+        # time Euler upwind finite difference (help from Ken Andersen and 
+        # Richard Law)
+        ggp_shift = growth_int_pred.shift({'size_class': 1})
+        ggp_shift, range_sc = xr.align(
+            ggp_shift, log10_size_bins_mat.
+            isel(size_class = gridded_params['idx']))
+
+        Ai_u = (((1/np.log(10))*-ggp_shift*ts_size_inc).
+                reindex(size_class = log10_size_bins_mat, fill_value = 0))
+        Bi_u = ((1+(1/np.log(10))*
+                 growth_int_pred.isel(size_class = gridded_params['idx'])*
+                 ts_size_inc+
+                 tot_mort_pred.isel(size_class = gridded_params['idx'])*
+                 gridded_params['timesteps_years']).
+                reindex(size_class = log10_size_bins_mat, fill_value = 0))
+        Si_u = ((pred_short.isel(size_class = gridded_params['idx'])).
+                reindex(size_class = log10_size_bins_mat, 
+                        fill_value = 0)).drop_vars('time')
+        del ggp_shift, range_sc
+
+        # Boundary condition at upstream end
+        Ai_u = xr.where(
+            Ai_u.size_class == gridded_params['log10_ind_min_pred_size'],
+            0, Ai_u)
+        Bi_u = xr.where(
+            Bi_u.size_class == gridded_params['log10_ind_min_pred_size'],
+            1, Bi_u)
+
+        # Apply transfer efficiency of 10% *plankton density at same size
+        # reproduction from energy allocation
+        if gridded_params['dynamic_reproduction']:
+            pred_repro = ((pred_short.isel(size_class = ind_min_pred_size)+
+                         ((reprod_pred*size_bin_multi*
+                           pred_short).sum('size_class')*
+                          gridded_params['timesteps_years'])/
+                         size_bin_multi.isel(size_class = ind_min_pred_size)-
+                         ts_size_inc*(1/np.log(10))*
+                         (growth_int_pred.
+                          isel(size_class = ind_min_pred_size))*
+                         pred_short.isel(size_class = ind_min_pred_size)-
+                         gridded_params['timesteps_years']*
+                         tot_mort_pred.isel(size_class = ind_min_pred_size)*
+                         pred_short.isel(size_class = ind_min_pred_size)).
+                        drop_vars(('time', 'size_class')))
+        
+            predators = xr.where(
+                (predators.size_class == 
+                 gridded_params['log10_ind_min_pred_size']) &
+                (predators.time == predators.time[i+1]), pred_repro, 
+                predators)
+            del pred_repro
+        
+        # Saving growth predators
+        growth_int_pred['time'] = predators.time[i].values
+        growth_int_pred.name = 'growth_int_pred'
+        yr = str(growth_int_pred.time.dt.year.values)
+        mth = "{:02d}".format(growth_int_pred.time.dt.month.values)
+        fn = f'growth_int_pred_15arcmin_{region}_{yr}-{mth}.nc'
+        growth_int_pred.to_netcdf(os.path.join(out_folder, fn))
+        del growth_int_pred, reprod_pred, tot_mort_pred, yr, mth, fn
+
+        # Calculating predator biomass for next time step
+        range_sc = (log10_size_bins_mat.
+                    isel(size_class = slice(ind_min_pred_size+1, None)))
+        pred_next = (predators.isel(time = i+1).
+                     shift({'size_class': 1}).drop_vars('time'))
+        pred_next, range_sc = xr.align(pred_next, range_sc)
+        pred_tn = (((Si_u.sel(size_class = range_sc)-
+                     Ai_u.sel(size_class = range_sc)*
+                     pred_next)/Bi_u.sel(size_class = range_sc)).
+                   reindex(size_class = log10_size_bins_mat, 
+                           fill_value = 0))
+        pred_short = xr.where((pred_tn.size_class < 
+                               pred_tn.size_class[ind_min_pred_size+1]),
+                              predators.isel(time = i+1), pred_tn)
+        del range_sc, pred_next, pred_tn
+
+        # Saving predator biomass
+        pred_short.name = 'predators'
+        pred_short['time'] = predators.time[i+1].values
+        yr = str(pred_short.time.dt.year.values)
+        mth = "{:02d}".format(pred_short.time.dt.month.values)
+        fn = f'predators_15arcmin_{region}_{yr}-{mth}.nc'
+        pred_short.to_netcdf(os.path.join(out_folder, fn))
+        del Ai_u, Bi_u, Si_u, yr, mth, fn
+
+        # Benthic Detritivore Density (nos.m-2)
+        ggp_shift = growth_int_det.shift({'size_class': 1})
+        ggp_shift, range_sc = xr.align(
+            ggp_shift, (log10_size_bins_mat.
+                        isel(size_class = gridded_params['idx_new'])))
+        
+        Ai_v = (((1/np.log(10))*-ggp_shift*ts_size_inc).
+                reindex(size_class = log10_size_bins_mat, fill_value = 0))
+        
+        Bi_v = ((1+(1/np.log(10))*
+                 growth_int_det.isel(size_class = gridded_params['idx_new'])*
+                 ts_size_inc+
+                 tot_mort_det.isel(size_class = gridded_params['idx_new'])*
+                 gridded_params['timesteps_years']).
+                reindex(size_class = log10_size_bins_mat, fill_value = 0).
+                drop_vars('time'))
+        
+        Si_v = (detrit_short.isel(size_class = gridded_params['idx_new']).
+                reindex(size_class = log10_size_bins_mat, fill_value = 0).
+                drop_vars('time'))
+        del ggp_shift
+
+        # Boundary condition at upstream end
+        Ai_v = xr.where((Ai_v.size_class == 
+                         gridded_params['log10_ind_min_detritivore_size']), 
+                        0, Ai_v)
+
+        Bi_v = xr.where((Bi_v.size_class == 
+                         gridded_params['log10_ind_min_detritivore_size']),
+                        1, Bi_v)
+
+        # Recruitment at smallest detritivore mass
+        # hold constant continuation of plankton with sinking rate multiplier
+        detritivores = xr.where((detritivores.time == 
+                                 detritivores.time[i+1]) & 
+                                (detritivores.size_class <= 
+                         gridded_params['log10_ind_min_detritivore_size']),
+                                detrit_short, detritivores)
+
+        # Apply a very low of transfer efficiency 1%* total biomass of 
+        # detritus divided by minimum size
+        if gridded_params['dynamic_reproduction']:
+            det_repro = ((detrit_short.
+                          isel(size_class = ind_min_detritivore_size)+
+                          ((reprod_det*size_bin_multi*detrit_short).
+                           sum('size_class')*
+                           gridded_params['timesteps_years'])/
+                          (size_bin_multi.
+                           isel(size_class = ind_min_detritivore_size))-
+                          ts_size_inc*(1/np.log(10))*
+                          (growth_int_det.
+                           isel(size_class = ind_min_detritivore_size))*
+                          (detrit_short.
+                           isel(size_class = ind_min_detritivore_size))-
+                          gridded_params['timesteps_years']*
+                          (tot_mort_det.
+                           isel(size_class = ind_min_detritivore_size))*
+                          (detrit_short.
+                           isel(size_class = ind_min_detritivore_size))).
+                         drop_vars(('time', 'size_class')))
+        
+            detritivores = xr.where(
+                (detritivores.size_class == 
+                 gridded_params['log10_ind_min_detritivore_size']) &
+                (detritivores.time == detritivores.time[i+1]), 
+                det_repro, detritivores)
+            del det_repro
+
+        # Saving growth detritivores
+        growth_int_det.name = 'growth_int_det'
+        growth_int_det['time'] = detritivores.time[i].values
+        yr = str(growth_int_det.time.dt.year.values)
+        mth = "{:02d}".format(growth_int_det.time.dt.month.values)
+        fn = f'growth_int_det_15arcmin_{region}_{yr}-{mth}.nc'
+        growth_int_det.to_netcdf(os.path.join(out_folder, fn))
+        del growth_int_det, reprod_det, tot_mort_det, yr, mth, fn
+
+        # Calculate detritivore biomass for next time step
+        det_next = (detritivores.isel(time = i+1).
+                    shift({'size_class': 1}).drop_vars('time'))
+        det_next, range_sc = xr.align(det_next, range_sc)
+        det_tn = (((Si_v.sel(size_class = range_sc)-
+                    Ai_v.sel(size_class = range_sc)*
+                    det_next)/Bi_v.sel(size_class = range_sc)).
+                  reindex(size_class = log10_size_bins_mat, 
+                          fill_value = 0))
+        detrit_short = xr.where(
+            (detritivores.size_class < 
+             log10_size_bins[ind_min_detritivore_size+1]),
+            detritivores.isel(time = i+1), det_tn)
+        detrit_short['time'] = detritivores.time[i+1].values
+
+        
+        # Saving detritivore biomass
+        detrit_short.name = 'detritivores'
+        yr = str(detrit_short.time.dt.year.values)
+        mth = "{:02d}".format(detrit_short.time.dt.month.values)
+        fn = f'detritivores_15arcmin_{region}_{yr}-{mth}.nc'
+        detrit_short.to_netcdf(os.path.join(out_folder, fn))
+        
+        del Ai_v, Bi_v, Si_v, det_next, det_tn, yr, mth, fn
+
+
+
+
