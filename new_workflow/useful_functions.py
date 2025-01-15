@@ -613,8 +613,6 @@ def gridded_sizemodel(base_folder, sinking_rate, depth,
     # Choosing first time step for predators, detritivores and detritus 
     # to initialise model
     pred_short = predators.isel(time = 0)
-    detrit_short = detritivores.isel(time = 0)
-    detritus_short = detritus.isel(time = 0)
 
     #Looping through time
     for i in range(0, len(sinking_rate.time)):
@@ -636,7 +634,7 @@ def gridded_sizemodel(base_folder, sinking_rate, depth,
                           (1+gridded_params['handling']*pred_growth)))
 
         # Detritivores (f_ben)
-        detrit_growth = ((detrit_short*log_size_increase).
+        detrit_growth = ((detritivores*log_size_increase).
                          dot(constant_growth).
                          rename({'sc': 'size_class'}))*feed_mult_ben
         feed_rate_bent = (pel_tempeffect.isel(time = i)*
@@ -649,7 +647,7 @@ def gridded_sizemodel(base_folder, sinking_rate, depth,
                                gridded_params['hr_vol_filter_benthos']*
                                10**(log10_size_bins_mat*
                                     gridded_params['metabolic_req_detritivore'])*
-                               detritus_short)
+                               detritus)
         feed_rate_det = (ben_tempeffect.isel(time = i)*
                          detritus_multiplier/
                          (1+gridded_params['handling']*
@@ -730,7 +728,7 @@ def gridded_sizemodel(base_folder, sinking_rate, depth,
                         (10**(log10_size_bins_mat*
                               gridded_params['metabolic_req_detritivore']))*
                         pref_benthos)*
-                       ((detrit_short*log_size_increase).
+                       ((detritivores*log_size_increase).
                         dot(constant_growth)).
                        rename({'sc': 'size_class'}))
         sat_ben = xr.where(feed_rate_bent > 0, 
@@ -764,7 +762,7 @@ def gridded_sizemodel(base_folder, sinking_rate, depth,
 
         # Redistribute total effort across grid cells 
         if i+1 < gridded_params['numb_time_steps']:
-            new_eff = effort_calculation(pred_short, detrit_short, 
+            new_eff = effort_calculation(pred_short, detritivores, 
                                          effort.isel(time = i+1), depth,
                                          log10_size_bins_mat, 
                                          gridded_params)
@@ -787,7 +785,7 @@ def gridded_sizemodel(base_folder, sinking_rate, depth,
 
         # Detritus output (g.m-2.yr-1)
         # losses from detritivore scavenging/filtering only:
-        output_w = (size_bin_multi*detrit_short*
+        output_w = (size_bin_multi*detritivores*
                     feed_rate_det).sum('size_class')
         del feed_rate_det
 
@@ -818,14 +816,14 @@ def gridded_sizemodel(base_folder, sinking_rate, depth,
                             (pel_tempeffect.isel(time = i)*senes_mort_pred*
                              pred_short*size_bin_multi).sum('size_class'))+
                            ((ben_tempeffect.isel(time = i)*other_mort_det*
-                             detrit_short*size_bin_multi).sum('size_class')+ 
+                             detritivores*size_bin_multi).sum('size_class')+ 
                             (ben_tempeffect.isel(time = i)*senes_mort_det*
-                             detrit_short*size_bin_multi).sum('size_class')))
+                             detritivores*size_bin_multi).sum('size_class')))
             else:
                 input_w = ((ben_tempeffect.isel(time = i)*other_mort_det*
-                             detrit_short*size_bin_multi).sum('size_class')+ 
+                             detritivores*size_bin_multi).sum('size_class')+ 
                             (ben_tempeffect.isel(time = i)*senes_mort_det*
-                             detrit_short*size_bin_multi).sum('size_class'))
+                             detritivores*size_bin_multi).sum('size_class'))
 
             # Get burial rate from Dunne et al. 2007 equation 3
             burial = input_w*(0.013+0.53*input_w**2/(7+input_w)**2)
@@ -834,16 +832,15 @@ def gridded_sizemodel(base_folder, sinking_rate, depth,
             # we are using realised p.p. as inputs to the model) 
             dW = input_w-(output_w+burial)
             # Biomass density of detritus g.m-2
-            detritus_short = (detritus_short+dW*
-                              gridded_params['timesteps_years'])
-            detritus_short['time'] = detritus.time[i+1].values
+            detritus = (detritus+dW*gridded_params['timesteps_years'])
+            detritus['time'] = predators.time[i+1].values
             
             # Saving detritus
-            detrit_short.name = 'detritus'
-            yr = str(detritus_short.time.dt.year.values)
-            mth = "{:02d}".format(detritus_short.time.dt.month.values)
+            detritus.name = 'detritus'
+            yr = str(detritus.time.dt.year.values)
+            mth = "{:02d}".format(detritus.time.dt.month.values)
             fn = f'detritus_15arcmin_{region}_{yr}-{mth}.nc'
-            detritus_short.to_netcdf(os.path.join(out_folder, fn))
+            detritus.to_netcdf(os.path.join(out_folder, fn))
             del output_w, defbypred, input_w, burial, dW, yr, mth, fn
 
         # Pelagic Predator Density (nos.m-2) solved for time using implicit 
@@ -950,7 +947,7 @@ def gridded_sizemodel(base_folder, sinking_rate, depth,
                 reindex(size_class = log10_size_bins_mat, fill_value = 0).
                 drop_vars('time'))
         
-        Si_v = (detrit_short.isel(size_class = gridded_params['idx_new']).
+        Si_v = (detritivores.isel(size_class = gridded_params['idx_new']).
                 reindex(size_class = log10_size_bins_mat, fill_value = 0).
                 drop_vars('time'))
         del ggp_shift
@@ -966,18 +963,16 @@ def gridded_sizemodel(base_folder, sinking_rate, depth,
 
         # Recruitment at smallest detritivore mass
         # hold constant continuation of plankton with sinking rate multiplier
-        detritivores = xr.where((detritivores.time == 
-                                 detritivores.time[i+1]) & 
-                                (detritivores.size_class <= 
+        detriti_next = xr.where((detritivores.size_class <= 
                          gridded_params['log10_ind_min_detritivore_size']),
-                                detrit_short, detritivores)
+                                detritivores, 0)
 
         # Apply a very low of transfer efficiency 1%* total biomass of 
         # detritus divided by minimum size
         if gridded_params['dynamic_reproduction']:
-            det_repro = ((detrit_short.
+            det_repro = ((detritivores.
                           isel(size_class = ind_min_detritivore_size)+
-                          ((reprod_det*size_bin_multi*detrit_short).
+                          ((reprod_det*size_bin_multi*detritivores).
                            sum('size_class')*
                            gridded_params['timesteps_years'])/
                           (size_bin_multi.
@@ -985,25 +980,24 @@ def gridded_sizemodel(base_folder, sinking_rate, depth,
                           ts_size_inc*(1/np.log(10))*
                           (growth_int_det.
                            isel(size_class = ind_min_detritivore_size))*
-                          (detrit_short.
+                          (detritivores.
                            isel(size_class = ind_min_detritivore_size))-
                           gridded_params['timesteps_years']*
                           (tot_mort_det.
                            isel(size_class = ind_min_detritivore_size))*
-                          (detrit_short.
+                          (detritivores.
                            isel(size_class = ind_min_detritivore_size))).
                          drop_vars(('time', 'size_class')))
         
-            detritivores = xr.where(
-                (detritivores.size_class == 
-                 gridded_params['log10_ind_min_detritivore_size']) &
-                (detritivores.time == detritivores.time[i+1]), 
-                det_repro, detritivores)
+            detriti_next = xr.where(
+                (detriti_next.size_class == 
+                 gridded_params['log10_ind_min_detritivore_size']), 
+                det_repro, detriti_next)
             del det_repro
 
         # Saving growth detritivores
         growth_int_det.name = 'growth_int_det'
-        growth_int_det['time'] = detritivores.time[i].values
+        growth_int_det['time'] = detritivores.time.values
         yr = str(growth_int_det.time.dt.year.values)
         mth = "{:02d}".format(growth_int_det.time.dt.month.values)
         fn = f'growth_int_det_15arcmin_{region}_{yr}-{mth}.nc'
@@ -1011,29 +1005,28 @@ def gridded_sizemodel(base_folder, sinking_rate, depth,
         del growth_int_det, reprod_det, tot_mort_det, yr, mth, fn
 
         # Calculate detritivore biomass for next time step
-        det_next = (detritivores.isel(time = i+1).
-                    shift({'size_class': 1}).drop_vars('time'))
+        det_next = detriti_next.shift({'size_class': 1}).drop_vars('time')
         det_next, range_sc = xr.align(det_next, range_sc)
         det_tn = (((Si_v.sel(size_class = range_sc)-
                     Ai_v.sel(size_class = range_sc)*
                     det_next)/Bi_v.sel(size_class = range_sc)).
                   reindex(size_class = log10_size_bins_mat, 
                           fill_value = 0))
-        detrit_short = xr.where(
-            (detritivores.size_class < 
+        #Overwriting detritivores with values for next time step
+        detritivores = xr.where(
+            (detriti_next.size_class < 
              log10_size_bins[ind_min_detritivore_size+1]),
-            detritivores.isel(time = i+1), det_tn)
-        detrit_short['time'] = detritivores.time[i+1].values
+            detriti_next, det_tn)
+        detritivores['time'] = predators.time[i+1].values
 
-        
         # Saving detritivore biomass
-        detrit_short.name = 'detritivores'
-        yr = str(detrit_short.time.dt.year.values)
-        mth = "{:02d}".format(detrit_short.time.dt.month.values)
+        detritivores.name = 'detritivores'
+        yr = str(detritivores.time.dt.year.values)
+        mth = "{:02d}".format(detritivores.time.dt.month.values)
         fn = f'detritivores_15arcmin_{region}_{yr}-{mth}.nc'
-        detrit_short.to_netcdf(os.path.join(out_folder, fn))
+        detritivores.to_netcdf(os.path.join(out_folder, fn))
         
-        del Ai_v, Bi_v, Si_v, det_next, det_tn, yr, mth, fn
+        del Ai_v, Bi_v, Si_v, det_next, det_tn, yr, mth, fn, detriti_next
 
 
 
