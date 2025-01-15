@@ -462,8 +462,8 @@ def gravitymodel(effort, prop_b, depth, n_iter):
 
 
 # Calculate fishing mortality and effort ------
-def effort_calculation(pred_bio, det_bio, effort, depth,
-                       log10_size_bins, gridded_params):
+def effort_calculation(pred_bio, det_bio, effort, depth, log10_size_bins, 
+                       gridded_params):
     '''
     Inputs:
     - pred_bio (2D data array) Pelagic predator biomass
@@ -474,23 +474,17 @@ def effort_calculation(pred_bio, det_bio, effort, depth,
     - gridded_params (dictionary) DBPM parameters
 
     Outputs:
-    - new_effort (2D data array) Fishing effort calculated for
-    next time strp
+    - new_effort (2D data array) Fishing effort calculated for next time step
     '''
-    pred_bio = ((pred_bio*log10_size_bins*
-                 gridded_params['log_size_increase']).
-                 isel(size_class = 
-                      slice(gridded_params['ind_min_fish_pred'],
-                            -1))).sum('size_class')
+    pred_bio = ((pred_bio*log10_size_bins*gridded_params['log_size_increase']).
+                isel(size_class = slice(gridded_params['ind_min_fish_pred'],
+                                        -1))).sum('size_class')
 
-    det_bio = ((det_bio*log10_size_bins*
-                gridded_params['log_size_increase']).
-                     isel(size_class = 
-                          slice(gridded_params['ind_min_fish_det'],
-                                -1))).sum('size_class')
+    det_bio = ((det_bio*log10_size_bins*gridded_params['log_size_increase']).
+               isel(size_class = slice(gridded_params['ind_min_fish_det'],
+                                       -1))).sum('size_class')
 
-    prop_b = ((pred_bio+det_bio)/
-              (pred_bio+det_bio)).sum().drop_vars('time')
+    prop_b = ((pred_bio+det_bio)/(pred_bio+det_bio)).sum().drop_vars('time')
 
     #Calculate new effort
     new_effort = gravitymodel(effort, prop_b, depth, 1)
@@ -500,9 +494,9 @@ def effort_calculation(pred_bio, det_bio, effort, depth,
 
 
 # Run model per grid cell or averaged over an area ------
-def gridded_sizemodel(base_folder, sinking_rate, depth, 
-                      log10_size_bins_mat, region, out_folder,
-                      ERSEM_det_input = False):
+def gridded_sizemodel(base_folder, predators, detritivores, detritus, pel_tempeffect,
+                      ben_tempeffect, effort, sinking_rate, depth, log10_size_bins_mat, 
+                      region, out_folder, ERSEM_det_input = False):
     '''
     Inputs:
     - xxxx
@@ -513,13 +507,9 @@ def gridded_sizemodel(base_folder, sinking_rate, depth,
 
     #Gridded parameters
     gridded_params = json.load(open(
-        os.path.join(base_folder, 'gridded_params_python.json')))
+        glob(os.path.join(base_folder, 'dbpm_gridded_*_python.json'))[0]))
 
     #Loading data from base folder
-    effort = xr.open_zarr(
-        glob(os.path.join(base_folder, 
-                          'effort_*'))[0])['effort']
-    
     pref_benthos = xr.open_zarr(glob(
         os.path.join(base_folder, 
                      'pref-benthos_*'))[0])['pref_benthos']
@@ -543,17 +533,6 @@ def gridded_sizemodel(base_folder, sinking_rate, depth,
     consume_benthos = xr.open_zarr(glob(
         os.path.join(base_folder,
                      'consume-benthos_*'))[0])['consume_benthos']
-    predators = xr.open_zarr(glob(
-        os.path.join(base_folder, 
-                     'predators_*'))[0])['predators']
-    
-    detritivores = xr.open_zarr(glob(
-        os.path.join(base_folder, 
-                     'detritivores_*'))[0])['detritivores']
-    
-    detritus = xr.open_zarr(glob(
-        os.path.join(base_folder, 
-                     'detritus_*'))[0])['detritus']
     
     fish_mort_pred = xr.open_zarr(glob(
         os.path.join(base_folder,
@@ -562,13 +541,7 @@ def gridded_sizemodel(base_folder, sinking_rate, depth,
     fish_mort_det = xr.open_zarr(glob(
         os.path.join(base_folder,
                      'fish-mort-det_*'))[0])['fish_mort_det']
-    
-    pel_tempeffect = xr.open_zarr(glob(
-        os.path.join(base_folder, 'pel-temp-eff_*'))[0])['pel_temp_eff']
-    
-    ben_tempeffect = xr.open_zarr(glob(
-        os.path.join(base_folder, 'ben-temp-eff_*'))[0])['ben_temp_eff']
-
+   
     # Calculating intrinsic natural mortality (OM.u, OM.v)
     other_mort_det = (gridded_params['natural_mort']*
                       10**(-0.25*log10_size_bins_mat))
