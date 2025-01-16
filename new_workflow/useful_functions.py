@@ -484,7 +484,7 @@ def effort_calculation(pred_bio, det_bio, effort, depth, log10_size_bins,
                isel(size_class = slice(gridded_params['ind_min_fish_det'],
                                        -1))).sum('size_class')
 
-    prop_b = ((pred_bio+det_bio)/(pred_bio+det_bio)).sum().drop_vars('time')
+    prop_b = ((pred_bio+det_bio)/(pred_bio+det_bio)).sum()
 
     #Calculate new effort
     new_effort = gravitymodel(effort, prop_b, depth, 1)
@@ -586,6 +586,7 @@ def gridded_sizemodel(base_folder, predators, detritivores, detritus, pel_tempef
     # Choosing first time step for predators, detritivores and detritus 
     # to initialise model
     pred_short = predators.isel(time = 0)
+    pred_short = pred_short.expand_dims({'time': [pred_short.time.values]})
 
     #Looping through time
     for i in range(0, len(sinking_rate.time)):
@@ -665,18 +666,25 @@ def gridded_sizemodel(base_folder, predators, detritivores, detritus, pel_tempef
         
         # Total mortality
         # Predators (Z.u)
-        tot_mort_pred = (pred_mort_pred+ pel_tempeffect.isel(time = i)*
+        tot_mort_pred = (pred_mort_pred+pel_tempeffect.isel(time = i)*
                          other_mort_pred+senes_mort_pred+
                          fishing_mort_pred).drop_vars('time')
 
         # Saving predation mortality
         # Getting year and month from dataset
-        pred_mort_pred['time'] = predators.time[i].values
+        if 'time' in pred_mort_pred.dims:
+            pred_mort_pred['time'] = [pred_short.time[0].values]
+        else:
+            pred_mort_pred = (pred_mort_pred.
+                              expand_dims({'time': [pred_short.time[0].values]}))
         pred_mort_pred.name = 'pred_mort_pred'
-        yr = str(pred_mort_pred.time.dt.year.values)
-        mth = "{:02d}".format(pred_mort_pred.time.dt.month.values)
+        [yr] = pred_mort_pred.time.dt.year.values
+        [mth] = pred_mort_pred.time.dt.month.values
+        mth = "{:02d}".format(mth)
         # Creating file name
         fn = f'pred_mort_pred_15arcmin_{region}_{yr}-{mth}.nc'
+        pred_mort_pred = pred_mort_pred.transpose('time', 'size_class', 
+                                                  'lat', 'lon')
         pred_mort_pred.to_netcdf(os.path.join(out_folder, fn))
 
         del pred_mort_pred, yr, mth, fn
@@ -725,11 +733,18 @@ def gridded_sizemodel(base_folder, predators, detritivores, detritus, pel_tempef
 
         # Saving predation mortality
         # Getting year and month from dataset
-        pred_mort_det['time'] = predators.time[i].values
+        if 'time' in pred_mort_det.dims:
+            pred_mort_det['time'] = [pred_short.time[0].values]
+        else:
+            pred_mort_det = (pred_mort_det.
+                              expand_dims({'time': [pred_short.time[0].values]}))
+        
         pred_mort_det.name = 'pred_mort_det'
-        yr = str(pred_mort_det.time.dt.year.values)
-        mth = "{:02d}".format(pred_mort_det.time.dt.month.values)
+        [yr] = pred_mort_det.time.dt.year.values
+        [mth] = pred_mort_det.time.dt.month.values
+        mth = "{:02d}".format(mth)
         fn = f'pred_mort_det_15arcmin_{region}_{yr}-{mth}.nc'
+        pred_mort_det = pred_mort_det.transpose('time', 'size_class', 'lat', 'lon')
         pred_mort_det.to_netcdf(os.path.join(out_folder, fn))
         del pred_mort_det, yr, mth, fn
 
@@ -746,13 +761,20 @@ def gridded_sizemodel(base_folder, predators, detritivores, detritus, pel_tempef
         # Adding new effort to next time step 
         effort = xr.where(effort.time == effort.time[i+1],
                           new_eff, effort)
-        new_eff['time'] = effort.time[i+1].values
+        
+        if 'time' in new_eff.dims:
+            new_eff['time'] = [effort.time[i+1].values]
+        else:
+            new_eff = (new_eff.
+                       expand_dims({'time': [effort.time[i+1].values]}))
         new_eff.name = 'effort'
 
         # Saving new effort
-        yr = str(new_eff.time.dt.year.values)
-        mth = "{:02d}".format(new_eff.time.dt.month.values)
+        [yr] = new_eff.time.dt.year.values
+        [mth] = new_eff.time.dt.month.values
+        mth = "{:02d}".format(mth)
         fn = f'effort_15arcmin_{region}_{yr}-{mth}.nc'
+        new_eff = new_eff.transpose('time', 'lat', 'lon')
         new_eff.to_netcdf(os.path.join(out_folder, fn))
         del new_eff
 
@@ -806,13 +828,20 @@ def gridded_sizemodel(base_folder, predators, detritivores, detritus, pel_tempef
             dW = input_w-(output_w+burial)
             # Biomass density of detritus g.m-2
             detritus = (detritus+dW*gridded_params['timesteps_years'])
-            detritus['time'] = predators.time[i+1].values
+            
+            if 'time' in detritus.dims:
+                detritus['time'] = [predators.time[i+1].values]
+            else:
+                detritus = (detritus.
+                            expand_dims({'time': [predators.time[i+1].values]}))
             
             # Saving detritus
             detritus.name = 'detritus'
-            yr = str(detritus.time.dt.year.values)
-            mth = "{:02d}".format(detritus.time.dt.month.values)
+            [yr] = detritus.time.dt.year.values
+            [mth] = detritus.time.dt.month.values
+            mth = "{:02d}".format(mth)
             fn = f'detritus_15arcmin_{region}_{yr}-{mth}.nc'
+            detritus = detritus.transpose('time', 'lat', 'lon')
             detritus.to_netcdf(os.path.join(out_folder, fn))
             del output_w, defbypred, input_w, burial, dW, yr, mth, fn
 
@@ -860,7 +889,7 @@ def gridded_sizemodel(base_folder, predators, detritivores, detritus, pel_tempef
                          gridded_params['timesteps_years']*
                          tot_mort_pred.isel(size_class = ind_min_pred_size)*
                          pred_short.isel(size_class = ind_min_pred_size)).
-                        drop_vars(('time', 'size_class')))
+                        drop_vars(('time', 'size_class'))).squeeze('time')
         
             predators = xr.where(
                 (predators.size_class == 
@@ -870,11 +899,18 @@ def gridded_sizemodel(base_folder, predators, detritivores, detritus, pel_tempef
             del pred_repro
         
         # Saving growth predators
-        growth_int_pred['time'] = predators.time[i].values
+        if 'time' in growth_int_pred.dims:
+            growth_int_pred['time'] = [pred_short.time[0].values]
+        else:
+            growth_int_pred = (growth_int_pred.
+                               expand_dims({'time': [pred_short.time[0].values]}))
         growth_int_pred.name = 'growth_int_pred'
-        yr = str(growth_int_pred.time.dt.year.values)
-        mth = "{:02d}".format(growth_int_pred.time.dt.month.values)
+        [yr] = growth_int_pred.time.dt.year.values
+        [mth] = growth_int_pred.time.dt.month.values
+        mth = "{:02d}".format(mth)
         fn = f'growth_int_pred_15arcmin_{region}_{yr}-{mth}.nc'
+        growth_int_pred = growth_int_pred.transpose('time', 'size_class',
+                                                    'lat', 'lon')
         growth_int_pred.to_netcdf(os.path.join(out_folder, fn))
         del growth_int_pred, reprod_pred, tot_mort_pred, yr, mth, fn
 
@@ -896,10 +932,12 @@ def gridded_sizemodel(base_folder, predators, detritivores, detritus, pel_tempef
 
         # Saving predator biomass
         pred_short.name = 'predators'
-        pred_short['time'] = predators.time[i+1].values
-        yr = str(pred_short.time.dt.year.values)
-        mth = "{:02d}".format(pred_short.time.dt.month.values)
+        pred_short['time'] = [predators.time[i+1].values]
+        [yr] = pred_short.time.dt.year.values
+        [mth] = pred_short.time.dt.month.values
+        mth = "{:02d}".format(mth)
         fn = f'predators_15arcmin_{region}_{yr}-{mth}.nc'
+        pred_short = pred_short.transpose('time', 'size_class', 'lat', 'lon')
         pred_short.to_netcdf(os.path.join(out_folder, fn))
         del Ai_u, Bi_u, Si_u, yr, mth, fn
 
@@ -970,10 +1008,18 @@ def gridded_sizemodel(base_folder, predators, detritivores, detritus, pel_tempef
 
         # Saving growth detritivores
         growth_int_det.name = 'growth_int_det'
-        growth_int_det['time'] = detritivores.time.values
-        yr = str(growth_int_det.time.dt.year.values)
-        mth = "{:02d}".format(growth_int_det.time.dt.month.values)
+        
+        if 'time' in growth_int_det.dims:
+            growth_int_det['time'] = [detritivores.time[0].values]
+        else:
+            growth_int_det = (growth_int_det.
+                              expand_dims({'time': [detritivores.time[0].values]}))
+            
+        [yr] = growth_int_det.time.dt.year.values
+        [mth] = growth_int_det.time.dt.month.values
+        mth = "{:02d}".format(mth)
         fn = f'growth_int_det_15arcmin_{region}_{yr}-{mth}.nc'
+        growth_int_det = growth_int_det.transpose('time', 'size_class', 'lat', 'lon')
         growth_int_det.to_netcdf(os.path.join(out_folder, fn))
         del growth_int_det, reprod_det, tot_mort_det, yr, mth, fn
 
@@ -990,12 +1036,14 @@ def gridded_sizemodel(base_folder, predators, detritivores, detritus, pel_tempef
             (detriti_next.size_class < 
              log10_size_bins[ind_min_detritivore_size+1]),
             detriti_next, det_tn)
-        detritivores['time'] = predators.time[i+1].values
+        detritivores['time'] = [predators.time[i+1].values]
 
         # Saving detritivore biomass
         detritivores.name = 'detritivores'
-        yr = str(detritivores.time.dt.year.values)
-        mth = "{:02d}".format(detritivores.time.dt.month.values)
+        [yr] = detritivores.time.dt.year.values
+        [mth] = detritivores.time.dt.month.values
+        mth = "{:02d}".format(mth)
+        detritivores = detritivores.transpose('time', 'size_class', 'lat', 'lon')
         fn = f'detritivores_15arcmin_{region}_{yr}-{mth}.nc'
         detritivores.to_netcdf(os.path.join(out_folder, fn))
         
