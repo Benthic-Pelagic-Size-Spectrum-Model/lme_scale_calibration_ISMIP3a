@@ -754,29 +754,29 @@ def gridded_sizemodel(base_folder, predators, detritivores, detritus, pel_tempef
                                          effort.isel(time = i+1), depth,
                                          log10_size_bins_mat, 
                                          gridded_params)
-        # Calculate new fishing mortality
-        fishing_mort_pred = fish_mort_pred*new_eff
-        fishing_mort_det = fish_mort_det*new_eff
+            # Calculate new fishing mortality
+            fishing_mort_pred = fish_mort_pred*new_eff
+            fishing_mort_det = fish_mort_det*new_eff
 
-        # Adding new effort to next time step 
-        effort = xr.where(effort.time == effort.time[i+1],
-                          new_eff, effort)
+            # Adding new effort to next time step 
+            effort = xr.where(effort.time == effort.time[i+1],
+                              new_eff, effort)
         
-        if 'time' in new_eff.dims:
-            new_eff['time'] = [effort.time[i+1].values]
-        else:
-            new_eff = (new_eff.
-                       expand_dims({'time': [effort.time[i+1].values]}))
-        new_eff.name = 'effort'
+            if 'time' in new_eff.dims:
+                new_eff['time'] = [effort.time[i+1].values]
+            else:
+                new_eff = (new_eff.
+                           expand_dims({'time': [effort.time[i+1].values]}))
+            new_eff.name = 'effort'
 
-        # Saving new effort
-        [yr] = new_eff.time.dt.year.values
-        [mth] = new_eff.time.dt.month.values
-        mth = "{:02d}".format(mth)
-        fn = f'effort_15arcmin_{region}_{yr}-{mth}.nc'
-        new_eff = new_eff.transpose('time', 'lat', 'lon')
-        new_eff.to_netcdf(os.path.join(out_folder, fn))
-        del new_eff
+            # Saving new effort
+            [yr] = new_eff.time.dt.year.values
+            [mth] = new_eff.time.dt.month.values
+            mth = "{:02d}".format(mth)
+            fn = f'effort_15arcmin_{region}_{yr}-{mth}.nc'
+            new_eff = new_eff.transpose('time', 'lat', 'lon')
+            new_eff.to_netcdf(os.path.join(out_folder, fn))
+            del new_eff
 
         # Detritus output (g.m-2.yr-1)
         # losses from detritivore scavenging/filtering only:
