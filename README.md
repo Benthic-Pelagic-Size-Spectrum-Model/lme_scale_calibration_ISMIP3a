@@ -20,8 +20,15 @@ This repository contains all code necessary to process inputs used by DBPM. This
     - Creates and saves calibration plots in PDF format  
 Plots created in this script can be used to visually inspect the fit of predicted catches against observed (reconstructed) catch data.
 
-## Step 5. Running DBPM spatial model  
-- Script xxxx 
+## Step 5. Setting up gridded inputs for spatial DBPM
+- Script [`05_setup_gridded_DBPM.ipynb`](new_features/new_workflow/05_setup_gridded_DBPM.ipynb) processes all inputs necessary to run the spatial DBPM for the area and time period of interest.  
+
+## Step 6. Running DBPM spatial model  
+- Script [`06_running_gridded_DBPM.ipynb`](new_features/new_workflow/06_running_gridded_DBPM.ipynb) uses inputs prepared in [step 5](new_features/new_workflow/05_setup_gridded_DBPM.ipynb) and runs the spatial DBPM. DBPM model outputs are stored for each timestep included in the input data.  
+
+## Step x. 
+- Calculate catches 
+- Plots
   
 # Running this repository
 The scripts in this repository were developed in NCI's Gadi, so the easiest way to run these script is to clone this repository to Gadi. However, before you can do this, you will need an NCI account, which are only available for researchers with an email address from an Australian institution. Further down in this document, we include information about how to create an NCI account if you do not have one already. Remember, you must have an email address for an Australian institution to create an NCI account.  
@@ -48,17 +55,4 @@ The environmental data comes from GFDL-MOM6-COBALT2, which is available at two h
   
 ### Fishing effort and catch data
 The fishing data were obtained from 'ISIMIP3a reconstructed fishing activity data (v1.0)' ([Novaglio et al. 2024](https://data.isimip.org/10.48364/ISIMIP.240282)). A copy of this dataset is also available under project `vf71` at the [National Computational Infrastructure (NCI)](https://nci.org.au/).  
-
-
-
-
-
-  
-## Step 3. Running DBPM model (with and without fishing)
-- Script [`03_processing_effort_fishing_inputs.R
-`](https://github.com/Benthic-Pelagic-Size-Spectrum-Model/lme_scale_calibration_ISMIP3a/blob/main/03_rungridbyLME.R) takes parameters estimated in **step 2** to create initial values by re-running the LME scale inputs  
-- Gets inputs for `gridded_sizemodel()` and runs for LME  
-- Produces diagnostic plots for each LME  
-
-
 
