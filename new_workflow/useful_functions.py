@@ -279,9 +279,11 @@ def gridded_spinup(file_path, start_spin, end_spin, spinup_period,
     #If spinup should be created based on mean values over spinup period
     if mean_spinup:
         da = da.mean('time')
+        spinup_da = [da] * len(spinup_period)
+    else:
+        spinup_da = [da] * int(len(spinup_period)/len(da.time))
 
     #Create spinup data array
-    spinup_da = [da] * len(spinup_period)
     spinup_da = xr.concat(spinup_da, dim = 'time')
     spinup_da['time'] = spinup_period
     
