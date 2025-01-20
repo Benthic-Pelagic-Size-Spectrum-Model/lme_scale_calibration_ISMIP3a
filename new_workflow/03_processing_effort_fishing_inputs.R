@@ -9,10 +9,10 @@ library(janitor)
 library(ggplot2)
 
 # Loading DBPM climate inputs ---------------------------------------------
-# We will load climate inputs to merge wih catch and effort data before saving
+# We will load climate inputs to merge with catch and effort data before saving
 # results
-forcing_folder <- file.path("/g/data/vf71/la6889/dbpm_inputs/east_antarctica/",
-                            "monthly_weighted")
+forcing_folder <- file.path("/g/data/vf71/la6889/dbpm_inputs/east_antarctica",
+                            "monthly_weighted/1deg")
 
 clim_forcing_file <- list.files(forcing_folder, pattern = "obsclim|spinup",
                                 full.names = T) |>
@@ -74,7 +74,7 @@ DBPM_effort_catch_input <- effort_data |>
 #Saving summarised catch and effort data
 DBPM_effort_catch_input |> 
   write_parquet(file.path(forcing_folder,
-                          "dbpm_effort-catch-inputs_fao-58.parquet"))
+                          "dbpm_effort-catch-inputs_fao-48.parquet"))
 
 #Removing individual data frames
 rm(effort_data, catch_data)
