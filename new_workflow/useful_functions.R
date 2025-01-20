@@ -751,19 +751,10 @@ sizemodel <- function(params, ERSEM_det_input = F, temp_effect = T,
       detritivores[ind_min_fish_det:numb_size_bins, 2:(numb_time_steps+1)]*
       size_bins_vals[ind_min_fish_det:numb_size_bins]
     
-    # Subsetting predator and detritivore results to include relevant size 
-    # classes and ignore initialisation values (i.e., first timestep)
-    if(!use_init){
-      predators <- predators[,2:(numb_time_steps+1)]
-      detritivores <- detritivores[,2:(numb_time_steps+1)]
-    }else{
-      predators <- predators[ind_min_pred_size:numb_size_bins, 
-                             2:(numb_time_steps+1)]
-      detritivores <- detritivores[ind_min_detritivore_size:numb_size_bins,
-                                   2:(numb_time_steps+1)]
-    }
-    
-    #Ignoring initialisation values (i.e., first timestep) for detritus
+    # Subsetting predator, detritivore and detritus results to exclude 
+    # initialisation values (i.e., first timestep)
+    predators <- predators[,2:(numb_time_steps+1)]
+    detritivores <- detritivores[,2:(numb_time_steps+1)]
     detritus <- detritus[2:(numb_time_steps+1)]
     
     return(list(predators = predators[,],
@@ -813,12 +804,12 @@ run_model <- function(fishing_params, dbpm_inputs, withinput = T){
     time_steps <- 2:(params$numb_time_steps+1)
     
     dbpm_inputs$total_pred_biomass <- 
-      apply(result_set$predators*params$log_size_increase*
+      apply(result_set$predators[lims_pred_bio,]*params$log_size_increase*
               size_bins[lims_pred_bio], 2, sum)
     
     lims_det_bio <- params$ind_min_detritivore_size:params$numb_size_bins
     dbpm_inputs$total_detritivore_biomass <- 
-      apply(result_set$detritivores*params$log_size_increase*
+      apply(result_set$detritivores[lims_det_bio,]*params$log_size_increase*
               size_bins[lims_det_bio], 2, sum)
     
     dbpm_inputs$total_detritus <- result_set$detritus
@@ -1095,11 +1086,11 @@ plotsizespectrum <- function(modeloutput, params, timeaveraged = F){
     det_size <- ind_min_detritivore_size:numb_size_bins
     # plot changes in the two size spectra over time
     if(timeaveraged){
-      predators <- rowMeans(modeloutput$predators, na.rm = T)
-      detritivores <- rowMeans(modeloutput$detritivores, na.rm = T)
+      predators <- rowMeans(modeloutput$predators[pred_size], na.rm = T)
+      detritivores <- rowMeans(modeloutput$detritivores[det_size], na.rm = T)
     }else{
-      predators <- modeloutput$predators[, numb_time_steps]
-      detritivores <- modeloutput$detritivores[, numb_time_steps]
+      predators <- modeloutput$predators[pred_size, numb_time_steps]
+      detritivores <- modeloutput$detritivores[det_size, numb_time_steps]
     }
     
     maxy <- max(log10(predators), na.rm = T)
