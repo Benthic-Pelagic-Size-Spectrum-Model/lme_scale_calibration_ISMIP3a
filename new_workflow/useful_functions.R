@@ -922,8 +922,10 @@ getError <- function(fishing_params, dbpm_inputs, year_int = 1950, corr = F,
                                                                 hjust = 0.5)))
       
       #Creating path to save figure
-      f_out <- file.path(figure_folder, paste0("dbpm_pred_obs_catches_", 
-                                               region_name, ".png"))
+      f_out <- file.path(figure_folder, 
+                         paste0("dbpm_pred_obs_catches_", 
+                                str_replace(str_to_lower(region_name), " ",
+                                            "-"), ".png"))
       
       #Saving composite figure
       ggsave(filename = f_out, plot = p3, width = 15, height = 10)
