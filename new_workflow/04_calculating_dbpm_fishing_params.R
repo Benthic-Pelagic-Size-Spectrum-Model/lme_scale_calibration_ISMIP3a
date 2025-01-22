@@ -8,9 +8,11 @@ library(purrr)
 
 
 # Loading DBPM climate and fishing inputs ---------------------------------
-region_int <- "fao-58"
-dbpm_inputs <- file.path("/g/data/vf71/la6889/dbpm_inputs/east_antarctica/", 
-                         "monthly_weighted", 
+region_int <- "fao-48"
+base_folder <- "/g/data/vf71/la6889/dbpm_inputs/weddell"
+res <- "1deg"
+
+dbpm_inputs <- file.path(base_folder, "monthly_weighted", res,
                          paste0("dbpm_clim-fish-inputs_", region_int, 
                                 "_1841-2010.parquet")) |> 
   read_parquet()
@@ -18,8 +20,8 @@ dbpm_inputs <- file.path("/g/data/vf71/la6889/dbpm_inputs/east_antarctica/",
 
 # Searching best fishing parameters values for area of interest -----------
 #Path to folder where results will be stored
-results_folder <- paste0("/g/data/vf71/la6889/dbpm_inputs/east_antarctica/", 
-                         "best_fish_vals_", region_int)
+results_folder <- file.path(base_folder, "fishing_params", 
+                            paste0("best_fish_vals_", region_int, "_", res))
 #Number of iterations
 no_iter <- 100
 params_calibration <- LHSsearch(num_iter = no_iter, forcing_file = dbpm_inputs, 
@@ -46,7 +48,7 @@ params_calibration |>
   write_parquet(file.path(
     results_folder,
     paste0("best-fishing-parameters_", region_int, 
-           "_searchvol_estimated_numb-iter_100.parquet")))
+           "_searchvol_estimated_numb-iter_", no_iter,".parquet")))
 
 params_calibration |> 
   slice(1) |> 
@@ -102,44 +104,38 @@ fishing_params <- params_calibration_optim |>
   arrange(rmse) |> 
   slice(1)
 
+# Create non-spatial parameters variable ----------------------------------
 params <- sizeparam(dbpm_inputs, fishing_params, xmin_consumer_u = -3, 
                     xmin_consumer_v = -3, tstepspryr = 12)
 
-# Saving parameters
+# Saving non-spatial parameters
 params |> 
   #Ensuring up to 10 decimal places are saved in file
-  write_json(paste0("/g/data/vf71/la6889/dbpm_inputs/east_antarctica/",
-                    "dbpm_size_params_", region_int, ".json"), digits = 10)
+  write_json(file.path(results_folder, paste0("dbpm_size_params_", 
+                                              region_int, ".json")), 
+             digits = 10)
 
 
 # Loading DBPM parameters -------------------------------------------------
 # If parameters were already saved, they can be read instead of being 
 # recalculated
-params <- read_json(paste0("/g/data/vf71/la6889/dbpm_inputs/east_antarctica/",
-                           "dbpm_size_params_", region_int, ".json"), 
+params <- read_json(file.path(results_folder, paste0("dbpm_size_params_", 
+                                                     region_int, ".json")), 
                     simplifyVector = T)
 
-# Loading data ------------------------------------------------------------
-fish_params <- file.path("/g/data/vf71/la6889/dbpm_inputs/east_antarctica",
-                         "best_fish_vals_fao-58",
-                         paste0("best-fishing-parameters_FAO-58_searchvol_",
-                                "estimated_numb-iter_1000.parquet")) |> 
-  read_parquet() |> 
+# OPTIONAL: Loading data --------------------------------------------------
+#If these parameters were previously calculated, they can be loaded to memory
+fishing_params <- read_parquet(
+  file.path(results_folder, 
+            paste0("best-fishing-parameters_", region_int, 
+                   "_searchvol_estimated_numb-iter_500.parquet"))) |> 
+  arrange(rmse) |> 
   slice(1)
-
-dbpm_inputs <- file.path("/g/data/vf71/la6889/dbpm_inputs/east_antarctica", 
-                         "monthly_weighted", 
-                         "dbpm_clim-fish-inputs_fao-58_1841-2010.parquet") |> 
-  read_parquet()
-
 
 # Run non-spatial DBPM ----------------------------------------------------
 # This step is necessary to get the initial conditions to be used in the gridded
 # DBPM
-params <- sizeparam(dbpm_inputs, fish_params, xmin_consumer_u = -3, 
-                    xmin_consumer_v = -3, tstepspryr = 12)
-
-init_results <- run_model(fish_params, dbpm_inputs, withinput = F)
+init_results <- run_model(fishing_params, dbpm_inputs, withinput = F)
 
 
 # Prepare fishing parameters for gridded DBPM -----------------------------
@@ -147,7 +143,7 @@ pred_initial <- rowMeans(init_results$predators)
 detritivore_initial <- rowMeans(init_results$detritivores)
 detrititus_initial <- mean(init_results$detritus)
 
-gridded_params <- sizeparam(dbpm_inputs, fish_params, xmin_consumer_u = -3, 
+gridded_params <- sizeparam(dbpm_inputs, fishing_params, xmin_consumer_u = -3, 
                             xmin_consumer_v = -3, tstepspryr = 12, use_init = T, 
                             pred_initial = pred_initial, 
                             detritivore_initial = detritivore_initial, 
@@ -155,8 +151,13 @@ gridded_params <- sizeparam(dbpm_inputs, fish_params, xmin_consumer_u = -3,
                             gridded = T)
 
 #Save for use in gridded DBPM (step 05)
+gridded_out <- file.path(base_folder, "gridded_params", res)
+if(!dir.exists(gridded_out)){
+  dir.create(gridded_out, recursive = T)
+}
+
 gridded_params |> 
-  write_json(file.path("/g/data/vf71/la6889/dbpm_inputs/east_antarctica", 
-                       "gridded_params/dbpm_gridded_size_params_fao-58.json"),
+  write_json(file.path(gridded_out, paste0("dbpm_gridded_size_params_", 
+                                           region_int, ".json")),
              digits = 10)
 
