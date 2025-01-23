@@ -8,9 +8,9 @@ library(purrr)
 
 
 # Loading DBPM climate and fishing inputs ---------------------------------
-region_int <- "fao-48"
-base_folder <- "/g/data/vf71/la6889/dbpm_inputs/weddell"
-res <- "1deg"
+region_int <- "fao-58"
+base_folder <- "/g/data/vf71/la6889/dbpm_inputs/east_antarctica/"
+res <- "025deg"
 
 dbpm_inputs <- file.path(base_folder, "monthly_weighted", res,
                          paste0("dbpm_clim-fish-inputs_", region_int, 
@@ -51,11 +51,11 @@ params_calibration |>
            "_searchvol_estimated_numb-iter_", no_iter,".parquet")))
 
 params_calibration |> 
-  slice(1) |> 
+  slice(1) |>
   corr_calib_plots(dbpm_inputs, results_folder)
 
 params_calibration |> 
-  arrange(rmse) |>
+  arrange(rmse) |> 
   slice(1) |> 
   corr_calib_plots(dbpm_inputs, results_folder)
 
@@ -89,12 +89,12 @@ params_calibration_optim |>
     paste0("best-fishing-parameters_", region_int, 
            "_searchvol_estimated_numb-iter_", no_iter, ".parquet")))
 
-params_calibration_optim |> 
+params_calibration_optim |>
   slice(1) |> 
   corr_calib_plots(dbpm_inputs, results_folder)
 
 params_calibration_optim |> 
-  arrange(rmse) |> 
+  arrange(rmse) |>
   slice(1) |> 
   corr_calib_plots(dbpm_inputs, results_folder)
 
