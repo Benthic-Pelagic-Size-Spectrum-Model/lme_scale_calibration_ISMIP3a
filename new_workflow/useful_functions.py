@@ -679,6 +679,10 @@ def gridded_sizemodel(base_folder, predators, detritivores, detritus, pel_tempef
         else:
             pred_mort_pred = (pred_mort_pred.
                               expand_dims({'time': [pred_short.time[0].values]}))
+
+        #Apply spatial mask
+        pred_mort_pred = pred_mort_pred.where(np.isfinite(depth))
+        
         pred_mort_pred.name = 'pred_mort_pred'
         [yr] = pred_mort_pred.time.dt.year.values
         [mth] = pred_mort_pred.time.dt.month.values
@@ -740,6 +744,9 @@ def gridded_sizemodel(base_folder, predators, detritivores, detritus, pel_tempef
         else:
             pred_mort_det = (pred_mort_det.
                               expand_dims({'time': [pred_short.time[0].values]}))
+
+        #Apply spatial mask
+        pred_mort_det = pred_mort_det.where(np.isfinite(depth))
         
         pred_mort_det.name = 'pred_mort_det'
         [yr] = pred_mort_det.time.dt.year.values
@@ -756,6 +763,8 @@ def gridded_sizemodel(base_folder, predators, detritivores, detritus, pel_tempef
                                          effort.isel(time = i+1), depth,
                                          log10_size_bins_mat, 
                                          gridded_params)
+            #Apply spatial mask
+            new_eff = new_eff.where(np.isfinite(depth))
             # Calculate new fishing mortality
             fishing_mort_pred = fish_mort_pred*new_eff
             fishing_mort_det = fish_mort_det*new_eff
@@ -836,6 +845,9 @@ def gridded_sizemodel(base_folder, predators, detritivores, detritus, pel_tempef
             else:
                 detritus = (detritus.
                             expand_dims({'time': [predators.time[i+1].values]}))
+
+            #Apply spatial mask
+            detritus = detritus.where(np.isfinite(depth))
             
             # Saving detritus
             detritus.name = 'detritus'
@@ -906,6 +918,10 @@ def gridded_sizemodel(base_folder, predators, detritivores, detritus, pel_tempef
         else:
             growth_int_pred = (growth_int_pred.
                                expand_dims({'time': [pred_short.time[0].values]}))
+
+        #Apply spatial mask
+        growth_int_pred = growth_int_pred.where(np.isfinite(depth))
+        
         growth_int_pred.name = 'growth_int_pred'
         [yr] = growth_int_pred.time.dt.year.values
         [mth] = growth_int_pred.time.dt.month.values
@@ -932,6 +948,8 @@ def gridded_sizemodel(base_folder, predators, detritivores, detritus, pel_tempef
                               predators.isel(time = i+1), pred_tn)
         del range_sc, pred_next, pred_tn
 
+        #Apply spatial mask
+        pred_short = pred_short.where(np.isfinite(depth))
         # Saving predator biomass
         pred_short.name = 'predators'
         pred_short['time'] = [predators.time[i+1].values]
@@ -1016,6 +1034,9 @@ def gridded_sizemodel(base_folder, predators, detritivores, detritus, pel_tempef
         else:
             growth_int_det = (growth_int_det.
                               expand_dims({'time': [detritivores.time[0].values]}))
+
+        #Apply spatial mask
+        growth_int_det = growth_int_det.where(np.isfinite(depth))
             
         [yr] = growth_int_det.time.dt.year.values
         [mth] = growth_int_det.time.dt.month.values
@@ -1039,6 +1060,8 @@ def gridded_sizemodel(base_folder, predators, detritivores, detritus, pel_tempef
              log10_size_bins[ind_min_detritivore_size+1]),
             detriti_next, det_tn)
         detritivores['time'] = [predators.time[i+1].values]
+        #Apply spatial mask
+        detritivores = detritivores.where(np.isfinite(depth))
 
         # Saving detritivore biomass
         detritivores.name = 'detritivores'
