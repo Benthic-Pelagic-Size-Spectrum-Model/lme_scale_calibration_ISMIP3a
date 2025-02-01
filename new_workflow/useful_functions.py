@@ -862,8 +862,9 @@ def gridded_sizemodel(base_folder, predators, detritivores, detritus, pel_tempef
                           tot_mort_pred.isel(size_class = ind_min_pred_size)*
                           pred_short.isel(size_class = ind_min_pred_size))
         
-            pred_next.loc[{'size_class': 
-                           gridded_params['log10_ind_min_pred_size']}] = pred_repro
+            pred_next = xr.where((pred_next.size_class == 
+                                  gridded_params['log10_ind_min_pred_size']), 
+                                 pred_repro, pred_next)
             del pred_repro
 
         # Saving growth predators
@@ -956,8 +957,10 @@ def gridded_sizemodel(base_folder, predators, detritivores, detritus, pel_tempef
                          (tot_mort_det.isel(size_class = ind_min_detritivore_size))*
                          (detritivores.isel(size_class = ind_min_detritivore_size)))
         
-            detriti_next.loc[{'size_class':
-                              gridded_params['log10_ind_min_detritivore_size']}] = det_repro
+            detriti_next = xr.where((detriti_next.size_class ==
+                                     gridded_params['log10_ind_min_detritivore_size']),
+                                    det_repro, detriti_next)
+            
             del det_repro
 
         # Saving growth detritivores
