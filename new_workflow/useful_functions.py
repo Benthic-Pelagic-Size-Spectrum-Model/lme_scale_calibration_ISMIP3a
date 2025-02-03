@@ -33,16 +33,15 @@ def netcdf_to_zarr(file_path, path_out):
 
 
 ## Extracting GFDL outputs for region of interest using boolean mask
-def extract_gfdl(file_path, mask, path_out, drop = 'all'):
+def extract_gfdl(file_path, mask, path_out, cross_dateline = False):
     '''
     Inputs:
     - file_path (character) File path where GFDL zarr file is located
     - mask (boolean data array) Grid cells within region of interest should be identified
     as 1.
     - path_out (character) File path where outputs should be stored as zarr files
-    - drop (character) Default is 'all'. It drops all grid cells where condition is not met. 
-    If a dimension name is provided, it will drop rows if ALL grid cells along dimension
-    do not meet the condition.
+    - cross_dateline (boolean) Default is False. If set to True, it will convert longitudes 
+    from +/-180 to 0-360 degrees before extracting data for region of interest
 
     Outputs:
     - None. This function saves results as zarr files in the path provided.
@@ -56,11 +55,14 @@ def extract_gfdl(file_path, mask, path_out, drop = 'all'):
     da = da[var]
     
     #Apply mask and remove rows where all grid cells are empty to reduce data array size
-    if drop == 'all':
-        da = da.where(mask == 1, drop = True)
+    if cross_dateline:
+        da = da.where(mask == 1)
+        da['lon'] = da.lon%360
+        da = da.sortby('lon')
+        da = da.dropna(dim = 'lon', how = 'all').dropna(dim = 'lat', how = 'all')
     else:
-        da = da.where(mask == 1).dropna(drop, how = 'all')
-
+        da = da.where(mask == 1, drop = True)
+    
     #Rechunking data
     if 'time' in da.dims:
         da = da.chunk({'time': '50MB', 'lat': '50MB', 'lon': '50MB'})
