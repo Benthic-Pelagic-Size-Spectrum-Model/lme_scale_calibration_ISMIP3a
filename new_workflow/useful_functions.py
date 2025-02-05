@@ -625,7 +625,7 @@ def gridded_sizemodel(base_folder, predators, detritivores, detritus, pel_tempef
                           rename({'sc': 'size_class'}))*feed_mult_ben)
         feed_rate_bent = (pel_temp_short*
                           (detrit_growth/(1+gridded_params['handling']*detrit_growth)))
-        # del detrit_growth
+        del detrit_growth
 
         # Feeding rates
         detritus_multiplier = ((1/size_bin_vals)*gridded_params['hr_vol_filter_benthos']*
@@ -634,7 +634,7 @@ def gridded_sizemodel(base_folder, predators, detritivores, detritus, pel_tempef
                                detritus)
         feed_rate_det = (ben_temp_short*detritus_multiplier/
                          (1+gridded_params['handling']*detritus_multiplier))
-        # del detritus_multiplier
+        del detritus_multiplier
 
         # Calculate Growth and Mortality
         # Predator growth integral (GG_u)
@@ -655,13 +655,13 @@ def gridded_sizemodel(base_folder, predators, detritivores, detritus, pel_tempef
         # Predator death integrals
         # Satiation level of predator for pelagic prey (sat.pel)
         sat_pel = xr.where(feed_rate_pel > 0, feed_rate_pel/pred_growth, 0)
-        # del pred_growth
+        del pred_growth
 
         # Predation mortality
         # Predators (PM.u)
         pred_mort_pred = (consume_pelagic*((predators*sat_pel*log_size_increase).
                                            dot(constant_mortality)).rename({'sc': 'size_class'}))
-        # del sat_pel
+        del sat_pel
         
         # Total mortality
         # Predators (Z.u)
@@ -684,7 +684,7 @@ def gridded_sizemodel(base_folder, predators, detritivores, detritus, pel_tempef
         pred_mort_pred.to_netcdf(os.path.join(out_folder, fn))
 
         #Remove variables no longer needed
-        # del pred_mort_pred, fishing_mort_pred, fn
+        del pred_mort_pred, fishing_mort_pred, fn
 
         # Benthos growth integral yr-1 (GG_v)
         growth_int_det = (gridded_params['high_prop']*gridded_params['growth_detritus']*
@@ -706,7 +706,7 @@ def gridded_sizemodel(base_folder, predators, detritivores, detritus, pel_tempef
                        ((detritivores*log_size_increase).dot(constant_growth)).
                        rename({'sc': 'size_class'}))
         sat_ben = xr.where(feed_rate_bent > 0, feed_rate_bent/calc_growth, 0)
-        # del calc_growth
+        del calc_growth
 
         # Predation mortality
         # Detritivores (PM.v)
@@ -714,7 +714,7 @@ def gridded_sizemodel(base_folder, predators, detritivores, detritus, pel_tempef
                                  (consume_benthos*((predators*sat_ben*log_size_increase).
                                                    dot(constant_mortality)).
                                   rename({'sc': 'size_class'})), 0)
-        # del sat_ben
+        del sat_ben
 
         # Total mortality
         # Detritivores (Z.v)
@@ -736,7 +736,7 @@ def gridded_sizemodel(base_folder, predators, detritivores, detritus, pel_tempef
         pred_mort_det = pred_mort_det.transpose('time', 'size_class', 'lat', 'lon')
         pred_mort_det.to_netcdf(os.path.join(out_folder, fn))
         #Remove variables not in use
-        # del pred_mort_det, fishing_mort_det, fn
+        del pred_mort_det, fishing_mort_det, fn
 
         # Redistribute total effort across grid cells 
         try:
@@ -761,14 +761,14 @@ def gridded_sizemodel(base_folder, predators, detritivores, detritus, pel_tempef
             eff_short = eff_short.transpose('time', 'lat', 'lon')
             eff_short.to_netcdf(os.path.join(out_folder, fn))
             #Remove variables not needed
-            # del dt_eff, fn, effort_next
+            del dt_eff, fn, effort_next
         except:
             continue
         
         # Detritus output (g.m-2.yr-1)
         # losses from detritivore scavenging/filtering only:
         output_w = (size_bin_multi*detritivores*feed_rate_det).sum('size_class')
-        # del feed_rate_det
+        del feed_rate_det
 
         # Total biomass density defecated by pred (g.m-2.yr-1)
         defbypred_size = (((gridded_params['defecate_prop']*feed_rate_pel*
@@ -776,7 +776,7 @@ def gridded_sizemodel(base_folder, predators, detritivores, detritus, pel_tempef
                             feed_rate_bent*size_bin_vals*predators).
                            isel(size_class = slice(ind_min_pred_size, None)))*
                          log_size_increase).sum('size_class')
-        # del feed_rate_pel, feed_rate_bent
+        del feed_rate_pel, feed_rate_bent
         
         # Increment values of detritus, predators & detritivores for next 
         # timestep
@@ -832,7 +832,7 @@ def gridded_sizemodel(base_folder, predators, detritivores, detritus, pel_tempef
         detritus = detritus.transpose('time', 'lat', 'lon')
         detritus.to_netcdf(os.path.join(out_folder, fn))
         #Remove variables not in use
-        # del output_w, defbypred_size, input_w, burial, dW, fn
+        del output_w, defbypred_size, input_w, burial, dW, fn
 
         # Pelagic Predator Density (nos.m-2) solved for time using implicit 
         # time Euler upwind finite difference (help from Ken Andersen and 
@@ -851,7 +851,7 @@ def gridded_sizemodel(base_folder, predators, detritivores, detritus, pel_tempef
                 reindex(size_class = log10_size_bins_mat, fill_value = 0))
         Si_u = ((predators.isel(size_class = gridded_params['idx'])).
                 reindex(size_class = log10_size_bins_mat, fill_value = 0))
-        # del ggp_shift, range_sc
+        del ggp_shift, range_sc
 
         # Boundary condition at upstream end
         Ai_u = xr.where(Ai_u.size_class == gridded_params['log10_ind_min_pred_size'],
@@ -883,7 +883,7 @@ def gridded_sizemodel(base_folder, predators, detritivores, detritus, pel_tempef
             pred_next = xr.where((pred_next.size_class == 
                                   gridded_params['log10_ind_min_pred_size']), 
                                  pred_repro, pred_next)
-            # del pred_repro
+            del pred_repro
 
         # Saving growth predators
         # Adding time stamp
@@ -900,7 +900,7 @@ def gridded_sizemodel(base_folder, predators, detritivores, detritus, pel_tempef
         growth_int_pred = growth_int_pred.transpose('time', 'size_class', 'lat', 'lon')
         growth_int_pred.to_netcdf(os.path.join(out_folder, fn))
         #Remove variables not in use
-        # del growth_int_pred, reprod_pred, tot_mort_pred, fn
+        del growth_int_pred, reprod_pred, tot_mort_pred, fn
 
         # Calculating predator biomass for next time step
         for sc in range(ind_min_pred_size+1, len(pred_next.size_class)):
@@ -912,7 +912,7 @@ def gridded_sizemodel(base_folder, predators, detritivores, detritus, pel_tempef
         predators = pred_next
         
         #Removing variables not needed
-        # del pred_next_shift, da
+        del pred_next_shift, da
 
         # Saving predators biomass
         # Adding time stamp
@@ -929,7 +929,7 @@ def gridded_sizemodel(base_folder, predators, detritivores, detritus, pel_tempef
         predators = predators.transpose('time', 'size_class', 'lat', 'lon')
         predators.to_netcdf(os.path.join(out_folder, fn))
         #Remove variables not in use
-        # del Ai_u, Bi_u, Si_u, fn
+        del Ai_u, Bi_u, Si_u, fn
 
         # Benthic Detritivore Density (nos.m-2)
         Ai_v = (((1/np.log(10))*
@@ -979,7 +979,7 @@ def gridded_sizemodel(base_folder, predators, detritivores, detritus, pel_tempef
             detriti_next = xr.where((detriti_next.size_class ==
                                      gridded_params['log10_ind_min_detritivore_size']),
                                     det_repro, detriti_next)
-            # del det_repro
+            del det_repro
 
         # Saving growth detritivores
         # Adding time stamp
@@ -996,7 +996,7 @@ def gridded_sizemodel(base_folder, predators, detritivores, detritus, pel_tempef
         growth_int_det = growth_int_det.transpose('time', 'size_class', 'lat', 'lon')
         growth_int_det.to_netcdf(os.path.join(out_folder, fn))
         #Remove variables not in use
-        # del growth_int_det, reprod_det, tot_mort_det, fn
+        del growth_int_det, reprod_det, tot_mort_det, fn
 
         # Calculate detritivore biomass for next time step
         for sc in gridded_params['idx_new']:
@@ -1007,7 +1007,7 @@ def gridded_sizemodel(base_folder, predators, detritivores, detritus, pel_tempef
                                     detriti_next)
         detritivores = detriti_next
         #Removing variables not in use
-        # del da, detriti_next_shift, Ai_v, Bi_v, Si_v
+        del da, detriti_next_shift, Ai_v, Bi_v, Si_v
 
         # Saving predation mortality
         # Adding time stamp
