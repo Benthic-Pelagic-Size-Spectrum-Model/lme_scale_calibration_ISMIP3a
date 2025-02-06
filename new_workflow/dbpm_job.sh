@@ -3,9 +3,9 @@
 #PBS -P vf71
 #PBS -q normalbw
 #PBS -l ncpus=84
-#PBS -l mem=378GB
+#PBS -l mem=756GB
 #PBS -l jobfs=200GB
-#PBS -l walltime=05:00:00
+#PBS -l walltime=12:00:00
 #PBS -l storage=gdata/vf71+gdata/hh5
 #PBS -M lilian.fierroarcos@utas.edu.au
 #PBS -m abe
