@@ -26,9 +26,14 @@ Plots created in this script can be used to visually inspect the fit of predicte
 ## Step 6. Running DBPM spatial model  
 - Script [`06_running_gridded_DBPM.ipynb`](new_features/new_workflow/06_running_gridded_DBPM.ipynb) uses inputs prepared in [step 5](new_features/new_workflow/05_setup_gridded_DBPM.ipynb) and runs the spatial DBPM. DBPM model outputs are stored for each timestep included in the input data.  
 
-## Step x. 
-- Calculate catches 
-- Plots
+## Step 7. Calculating catches from gridded DBPM outputs 
+- Script[`07_calculating_catches_DBPM`](new_features/07_calculating_catches_DBPM.ipynb) calculates catches for benthic detritivores and pelagic predators from gridded DBPM outputs calculated in [step 6](new_features/new_workflow/06_running_gridded_DBPM.ipynb).
+
+## Step 8. Plotting data
+- Script [`08_plotting_gridded_DBPM_outputs`](new_features/08_plotting_gridded_DBPM_outputs.ipynb) produces size spectrum plots based on gridded DBPM outputs produced in [step 6](new_features/new_workflow/06_running_gridded_DBPM.ipynb).
+
+## Step x. xxxx
+Something
   
 # Running this repository
 The scripts in this repository were developed in NCI's Gadi, so the easiest way to run these script is to clone this repository to Gadi. However, before you can do this, you will need an NCI account, which are only available for researchers with an email address from an Australian institution. Further down in this document, we include information about how to create an NCI account if you do not have one already. Remember, you must have an email address for an Australian institution to create an NCI account.  
@@ -43,7 +48,7 @@ You can also run these scripts in your own computer or a different server, but y
 2. [Join relevant NCI projects](https://access-hive.org.au/getting_started/first_steps/#join-relevant-nci-projects)
       * Request to join the following NCI projects:  
         * vf71 - for access to GFDL-MOM6-COBALT2 outputs in analysis ready data format 
-        * hh5 – for the Python conda environment   
+        * hh5 - for the Python conda environment   
       * Note that it can take a few business day get approved as a project member
 3. [Verify that you can log into NCI’s Gadi](https://access-hive.org.au/getting_started/first_steps/#login-to-gadi)  
       * Note that it usually takes more than 30 minutes for your account to be created  
