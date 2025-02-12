@@ -903,7 +903,7 @@ getError <- function(fishing_params, dbpm_inputs, year_int = 1950, corr = F,
         theme_classic()+ 
         theme(axis.text = element_text(colour = "grey20", size = 12),
               text = element_text(size = 15))+
-        labs(x = "Year", y = bquote("Total catch (g*"~yr^-1*"*"*m^-2*")"))
+        labs(x = "Year", y = bquote("Mean catch (g*"~yr^-1*"*"*m^-2*")"))
       
       #Plotting predicted vs observed catches
       p2 <- ggplot()+
