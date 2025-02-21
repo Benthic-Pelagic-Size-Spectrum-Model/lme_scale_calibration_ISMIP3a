@@ -17,26 +17,24 @@ if __name__ == '__main__':
     client = Client()
 
     #Do not print warning about large chunks
-    dask.config.set({'array.slicing.split_large_chunks': False})
+    #dask.config.set({'array.slicing.split_large_chunks': False})
     #Reduce size of chunks to 100 MB
-    dask.config.set({'array.chunk-size': '100 MB'})
+    #dask.config.set({'array.chunk-size': '100 MB'})
 
     ## Name of region and model resolution ----
-    region = 'fao-48'
-    model_res = '025deg'
+    region = 'fao-88'
+    model_res = '1deg'
     
     ## Defining input and output folders ----
-    base_folder = '/g/data/vf71/la6889/dbpm_inputs/weddell/'
+    base_folder = '/g/data/vf71/la6889/dbpm_inputs/west_antarctica/'
     gridded_folder = os.path.join(base_folder, 'gridded_params', model_res)
-    out_folder = 'test'
-    # out_folder = os.path.join(base_folder, 'run_fishing', model_res)
+    out_folder = os.path.join(base_folder, 'run_fishing', model_res)
     os.makedirs(out_folder, exist_ok = True) 
 
     ## If starting DBPM run from a specific time step ----
     # Character: Year and month from when DBPM initialisation values should be loaded
     # If starting model for the first time, it should be set to None
-    # init_time = '1954-10'
-    init_time = None
+    init_time = '1960-12'
     
     ## Loading fixed DBPM parameters ----
     ds_fixed = uf.loading_dbpm_inputs(gridded_folder)
@@ -51,10 +49,10 @@ if __name__ == '__main__':
     #Removing datarrays added to fixed inputs
     del depth, log10_size_bins_mat
 
-    #Scatter fixed dataset across workers
-    ds_fixed_scattered = client.scatter(ds_fixed)
-    #Complete scattering before use ("dask future")
-    ds_fixed_fut = ds_fixed_scattered.result()
+    # #Scatter fixed dataset across workers
+    # ds_fixed_scattered = client.scatter(ds_fixed)
+    # #Complete scattering before use ("dask future")
+    # ds_fixed_fut = ds_fixed_scattered.result()
 
     
     ## Loading predator, detritivores and detritus initialisation data ----
@@ -83,33 +81,84 @@ if __name__ == '__main__':
     # ds_init_fut = ds_init_scattered.result()
 
     ## Loading dynamic data ----
-    #Intercept plankton size spectrum
-    ui0 = xr.open_zarr(glob(os.path.join(gridded_folder, 'ui0_spinup*'))[0])['ui0']
-    
-    #Slope plankton size spectrum
-    slope = xr.open_zarr(glob(os.path.join(base_folder, 'gridded', 
-                                           model_res, '*spinup_slope_*'))[0])['slope']
-    #Temperature effects
-    pel_tempeffect = xr.open_zarr(glob(
-        os.path.join(gridded_folder, 'pel-temp-eff_spinup*'))[0])['pel_temp_eff']
-    
-    ben_tempeffect = xr.open_zarr(glob(
-        os.path.join(gridded_folder, 'ben-temp-eff_spinup*'))[0])['ben_temp_eff']
-
-    #Sinking rate
-    sinking_rate = xr.open_zarr(glob(os.path.join(base_folder, 'gridded', model_res,
-                                                  '*_spinup_er_*'))[0])['export_ratio']
-
-    # Loading effort
-    effort = xr.open_zarr(glob(os.path.join(gridded_folder, 'effort_spinup*'))[0])['effort']
+    #Spinup data is loaded if init_time is None or if the init_time year is less than 1960
+    if init_time is None or pd.Timestamp(init_time).year <= 1960:
+        #Intercept plankton size spectrum
+        ui0 = xr.open_zarr(glob(os.path.join(gridded_folder,
+                                             'ui0_spinup*'))[0])['ui0']
+        #Slope plankton size spectrum
+        slope = xr.open_zarr(glob(
+            os.path.join(base_folder, 'gridded', 
+                         model_res, '*spinup_slope_*'))[0])['slope']
+        #Temperature effects
+        pel_tempeffect = xr.open_zarr(glob(
+            os.path.join(gridded_folder, 
+                         'pel-temp-eff_spinup*'))[0])['pel_temp_eff']
+        ben_tempeffect = xr.open_zarr(glob(
+            os.path.join(gridded_folder, 
+                         'ben-temp-eff_spinup*'))[0])['ben_temp_eff']
+        #Sinking rate
+        sinking_rate = xr.open_zarr(glob(
+            os.path.join(base_folder, 'gridded', model_res,
+                         '*_spinup_er_*'))[0])['export_ratio']
+        # Loading effort
+        effort = xr.open_zarr(glob(os.path.join(gridded_folder, 
+                                                'effort_spinup*'))[0])['effort']
+    #Spinup data plus obsclim are loaded if init_time is 1960
+    elif pd.Timestamp(init_time).year == 1960:
+        exp = ['spinup', 'obsclim']
+        #Intercept plankton size spectrum
+        ui0 = xr.open_mfdataset(glob(os.path.join(gridded_folder, 'ui0_*')), 
+                                engine = 'zarr')['ui0']
+        #Slope plankton size spectrum
+        slope = xr.open_mfdataset([f for ex in exp for f in glob(
+            os.path.join(base_folder, 'gridded', model_res, f'*{ex}_slope_*'))], 
+                                  engine = 'zarr')['slope']
+        #Temperature effects
+        pel_tempeffect = xr.open_mfdataset(glob(
+            os.path.join(gridded_folder, 'pel-temp-eff_*')),
+                                           engine = 'zarr')['pel_temp_eff']
+        ben_tempeffect = xr.open_mfdataset(glob(
+            os.path.join(gridded_folder, 'ben-temp-eff_*')),
+                                           engine = 'zarr')['ben_temp_eff']
+        #Sinking rate
+        sinking_rate = xr.open_mfdataset([f for ex in exp for f in glob(
+            os.path.join(base_folder, 'gridded', model_res, f'*{ex}_er_*'))], 
+                                         engine = 'zarr')['export_ratio']
+        # Loading effort
+        effort = xr.open_mfdataset(glob(os.path.join(gridded_folder, 'effort_*')),
+                                   engine = 'zarr')['effort']
+    #Obsclim data loaded from 1961 onwards:
+    else:
+        #Intercept plankton size spectrum
+        ui0 = xr.open_zarr(glob(
+            os.path.join(gridded_folder, 'ui0_[0-9]*'))[0])['ui0']
+        #Slope plankton size spectrum
+        slope = xr.open_zarr(glob(
+            os.path.join(base_folder, 'gridded', 
+                         model_res, '*obsclim_slope_*'))[0])['slope']
+        #Temperature effects
+        pel_tempeffect = xr.open_zarr(glob(
+            os.path.join(gridded_folder, 'pel-temp-eff_[0-9]*'))[0])['pel_temp_eff']
+        ben_tempeffect = xr.open_zarr(glob(
+            os.path.join(gridded_folder, 'ben-temp-eff_[0-9]*'))[0])['ben_temp_eff']
+        #Sinking rate
+        sinking_rate = xr.open_zarr(glob(
+            os.path.join(base_folder, 'gridded', model_res,
+                         '*_obsclim_er_*'))[0])['export_ratio']
+        # Loading effort
+        effort = xr.open_zarr(glob(
+            os.path.join(gridded_folder, 'effort_[0-9]*'))[0])['effort']
 
     #If running from a specific point in time, then data is subsetted from the month after
     #init_time
     if init_time is not None:
         #Timestep from when to restart DBPM 
-        subset_time = (pd.Timestamp(init_time)+pd.DateOffset(months = 1)).strftime('%Y-%m')
+        subset_time = (pd.Timestamp(init_time)+
+                       pd.DateOffset(months = 1)).strftime('%Y-%m')
         #Timestep from when to add init effort data
-        effort_time = (pd.Timestamp(init_time)+pd.DateOffset(months = 2)).strftime('%Y-%m')
+        effort_time = (pd.Timestamp(init_time)+
+                       pd.DateOffset(months = 2)).strftime('%Y-%m')
         
         #begin (i.e., one month after predators data)
         ui0 = ui0.sel(time = slice(subset_time, None))
@@ -130,16 +179,16 @@ if __name__ == '__main__':
                                          'pel_tempeffect': pel_tempeffect,
                                          'ben_tempeffect': ben_tempeffect, 
                                          'sinking_rate': sinking_rate,
-                                         'effort': effort}).isel(time = slice(0, 2))
-    #Scatter initialisation dataset across workers
-    ds_dynamic_scattered = client.scatter(ds_dynamic)
-    #Complete scattering before use ("dask future")
-    ds_dynamic_fut = ds_dynamic_scattered.result()
+                                         'effort': effort})
+    # #Scatter initialisation dataset across workers
+    # ds_dynamic_scattered = client.scatter(ds_dynamic)
+    # #Complete scattering before use ("dask future")
+    # ds_dynamic_fut = ds_dynamic_scattered.result()
 
     
     ## Running spatial DBPM ----
-    uf.gridded_sizemodel(gridded_folder, ds_fixed_fut, ds_init, ds_dynamic_fut, 
+    uf.gridded_sizemodel(gridded_folder, ds_fixed, ds_init, ds_dynamic, 
                          region = region, model_res = model_res, out_folder = out_folder)
 
     #Closing client
-    client.close()
+    # client.close()
