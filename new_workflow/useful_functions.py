@@ -28,13 +28,12 @@ def netcdf_to_zarr(file_path, path_out):
     #Loading and rechunking data
     da = xr.open_dataarray(file_path).chunk({'lat': '50MB', 'lon': '50MB'})
 
-    #Change time dimension to datetime64 format
-    if 'time' in da.dims:
-        try:
-            da['time'] = pd.DatetimeIndex(da.indexes['time'].to_datetimeindex(),
-                                          dtype = 'datetime64[ns]')
-        except:
-            continue
+    #Change date format
+    try:
+        da['time'] = pd.DatetimeIndex(da.indexes['time'].to_datetimeindex(),
+                                      dtype = 'datetime64[ns]')
+    except:
+        pass
 
     #Save results
     da.to_zarr(path_out, consolidated = True, mode = 'w')
@@ -830,7 +829,7 @@ def gridded_sizemodel(base_folder, dbpm_fixed_inputs, dbpm_init_inputs,
             #Remove variables not needed
             #del dt_eff, fn, effort_next
         except:
-            continue
+            pass
         
         # Detritus output (g.m-2.yr-1)
         # losses from detritivore scavenging/filtering only:
