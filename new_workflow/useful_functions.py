@@ -28,6 +28,14 @@ def netcdf_to_zarr(file_path, path_out):
     #Loading and rechunking data
     da = xr.open_dataarray(file_path).chunk({'lat': '50MB', 'lon': '50MB'})
 
+    #Change time dimension to datetime64 format
+    if 'time' in da.dims:
+        try:
+            da['time'] = pd.DatetimeIndex(da.indexes['time'].to_datetimeindex(),
+                                          dtype = 'datetime64[ns]')
+        except:
+            continue
+
     #Save results
     da.to_zarr(path_out, consolidated = True, mode = 'w')
 
