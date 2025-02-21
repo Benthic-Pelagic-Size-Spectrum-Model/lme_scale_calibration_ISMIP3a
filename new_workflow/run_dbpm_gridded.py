@@ -22,11 +22,11 @@ if __name__ == '__main__':
     #dask.config.set({'array.chunk-size': '100 MB'})
 
     ## Name of region and model resolution ----
-    region = 'fao-88'
+    region = 'fao-58'
     model_res = '1deg'
     
     ## Defining input and output folders ----
-    base_folder = '/g/data/vf71/la6889/dbpm_inputs/west_antarctica/'
+    base_folder = '/g/data/vf71/la6889/dbpm_inputs/east_antarctica/'
     gridded_folder = os.path.join(base_folder, 'gridded_params', model_res)
     out_folder = os.path.join(base_folder, 'run_fishing', model_res)
     os.makedirs(out_folder, exist_ok = True) 
@@ -34,7 +34,7 @@ if __name__ == '__main__':
     ## If starting DBPM run from a specific time step ----
     # Character: Year and month from when DBPM initialisation values should be loaded
     # If starting model for the first time, it should be set to None
-    init_time = '1960-12'
+    init_time = '1960-10'
     
     ## Loading fixed DBPM parameters ----
     ds_fixed = uf.loading_dbpm_inputs(gridded_folder)
@@ -82,7 +82,7 @@ if __name__ == '__main__':
 
     ## Loading dynamic data ----
     #Spinup data is loaded if init_time is None or if the init_time year is less than 1960
-    if init_time is None or pd.Timestamp(init_time).year <= 1960:
+    if init_time is None or pd.Timestamp(init_time).year < 1960:
         #Intercept plankton size spectrum
         ui0 = xr.open_zarr(glob(os.path.join(gridded_folder,
                                              'ui0_spinup*'))[0])['ui0']
