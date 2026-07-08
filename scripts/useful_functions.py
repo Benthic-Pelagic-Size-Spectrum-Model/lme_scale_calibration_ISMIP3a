@@ -327,7 +327,7 @@ def weighted_mean_timestep(file_paths, weights, region):
     return df
 
 
-#Calculating export ratio
+# Calculating threshold depth to extract phytoplankton inputs
 def get_threshold_depth(folder_gridded_data, gfdl_exp, max_depth = 200):
     '''
     Inputs:
@@ -353,7 +353,7 @@ def get_threshold_depth(folder_gridded_data, gfdl_exp, max_depth = 200):
     mld = xr.open_zarr(glob(
         os.path.join(folder_gridded_data, f'*{gfdl_exp}_mlotst-0125_*'))[0])['mlotst-0125']
 
-    # Check if MLD depth in shallow areas (<= 100 m depth) is less 100 m
+    # Check if MLD depth in shallow areas (<= 100 m depth) is less than 100 m
     # Keep the largest depth (water column depth vs MLD)
     thresh_depth = np.maximum(depth_n, mld)
 
@@ -398,55 +398,104 @@ def detrital_input_seafloor(folder_gridded_data, gfdl_exp, benthic_habitat_depth
     # Updating metada
     input_w.name = 'input_w'
     input_w = input_w.assign_attrs({'short_name': 'detrital_input_seafloor',
-                                    'long_name': 'Input fluxes to detritus pool near seafloor',
+                                    'long_name': 'Input fluxes to detritus pool near ' +
+                                    'seafloor',
                                     'units': 'gWW m-3 yr-1'})
 
     return input_w
     
 
 # Integrating (mean) phytoplankton inputs to threshold depth
-def integrating_phyto(folder_gridded_data, gfdl_exp, thresh_depth = 200):
+def integrating_phyto(folder_gridded_data, gfdl_exp, thresh_depth = 200,
+                      averaging = 'biomass_weighted'):
     '''
     Inputs:
     - folder_gridded_data (character) File path pointing to folder containing
-    zarr files with vertically resolved phytopklankton outputs (`phyc` and `phypico`) 
-    from GFDL
+    zarr files with vertically resolved phytopklankton outputs (`phyc` and `phypico`), 
+    mixed layer depth (`mlotst-0125`) and depth (`deptho`) from GFDL
     - gfdl_exp (character) Select GFDL experiment 'ctrl_clim' or 'obs_clim'
-    - thresh_depth (numeric) Default is 200 (m) Maximum depth in meters to be considered 
-    when processing DBPM phytoplankton inputs
+    - thresh_depth (numeric) Default 200 (m). Maximum depth in meters to be considered 
+    when processing DBPM phytoplankton inputs.
+     - averaging (character) Default 'biomass_weighted'. Defines how to collapse the
+     depth dimension. There are four choices available:
+         'fixed'            thickness-weighted mean over the `thresh_depth`.
+         'mld'              thickness-weighted mean over the mixed layer
+                            (out from `get_threshold_depth` function). De-biases 
+                            phytoplankton inputs but truncates a DCM.
+         'cumulative90'     mean over the layer holding 90% of the column-integrated
+                            TOTAL phytoplankton biomass (threshold-free productive
+                            layer).
+         'biomass_weighted' (default) TOTAL-phytoplankton-biomass weighted by mean 
+                            concentration over the whole column. That is
+                              (column biomass) / (effective productive thickness)
+                            Threshold- and light-free; the total-phytoplankton weight 
+                            keeps small and large fractions on the same layer. Best
+                            matches the food density a vertically-migrating, 
+                            food-tracking pelagic forager experiences. It captures 
+                            surface + deep chlorophyll maximum, ignores phytoplankton-
+                            poor waters it passes through but does not feed in.
 
     Outputs:
-    - phyc (data array) Contains integrated phytoplankton values up to threshold depth.
-    - phypico (data array) Contains integrated picophytoplankton values up to threshold
-    depth.
+    - phyc_weighted, phypico_weighted (data arrays, mol m-3). Integrated phytoplankton 
+    values up to threshold depth.
     '''
 
-    #load depth
-    depth = (xr.open_zarr(glob(os.path.join(folder_gridded_data, 
-                                            f'*_thkcello_*'))[0])['thkcello'].
-        drop_vars('time').squeeze().sel(lev = slice(None, thresh_depth)).fillna(0))
+    #load depth bins
+    depth_bins = (xr.open_zarr(
+        glob(os.path.join(folder_gridded_data, f'*_thkcello_*'))[0])['thkcello'].
+        drop_vars('time').squeeze().fillna(0))
     
-    #Load phypico
+    #Load phytoplankton variables
     phypico = (xr.open_zarr(glob(
         os.path.join(folder_gridded_data, f'*{gfdl_exp}_phypico_*'))[0])['phypico'].
-        sel(lev = slice(None, thresh_depth)))
-    phypico_weighted = phypico.weighted(depth).mean('lev')
-    phypico_weighted = phypico_weighted.assign_attrs(
-        {'standard_name': 'mean_mole_concentration_of_picophytoplankton_expressed_as_carbon_in_sea_water',
-         'long_name': 'Depth Weighted Mean of Picophytoplankton Carbon Concentration', 
-         'units': 'mol m-3'})
-    
-    #Load phyc
+        fillna(0))
     phyc = (xr.open_zarr(glob(
         os.path.join(folder_gridded_data, f'*{gfdl_exp}_phyc_*'))[0])['phyc'].
-        sel(lev = slice(None, thresh_depth)))
-    phyc_weighted = phyc.weighted(depth).mean('lev')
-    phyc_weighted = phyc_weighted.assign_attrs(
-        {'standard_name': 'mean_mole_concentration_of_phytoplankton_expressed_as_carbon_in_sea_water',
-         'long_name': 'Depth Weighted Mean of Phytoplankton Carbon Concentration', 
+        fillna(0))
+
+    #Create weights based on choice provided `averaging` parameter
+    if averaging == 'fixed':
+        weights = depth_bins.sel(lev = slice(None, thresh_depth))
+        phyc = phyc.sel(lev = slice(None, thresh_depth))
+        phypico = phypico.sel(lev = slice(None, thresh_depth))
+    elif averaging == 'mld':
+        mld_depth = get_threshold_depth(folder_gridded_data, gfdl_exp, 
+                                        max_depth = thresh_depth)
+        weights = (depth_bins.sel(lev = slice(None, thresh_depth)).
+            expand_dims(dim = {'time': mld_depth.time.values}))
+        weights = weights.where(weights['lev'] <= mld_depth, 0)
+        phyc = phyc.sel(lev = slice(None, thresh_depth))
+        phypico = phypico.sel(lev = slice(None, thresh_depth))
+    elif averaging == 'cumulative90':
+        bio = phyc*depth_bins
+        bio_90 = bio.cumsum('lev') <= (0.9*bio.sum('lev'))
+        weights = depth_bins.where(bio_90, 0)
+    elif averaging == 'biomass_weighted':
+        weights = phyc*depth_bins
+    else:
+        raise ValueError(f"the 'averaging' parameter must be 'fixed', 'mld', " +
+                         f"'cumulative90' or 'biomass_weighted'. Instead "+
+                         f"{averaging}' was provided.")
+
+    #Function calculating weighted mean
+    def _wmean(phyto, weights):
+        return (phyto*weights).sum('lev') / weights.sum('lev')
+
+    phypico_weighted = _wmean(phypico, weights).assign_attrs(
+        {'standard_name': 'mean_mole_concentration_of_picophytoplankton_expressed_' + 
+         'as_carbon_in_sea_water',
+         'long_name': f'{averaging} mean of picophytoplankton carbon concentration', 
          'units': 'mol m-3'})
+    phypico_weighted.name = 'phypico'
     
-    return phyc_weighted, phypico_weighted
+    phyc_weighted = _wmean(phyc, weights).assign_attrs(
+        {'standard_name': 'mean_mole_concentration_of_phytoplankton_expressed_as_' + 
+         'carbon_in_sea_water',
+         'long_name': f'{averaging} mean of phytoplankton carbon concentration', 
+         'units': 'mol m-3'})
+    phyc_weighted.name = 'phyc'
+    
+    return phyc_weighted.drop_encoding(), phypico_weighted.drop_encoding()
 
 
 #Calculating export ratio
@@ -476,7 +525,7 @@ def getExportRatio(folder_gridded_data, gfdl_exp):
     #Load phypico-vint
     sphy = xr.open_zarr(glob(
         os.path.join(folder_gridded_data, 
-                     f'*{gfdl_exp}_phypico-vint200m_*'))[0])['phypico']
+                     f'*{gfdl_exp}_phypico-vint-weighted_*'))[0])['phypico']
     #Rename phypico-vint to sphy
     sphy.name = 'sphy'
     sphy = sphy.assign_attrs({'short_name': 'sphy',
@@ -485,7 +534,8 @@ def getExportRatio(folder_gridded_data, gfdl_exp):
 
     #Load phyc-vint
     ptotal = xr.open_zarr(glob(
-        os.path.join(folder_gridded_data, f'*{gfdl_exp}_phyc-vint200m_*'))[0])['phyc']
+        os.path.join(folder_gridded_data, 
+                     f'*{gfdl_exp}_phyc-vint-weighted_*'))[0])['phyc']
 
     #Calculate large phytoplankton
     lphy = ptotal-sphy
@@ -512,7 +562,7 @@ def getExportRatio(folder_gridded_data, gfdl_exp):
                           'long_name': 'Export ratio of organic matter',
                           'units': 'mol m-3'})
     
-    return sphy, lphy, er
+    return sphy, lphy, er.drop_encoding()
 
 
 #Calculate slope and intercept

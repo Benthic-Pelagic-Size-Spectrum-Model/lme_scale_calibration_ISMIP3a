@@ -88,7 +88,7 @@ sizeparam <- function(dbpm_inputs, fishing_params, dx = 0.1, xmin = -12,
     # between 500-1800 and 0 below 1800m (suggestions of values from Clive
     # Trueman based on stable isotope work, and proportion of biomass, 	Rockall 
     # Trough studies) (pref.ben)
-    param$pref_benthos <- 0.8*exp(-1/250*param$depth)
+    param$pref_benthos <- 0.8*exp(-1/1500*param$depth)
     
     # preference for pelagic prey (pref.pel)
     param$pref_pelagic <- 1-param$pref_benthos 
