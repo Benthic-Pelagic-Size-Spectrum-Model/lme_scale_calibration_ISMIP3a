@@ -34,7 +34,8 @@ if __name__ == '__main__':
     resolutions = ['1deg', '025deg']
 
     #Define variables of interest
-    dbpm_var = ['phyc', 'phypico', 'siconc', 'deptho', 'expc-bot', 'tob', 'tos']
+    dbpm_var = ['phyc', 'phypico', 'siconc', 'deptho', 'expc-bot', 'tob', 'tos',
+                'mlotst-0125']
     
     #Loop through experiments and resolutions
     for res in resolutions:
@@ -82,13 +83,14 @@ if __name__ == '__main__':
                 consolidated = True, mode = 'w')
 
             # Vertically integrate phytoplankton inputs up to threshold depth
-            phyc, phypico = uf.integrating_phyto(gfdl_out, exp, thresh_depth = 200)
+            phyc, phypico = uf.integrating_phyto(gfdl_out, exp, thresh_depth = 200,
+                                                averaging = 'biomass_weighted')
             #Save outputs
             phyc.to_zarr(
-                os.path.join(gfdl_out, base_fn.replace('_var_', '_phyc-vint200m_')), 
+                os.path.join(gfdl_out, base_fn.replace('_var_', '_phyc-vint-weighted_')), 
                 consolidated = True, mode = 'w')
             phypico.to_zarr(
-                os.path.join(gfdl_out, base_fn.replace('_var_', '_phypico-vint200m_')), 
+                os.path.join(gfdl_out, base_fn.replace('_var_', '_phypico-vint-weighted_')), 
                 consolidated = True, mode = 'w')
 
             #Calculate phytoplankton size distribution and export ratio
@@ -132,7 +134,7 @@ if __name__ == '__main__':
                 #lowest latitude area where sea ice forms each winter according to NASA's 
                 #Earth Observatory
                 da_mask_north = (xr.where(da_mask.lat > 42, da_mask, False).
-                    isel(lat = slice(None, None, -1)).cumsum('lat')))
+                    isel(lat = slice(None, None, -1)).cumsum('lat'))
                 #Sea ice kept from 52S towards the south pole as 55S is the lowest latitude area
                 # where sea ice forms each winter according to NASA's Earth Observatory
                 da_mask_south = xr.where(da_mask.lat <= -52, da_mask, False).cumsum('lat')
