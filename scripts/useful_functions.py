@@ -690,6 +690,7 @@ def GetPPIntSlope(gfdl_folder = None, gfdl_exp = None, lphy_file = None,
         'long_name': 'Slope of primary producer spectrum',
         'comment': ('Calculations described in full in Woodworth-' +
                     'Jefcoats et al 2013 (DOI: 10.1111/gcb.12076)')})
+    slope = slope.drop_encoding()
 
     #a is really log10(a), same a when small, midsmall are used
     intercept = (large-(slope*midlarge))
@@ -699,6 +700,7 @@ def GetPPIntSlope(gfdl_folder = None, gfdl_exp = None, lphy_file = None,
         'long_name': 'Intercept of primary producer spectrum',
         'comment': ('Calculations described in full in Woodworth-' +
                     'Jefcoats et al 2013 (DOI: 10.1111/gcb.12076)')})
+    intercept = intercept.drop_encoding()
 
     # a could be used directly to replace 10^pp in sizemodel()
     if output == 'slope':
