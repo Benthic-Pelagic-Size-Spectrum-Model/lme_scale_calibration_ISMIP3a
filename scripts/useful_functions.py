@@ -275,6 +275,8 @@ def extract_gfdl(file_path, mask, path_out, cross_dateline = False):
         da = da.chunk({'time': -1, 'lat': -1, 'lon': -1})
     else:
         da = da.chunk({'lat':-1, 'lon': -1})
+
+    da = da.drop_encoding()
     
     #Save subsetted data
     da.to_zarr(path_out, consolidated = True, mode = 'w')
@@ -419,9 +421,9 @@ def detrital_input_seafloor(folder_gridded_data, gfdl_exp, benthic_habitat_depth
     return input_w
     
 
-# Integrating (mean) phytoplankton inputs to threshold depth
-def integrating_phyto(folder_gridded_data, gfdl_exp, thresh_depth = 200,
-                      averaging = 'biomass_weighted'):
+# Integrating (mean) phytoplankton and ocean temperature inputs 
+def integrating_inputs(folder_gridded_data, gfdl_exp, thresh_depth = 200,
+                       averaging = 'biomass_weighted'):
     '''
     Inputs:
     - folder_gridded_data (character) File path pointing to folder containing
@@ -459,12 +461,15 @@ def integrating_phyto(folder_gridded_data, gfdl_exp, thresh_depth = 200,
         glob(os.path.join(folder_gridded_data, f'*_thkcello_*'))[0])['thkcello'].
         drop_vars('time').squeeze().fillna(0))
     
-    #Load phytoplankton variables
+    #Load phytoplankton and ocean temperature variables
     phypico = (xr.open_zarr(glob(
         os.path.join(folder_gridded_data, f'*{gfdl_exp}_phypico_*'))[0])['phypico'].
         fillna(0))
     phyc = (xr.open_zarr(glob(
         os.path.join(folder_gridded_data, f'*{gfdl_exp}_phyc_*'))[0])['phyc'].
+        fillna(0))
+    temp_ocean = (xr.open_zarr(glob(
+        os.path.join(folder_gridded_data, f'*{gfdl_exp}_thetao_*'))[0])['thetao'].
         fillna(0))
 
     #Create weights based on choice provided `averaging` parameter
@@ -472,6 +477,7 @@ def integrating_phyto(folder_gridded_data, gfdl_exp, thresh_depth = 200,
         weights = depth_bins.sel(lev = slice(None, thresh_depth))
         phyc = phyc.sel(lev = slice(None, thresh_depth))
         phypico = phypico.sel(lev = slice(None, thresh_depth))
+        temp_ocean = temp_ocean.sel(lev = slice(None, thresh_depth))
     elif averaging == 'mld':
         mld_depth = get_threshold_depth(folder_gridded_data, gfdl_exp, 
                                         max_depth = thresh_depth)
@@ -480,6 +486,7 @@ def integrating_phyto(folder_gridded_data, gfdl_exp, thresh_depth = 200,
         weights = weights.where(weights['lev'] <= mld_depth, 0)
         phyc = phyc.sel(lev = slice(None, thresh_depth))
         phypico = phypico.sel(lev = slice(None, thresh_depth))
+        temp_ocean = temp_ocean.sel(lev = slice(None, thresh_depth))
     elif averaging == 'cumulative90':
         bio = phyc*depth_bins
         bio_90 = bio.cumsum('lev') <= (0.9*bio.sum('lev'))
@@ -508,17 +515,27 @@ def integrating_phyto(folder_gridded_data, gfdl_exp, thresh_depth = 200,
          'long_name': f'{averaging} mean of phytoplankton carbon concentration', 
          'units': 'mol m-3'})
     phyc_weighted.name = 'phyc'
+
+    temp_ocean_weighted = _wmean(temp_ocean, weights).assign_attrs(
+        {'standard_name': 'mean_sea_water_potential_temperature',
+         'long_name': f'{averaging} mean of sea water potential temperature', 
+         'units': 'degC'})
+    temp_ocean_weighted.name = 'ocean-temp-weighted'
     
-    return phyc_weighted.drop_encoding(), phypico_weighted.drop_encoding()
+    return (phyc_weighted.drop_encoding(), phypico_weighted.drop_encoding(), 
+            temp_ocean_weighted.drop_encoding())
 
 
 #Calculating export ratio
-def getExportRatio(folder_gridded_data, gfdl_exp):
+def getExportRatio(folder_gridded_data, gfdl_exp, temp_source = 'ocean-temp-weighted'):
     '''
     Inputs:
     - folder_gridded_data (character) File path pointing to folder containing
     zarr files with GFDL data for the region of interest
     - gfdl_exp (character) Select GFDL experiment 'ctrl_clim' or 'obs_clim'
+    - mean_ocean_temp (character). Default "ocean-temp-weighted", sets temperature 
+    to be phytoplankton biomass weighted ocean temperature mean. Setting to "tos" 
+    uses sea surface temperature
 
     Outputs:
     - sphy (data array) Contains small phytoplankton. This is data frame simply
@@ -529,8 +546,8 @@ def getExportRatio(folder_gridded_data, gfdl_exp):
     '''
 
     #Load sea surface temperature
-    tos = xr.open_zarr(glob(
-        os.path.join(folder_gridded_data, f'*{gfdl_exp}_tos_*'))[0])['tos']
+    ocean_temp = xr.open_zarr(glob(
+        os.path.join(folder_gridded_data, f'*{gfdl_exp}_{temp_source}_*'))[0])[temp_source]
     
     #load depth
     depth = xr.open_zarr(glob(
@@ -565,7 +582,7 @@ def getExportRatio(folder_gridded_data, gfdl_exp):
     psmall = (sphy/ptotal)
 
     #Calculate export ratio
-    er = (np.exp(-0.032*tos)*((0.14*psmall) + (0.74*(plarge))) +
+    er = (np.exp(-0.032*ocean_temp)*((0.14*psmall) + (0.74*(plarge))) +
           (0.0228*(plarge)*(depth*0.004)))/(1 + (depth*0.004))
     #If values are negative, assign a value of 0
     er = xr.where(er < 0, 0, er)
