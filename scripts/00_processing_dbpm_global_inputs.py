@@ -34,7 +34,7 @@ if __name__ == '__main__':
     resolutions = ['1deg', '025deg']
 
     #Define variables of interest
-    dbpm_var = ['phyc', 'phypico', 'siconc', 'deptho', 'expc-bot', 'tob', 'tos',
+    dbpm_var = ['phyc', 'phypico', 'siconc', 'deptho', 'expc-bot', 'tob', 'thetao',
                 'mlotst-0125']
     
     #Loop through experiments and resolutions
@@ -83,14 +83,18 @@ if __name__ == '__main__':
                 consolidated = True, mode = 'w')
 
             # Vertically integrate phytoplankton inputs up to threshold depth
-            phyc, phypico = uf.integrating_phyto(gfdl_out, exp, thresh_depth = 200,
-                                                averaging = 'biomass_weighted')
+            phyc, phypico, temp_ocean = uf.integrating_inputs(gfdl_out, exp, 
+                                                              thresh_depth = 200,
+                                                              averaging = 'biomass_weighted')
             #Save outputs
             phyc.to_zarr(
                 os.path.join(gfdl_out, base_fn.replace('_var_', '_phyc-vint-weighted_')), 
                 consolidated = True, mode = 'w')
             phypico.to_zarr(
                 os.path.join(gfdl_out, base_fn.replace('_var_', '_phypico-vint-weighted_')), 
+                consolidated = True, mode = 'w')
+            temp_ocean.to_zarr(
+                os.path.join(gfdl_out, base_fn.replace('_var_', '_ocean-temp-weighted_')), 
                 consolidated = True, mode = 'w')
 
             #Calculate phytoplankton size distribution and export ratio
@@ -116,10 +120,10 @@ if __name__ == '__main__':
                 os.path.join(gfdl_out, base_fn.replace('_var_', '_slope_')), 
                 consolidated = True, mode = 'w')
 
-            #Create sea ice masks 
-            #Any grid cells with sea ice concentration of 15% or above will not be
-            #available for fishing
-            #Identify sea ice files
+            Create sea ice masks 
+            Any grid cells with sea ice concentration of 15% or above will not be
+            available for fishing
+            Identify sea ice files
             si_files = glob(os.path.join(gfdl_out, '*siconc*'))
 
             #Create masks for all sea ice files
