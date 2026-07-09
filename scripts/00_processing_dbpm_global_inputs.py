@@ -107,7 +107,7 @@ if __name__ == '__main__':
                 consolidated = True, mode = 'w')
             
             #Calculate intercept and slope
-            intercept, slope = uf.GetPPIntSlope(gfdl_out, exp)
+            intercept, slope = uf.GetPPIntSlope(gfdl_folder = gfdl_out, gfdl_exp = exp)
             #Save outputs
             intercept.to_zarr(
                 os.path.join(gfdl_out, base_fn.replace('_var_', '_intercept_')), 
