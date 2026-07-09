@@ -25,7 +25,7 @@ if __name__ == '__main__':
     resolutions = ['1deg', '025deg']
 
     #Define variables for which a spinup period will be created
-    dynamic_vars = ['input-w20m', 'expc-bot', 'er', 'lphy', 'sphy', 'tob', 'tos']
+    dynamic_vars = ['input-w20m', 'expc-bot', 'er', 'lphy', 'sphy', 'tob', 'ocean-temp-weighted']
 
     #Defining stable spin and spinup periods
     stable_spin = pd.date_range('1741-01', end = '1840-12', freq = 'MS')
@@ -34,6 +34,7 @@ if __name__ == '__main__':
     # Choose whether smoothing of inputs will be performed by LOESS (smoothed) or
     # deseasoning data (deseasoned). Select None for no smoothing.
     smoothing = None
+    
     #Loop through experiments and resolutions
     for res in resolutions:
         #Define GFDL folder where sea ice masks are stored
