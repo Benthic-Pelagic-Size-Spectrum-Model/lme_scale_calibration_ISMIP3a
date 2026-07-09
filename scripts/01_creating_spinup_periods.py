@@ -25,7 +25,7 @@ if __name__ == '__main__':
     resolutions = ['1deg', '025deg']
 
     #Define variables for which a spinup period will be created
-    dynamic_vars = ['input-w20m', 'expc-bot', 'er', 'intercept', 'slope', 'tob', 'tos']
+    dynamic_vars = ['input-w20m', 'expc-bot', 'er', 'lphy', 'sphy', 'tob', 'tos']
 
     #Defining stable spin and spinup periods
     stable_spin = pd.date_range('1741-01', end = '1840-12', freq = 'MS')
@@ -88,8 +88,33 @@ if __name__ == '__main__':
                 replace('2010', '1960'))
             uf.gridded_spinup(f_in, '1961-01', '1980-12', spinup_period, 
                               file_out = f_out)
-            #The stable spinup period 
+
+            # The stable spinup period 
             fout_stable = (f_in.replace('ctrlclim', 'stable-spin').
                 replace('1961', '1741').replace('2010', '1840'))
             uf.gridded_spinup(f_out, '1841-01', '1841-12', stable_spin,
                               mean_spinup = True, file_out = fout_stable)
+                
+        # Calculate slope and intercept for stable spinup period
+        lphy = xr.open_zarr(glob(os.path.join(
+            gfdl_folder, f'gfdl-*stable-spin_lphy_*monthly*'))[0])['lphy']
+
+        sphy = xr.open_zarr(glob(os.path.join(
+            gfdl_folder, f'gfdl-*stable-spin_sphy_*monthly*'))[0])['sphy']
+
+        intercept, slope = uf.GetPPIntSlope(sphy_file = sphy, lphy_file = lphy)
+
+        #Save outputs
+        int_out = (glob(os.path.join(gfdl_folder, f'gfdl-*ctrlclim_intercept_*monthly*'))[0].
+            replace('ctrlclim', 'stable-spin').replace('1961', '1741').replace('2010', '1840'))
+        intercept.to_zarr(int_out, consolidated = True, mode = 'w')
+
+        slo_out = (glob(os.path.join(gfdl_folder, f'gfdl-*ctrlclim_slope_*monthly*'))[0].
+            replace('ctrlclim', 'stable-spin').replace('1961', '1741').replace('2010', '1840'))
+        slope.to_zarr(slo_out, consolidated = True, mode = 'w')
+
+
+
+
+
+        
