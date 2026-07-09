@@ -2,7 +2,7 @@
 
 # Library of useful functions
 # Authors: Denisse Fierro Arcos
-# Date last update: 2025-03-25
+# Date last update: 2026-07-08
 
 # Loading libraries
 import xarray as xr
@@ -49,10 +49,12 @@ def netcdf_to_zarr(file_path, path_out):
 def loess_xarray(da, time_dim, **kwargs):
     '''
     Inputs:
-    - da (Data Array) Three dimensional xarray data array (time, lat, lon) to be smoothed.
+    - da (Data Array) Three dimensional xarray data array (time, lat, lon) to 
+    be smoothed.
     - time_dim (Data Array) Time dimension from "da" input.
     **Optional**: 
-    - frac (numeric) Proportion of timesteps to be used in data smoothing. If not provided,
+    - frac (numeric) Proportion of timesteps to be used in data smoothing. If 
+    not provided,
     it defaults to 0.5
 
     Outputs:
@@ -74,9 +76,10 @@ def loess_xarray(da, time_dim, **kwargs):
     data_vals = np.asarray(da)
     time_vals = np.asarray(time_dim)
 
-    #Applying LOESS smoother - Keep only smoothed values (i.e., ignore time column)
-    smooth = lowess(data_vals, time_vals, is_sorted = True, frac = frac, it = it, 
-                    missing = 'none')[:, 1]
+    #Applying LOESS smoother - Keep only smoothed values (i.e., ignore time 
+    #column)
+    smooth = lowess(data_vals, time_vals, is_sorted = True, frac = frac, 
+                    it = it, missing = 'none')[:, 1]
     return smooth
 
 
@@ -84,10 +87,11 @@ def loess_xarray(da, time_dim, **kwargs):
 def smoothing_loess(file_path, path_out, **kwargs):
     '''
     - file_path (character) File path where GFDL zarr file is located
-    - path_out (character) File path where outputs should be stored as zarr files
+    - path_out (character) File path where outputs should be stored as zarr 
+    files
     **Optional**: 
-    - mth_smooth (numeric) Number of timesteps to be used in data smoothing. If not
-    provided, it defaults to 4 timesteps.
+    - mth_smooth (numeric) Number of timesteps to be used in data smoothing. 
+    If not provided, it defaults to 4 timesteps.
 
     Outputs:
     - None. This function saves results as zarr files in the path provided.    
@@ -131,7 +135,8 @@ def smoothing_loess(file_path, path_out, **kwargs):
         output_dtypes = [float]).load()
     # Add metadata and record smoothing step
     da_smooth = da_smooth.assign_attrs(da.attrs)
-    da_smooth.attrs['fishmip_postprocess'] = f'LOESS smooth applied to data, span = {frac}, it = {it}'
+    da_smooth.attrs['fishmip_postprocess'] = ('LOESS smooth applied to ' +
+                                              f'data, span = {frac}, it = {it}')
     # Add variable name
     da_smooth.name = var
     # Save results
@@ -144,9 +149,10 @@ def stl_xarray(da, **kwargs):
     Inputs:
     - da (Data Array) - 1 dimensional vector from a data array
     **Optional**
-    - period (integer) - Default is 12 (annual). The periodicity of the time series
-    (e.g., 12 for monthly, 365 for daily).
-    - component (character) - Default is seasonal. Returns specified STL component
+    - period (integer) - Default is 12 (annual). The periodicity of the time 
+    series (e.g., 12 for monthly, 365 for daily).
+    - component (character) - Default is seasonal. Returns specified STL 
+    component
 
     Outputs:
     res - Specified STL component
@@ -200,10 +206,12 @@ def seasonal_decomposition(file_path, path_out, period, component):
 
     # Use apply_ufunc to apply the wrapper function across spatial dimensions
     da_comp = xr.apply_ufunc(stl_xarray, da, 
-                             kwargs = {'period': period, 'component': component},
+                             kwargs = {'period': period, 
+                             'component': component},
                              input_core_dims = [['time']], 
                              output_core_dims = [['time']],
-                             dask = 'parallelized', vectorize = True, 
+                             dask = 'parallelized', 
+                             vectorize = True, 
                              output_dtypes = [da.dtype],
                              # Allow rechunking of data if needed
                              dask_gufunc_kwargs = {'allow_rechunk': True}).load()
@@ -212,7 +220,8 @@ def seasonal_decomposition(file_path, path_out, period, component):
     da_decomp = da-da_comp
     # Add metadata and record smoothing step
     da_decomp = da_decomp.assign_attrs(da.attrs)
-    da_decomp.attrs['fishmip_postprocess'] = f'Original data minus {component} component'
+    da_decomp.attrs['fishmip_postprocess'] = ('Original data minus ' + 
+                                              f'{component} component')
     # Add variable name
     da_decomp.name = var
     # Save results
@@ -224,11 +233,13 @@ def extract_gfdl(file_path, mask, path_out, cross_dateline = False):
     '''
     Inputs:
     - file_path (character) File path where GFDL zarr file is located
-    - mask (boolean data array) Grid cells within region of interest should be identified
-    as 1.
-    - path_out (character) File path where outputs should be stored as zarr files
-    - cross_dateline (boolean) Default is False. If set to True, it will convert longitudes 
-    from +/-180 to 0-360 degrees before extracting data for region of interest
+    - mask (boolean data array) Grid cells within region of interest should be
+    identified as 1.
+    - path_out (character) File path where outputs should be stored as zarr 
+    files
+    - cross_dateline (boolean) Default is False. If set to True, it will convert
+    longitudes from +/-180 to 0-360 degrees before extracting data for region of
+    interest
     
     Outputs:
     - None. This function saves results as zarr files in the path provided.
@@ -273,10 +284,10 @@ def extract_gfdl(file_path, mask, path_out, cross_dateline = False):
 def weighted_mean_timestep(file_paths, weights, region):
     '''
     Inputs:
-    - file_paths (list) File paths pointing to zarr files from which weighted means 
-    will be calculated and stored in a single data frame
-    - weights (data array) Contains the weights to be used when calculating weighted mean.
-    It should NOT include NaN, zeroes (0) should be used instead.
+    - file_paths (list) File paths pointing to zarr files from which weighted
+    means will be calculated and stored in a single data frame
+    - weights (data array) Contains the weights to be used when calculating 
+    weighted mean. It should NOT include NaN, zeroes (0) should be used instead.
     - region (character) Name of the region to be recorded in data frame
 
     Outputs:
@@ -334,24 +345,26 @@ def get_threshold_depth(folder_gridded_data, gfdl_exp, max_depth = 200):
     - folder_gridded_data (character) File path pointing to folder containing
     zarr files with GFDL data for the region of interest
     - gfdl_exp (character) Select GFDL experiment 'ctrl_clim' or 'obs_clim'
-    - max_depth (numeric) Default is 200 (m) Maximum depth in meters to be considered when
-    processing DBPM phytoplankton inputs
+    - max_depth (numeric) Default is 200 (m) Maximum depth in meters to be 
+    considered when processing DBPM phytoplankton inputs
     
     Outputs:
-    - thresh_depth (data array) Contains the maximum depth to integrate phytoplankton
-    inputs
+    - thresh_depth (data array) Contains the maximum depth to integrate 
+    phytoplankton inputs
     '''
     
     #load depth
     depth = xr.open_zarr(glob(
-        os.path.join(folder_gridded_data, f'*{gfdl_exp}_deptho_*'))[0])['deptho']
+        os.path.join(folder_gridded_data, 
+                      f'*{gfdl_exp}_deptho_*'))[0])['deptho']
     
     # Identify areas where depth is 'max_depth' or less
     depth_n = depth.where(depth <= max_depth)
 
     #Load mixed layer depth
     mld = xr.open_zarr(glob(
-        os.path.join(folder_gridded_data, f'*{gfdl_exp}_mlotst-0125_*'))[0])['mlotst-0125']
+        os.path.join(folder_gridded_data, 
+                      f'*{gfdl_exp}_mlotst-0125_*'))[0])['mlotst-0125']
 
     # Check if MLD depth in shallow areas (<= 100 m depth) is less than 100 m
     # Keep the largest depth (water column depth vs MLD)
@@ -365,7 +378,8 @@ def get_threshold_depth(folder_gridded_data, gfdl_exp, max_depth = 200):
     thresh_depth.name = 'threshold_depth'
     thresh_depth.attrs = {'standard_name': f'threshold_depth_mld_{max_depth}m',
                           'long_name':
-                          f'Threshold depth based on MLD and at least {max_depth}m in shallow waters', 
+                          ('Threshold depth based on MLD and at least ' + 
+                           f'{max_depth}m in shallow waters'), 
                           'units': 'm'}
     return thresh_depth
 
@@ -398,8 +412,8 @@ def detrital_input_seafloor(folder_gridded_data, gfdl_exp, benthic_habitat_depth
     # Updating metada
     input_w.name = 'input_w'
     input_w = input_w.assign_attrs({'short_name': 'detrital_input_seafloor',
-                                    'long_name': 'Input fluxes to detritus pool near ' +
-                                    'seafloor',
+                                    'long_name': ('Input fluxes to detritus pool ' +
+                                                  'near seafloor'),
                                     'units': 'gWW m-3 yr-1'})
 
     return input_w
@@ -473,8 +487,8 @@ def integrating_phyto(folder_gridded_data, gfdl_exp, thresh_depth = 200,
     elif averaging == 'biomass_weighted':
         weights = phyc*depth_bins
     else:
-        raise ValueError(f"the 'averaging' parameter must be 'fixed', 'mld', " +
-                         f"'cumulative90' or 'biomass_weighted'. Instead "+
+        raise ValueError("the 'averaging' parameter must be 'fixed', 'mld', " +
+                         "'cumulative90' or 'biomass_weighted'. Instead " +
                          f"{averaging}' was provided.")
 
     #Function calculating weighted mean
@@ -482,15 +496,15 @@ def integrating_phyto(folder_gridded_data, gfdl_exp, thresh_depth = 200,
         return (phyto*weights).sum('lev') / weights.sum('lev')
 
     phypico_weighted = _wmean(phypico, weights).assign_attrs(
-        {'standard_name': 'mean_mole_concentration_of_picophytoplankton_expressed_' + 
-         'as_carbon_in_sea_water',
+        {'standard_name': ('mean_mole_concentration_of_picophytoplankton_expressed_' +
+                           'as_carbon_in_sea_water'),
          'long_name': f'{averaging} mean of picophytoplankton carbon concentration', 
          'units': 'mol m-3'})
     phypico_weighted.name = 'phypico'
     
     phyc_weighted = _wmean(phyc, weights).assign_attrs(
-        {'standard_name': 'mean_mole_concentration_of_phytoplankton_expressed_as_' + 
-         'carbon_in_sea_water',
+        {'standard_name': ('mean_mole_concentration_of_phytoplankton_expressed_as_' +
+                           'carbon_in_sea_water'),
          'long_name': f'{averaging} mean of phytoplankton carbon concentration', 
          'units': 'mol m-3'})
     phyc_weighted.name = 'phyc'
@@ -551,8 +565,8 @@ def getExportRatio(folder_gridded_data, gfdl_exp):
     psmall = (sphy/ptotal)
 
     #Calculate export ratio
-    er = (np.exp(-0.032*tos)*((0.14*psmall)+(0.74*(plarge)))+
-          (0.0228*(plarge)*(depth*0.004)))/(1+(depth*0.004))
+    er = (np.exp(-0.032*tos)*((0.14*psmall) + (0.74*(plarge))) +
+          (0.0228*(plarge)*(depth*0.004)))/(1 + (depth*0.004))
     #If values are negative, assign a value of 0
     er = xr.where(er < 0, 0, er)
     #If values are above 1, assign a value of 1
@@ -566,13 +580,24 @@ def getExportRatio(folder_gridded_data, gfdl_exp):
 
 
 #Calculate slope and intercept
-def GetPPIntSlope(gfdl_folder, gfdl_exp, mmin = 10**(-14.25), mmid = 10**(-10.184), 
+def GetPPIntSlope(gfdl_folder = None, gfdl_exp = None, lphy_file = None, 
+                  sphy_file = None, mmin = 10**(-14.25), mmid = 10**(-10.184), 
                   mmax = 10**(-5.25), output = 'both'):
     '''
     Inputs:
-    - gfdl_folder (character) File path pointing to folder containing
-    zarr files with GFDL data for the region of interest
-    - gfdl_exp (character) Select GFDL experiment 'ctrl_clim' or 'obs_clim'
+    - gfdl_folder (character) OPTIONAL. File path pointing to folder containing
+    zarr files with GFDL data for the region of interest. If provided, do not use the
+    "lphy_file" and "sphy_file" parameters.
+    - gfdl_exp (character) If providing "gfdl_folder", a GFDL experiment, either
+    'ctrl_clim' or 'obs_clim' should be provided.
+    - lphy_file (character or Data Array) OPTIONAL. Provide either the full file path 
+    to the large phytoplankton zarr file or a Data Array containing large 
+    phytoplankton data. Must only be provided if NOT providing "gfdl_folder", and it
+    should be provided together with "sphy_file" parameter.
+    - sphy_file (character or Data Array) OPTIONAL. Provide either the full file path 
+    to the small phytoplankton zarr file or a Data Array containing small 
+    phytoplankton data. Must only be provided if NOT providing "gfdl_folder", and it
+    should be provided together with "lphy_file" parameter.
     - mmin (numeric)  Default is 10**(-14.25). Minimum body mass of primary
     producers representing phycophytoplankton
     - mmid (numeric)  Default is 10**(-10.184). Body mass of primary producers
@@ -586,14 +611,54 @@ def GetPPIntSlope(gfdl_folder, gfdl_exp, mmin = 10**(-14.25), mmid = 10**(-10.18
     Outputs:
     - (Data array) - Depends on value of 'output' parameter. 
     '''
+
+    has_lphy = lphy_file is not None
+    has_sphy = sphy_file is not None
     
-    #load large phytoplankton
-    lphy = xr.open_zarr(glob(os.path.join(gfdl_folder, 
-                                          f'*{gfdl_exp}_lphy_*'))[0])['lphy']
     
-    #Load small phytoplankton
-    sphy = xr.open_zarr(glob(os.path.join(gfdl_folder, 
-                                          f'*{gfdl_exp}_sphy_*'))[0])['sphy']
+    if gfdl_folder is None and not has_lphy and not has_sphy:
+        raise ValueError('You must provide either the "gfdl_folder" parameter or' +
+                         ' both: the "lphy_file" and "sphy_file" parameters, but' +
+                         ' none was provided')   
+    
+    elif gfdl_folder is not None and (has_lphy or has_sphy):
+        raise ValueError('You must provide either the "gfdl_folder" parameter or' +
+                         ' both: the "lphy_file" and "sphy_file" parameters, but' +
+                         ' not all.')
+
+    if gfdl_folder is not None and gfdl_exp is None:
+        raise ValueError('If providing the "gfdl_folder" parameter, you must also ' +
+                         'provide the "gfdl_exp" parameter.')
+    elif gfdl_folder is not None and gfdl_exp is not None:
+        #load large phytoplankton
+        lphy = xr.open_zarr(glob(os.path.join(gfdl_folder, 
+                                              f'*{gfdl_exp}_lphy_*'))[0])['lphy']
+        
+        #Load small phytoplankton
+        sphy = xr.open_zarr(glob(os.path.join(gfdl_folder, 
+                                              f'*{gfdl_exp}_sphy_*'))[0])['sphy']
+
+    if has_lphy != has_sphy:
+        raise ValueError('You must provide both the "lphy_file" and "sphy_file" ' + 
+                         'parameters, but only one was provided.')
+    elif has_lphy is True and has_sphy is True:
+        if isinstance(lphy_file, str):
+            lphy = xr.open_zarr(lphy_file)['lphy']
+        elif isinstance(lphy_file, xr.DataArray):
+            lphy = lphy_file
+        else:
+            raise ValueError('You must provide either a full file path to the ' + 
+                             'large phytoplankton data or data array containing ' + 
+                             'large phytoplankton data, but neither was provided.')
+
+        if isinstance(sphy_file, str):
+            sphy = xr.open_zarr(sphy_file)['sphy']
+        elif isinstance(sphy_file, xr.DataArray):
+            sphy = sphy_file
+        else:
+            raise ValueError('You must provide either a full file path to the ' + 
+                             'small phytoplankton data or data array containing ' + 
+                             'small phytoplankton data, but neither was provided.')
     
     #Convert sphy and lphy from mol C / m^3 to g C / m^3
     sphy = sphy*12.0107
@@ -609,8 +674,8 @@ def GetPPIntSlope(gfdl_folder, gfdl_exp, mmin = 10**(-14.25), mmid = 10**(-10.18
       
     #Calculate a and b in log B (log10 abundance) vs. log M (log10 gww)
     #in log10 gww
-    midsmall = np.log10((mmin+mmid)/2)
-    midlarge = np.log10((mmid+mmax)/2)
+    midsmall = np.log10((mmin + mmid)/2)
+    midlarge = np.log10((mmid + mmax)/2)
 
     #convert to log10 (gww/size class median size) for log10 abundance
     small = (np.log10((sphy*10)/10**midsmall))
@@ -623,7 +688,7 @@ def GetPPIntSlope(gfdl_folder, gfdl_exp, mmin = 10**(-14.25), mmid = 10**(-10.18
     slope = slope.assign_attrs({
         'short_name': 'slope',
         'long_name': 'Slope of primary producer spectrum',
-        'comment': ('Calculations described in full in Woodworth-'+ 
+        'comment': ('Calculations described in full in Woodworth-' +
                     'Jefcoats et al 2013 (DOI: 10.1111/gcb.12076)')})
 
     #a is really log10(a), same a when small, midsmall are used
@@ -632,7 +697,7 @@ def GetPPIntSlope(gfdl_folder, gfdl_exp, mmin = 10**(-14.25), mmid = 10**(-10.18
     intercept = intercept.assign_attrs({
         'short_name': 'intercept',
         'long_name': 'Intercept of primary producer spectrum',
-        'comment': ('Calculations described in full in Woodworth-'+ 
+        'comment': ('Calculations described in full in Woodworth-' +
                     'Jefcoats et al 2013 (DOI: 10.1111/gcb.12076)')})
 
     # a could be used directly to replace 10^pp in sizemodel()
@@ -860,7 +925,7 @@ def gravitymodel(effort, prop_b, depth, n_iter, sea_ice_mask):
     while(i <= n_iter):
         suit = prop_b*d*sea_ice_mask
         rel_suit = suit/(suit.sum())
-        neweffort = eff+(rel_suit*eff)
+        neweffort = eff + (rel_suit*eff)
         mult = (eff.sum())/(neweffort.sum())
         eff = neweffort*mult
         i += i
@@ -897,7 +962,7 @@ def effort_calculation(predators, detritivores, effort, depth, size_bin_vals,
                    isel(size_class = slice(gridded_params['ind_min_fish_det'],
                                            -1))).sum('size_class')
     
-        sum_bio = pred_bio+det_bio
+        sum_bio = pred_bio + det_bio
     
         prop_b = sum_bio/sum_bio.sum()
     
@@ -1099,7 +1164,7 @@ def loading_dbpm_dynamic_inputs(gridded_folder, init_time = None, fishing = True
     #Subset data
     if init_time is not None:
         #Timestep from when to restart DBPM 
-        subset_time = (pd.Timestamp(init_time)+
+        subset_time = (pd.Timestamp(init_time) +
                        pd.DateOffset(months = 1)).strftime('%Y-%m')
         
         #Subset data from timestep above until the end of the available data
@@ -1153,7 +1218,7 @@ def feeding_satiation_rates(gridded_params, dbpm_fixed_inputs, dbpm_init_inputs,
                         dot(dbpm_fixed_inputs['constant_growth']).
                        rename({'sc': 'size_class'}))*feed_mult_pel)
         feed_rate_pel = (dbpm_dynamic_inputs['pel_tempeffect']*
-                         (pred_growth/(1+gridded_params['handling']*pred_growth)))
+                         (pred_growth/(1 + gridded_params['handling']*pred_growth)))
         # Satiation level of predator for pelagic prey (sat.pel)
         sat_pel = xr.where(feed_rate_pel > 0, feed_rate_pel/pred_growth, 0)
 
@@ -1173,7 +1238,7 @@ def feeding_satiation_rates(gridded_params, dbpm_fixed_inputs, dbpm_init_inputs,
                           dot(dbpm_fixed_inputs['constant_growth']).
                           rename({'sc': 'size_class'}))*feed_mult_ben)
         feed_rate_bent = (dbpm_dynamic_inputs['pel_tempeffect']*
-                          (detrit_growth/(1+gridded_params['handling']*detrit_growth)))
+                          (detrit_growth/(1 + gridded_params['handling']*detrit_growth)))
         # Satiation level of predator for benthic prey
         calc_growth = ((gridded_params['hr_volume_search']*
                         (10**(dbpm_fixed_inputs['log10_size_bins']*
@@ -1198,7 +1263,7 @@ def feeding_satiation_rates(gridded_params, dbpm_fixed_inputs, dbpm_init_inputs,
                                     gridded_params['metabolic_req_detritivore'])*
                                dbpm_init_inputs['detritus'])
         feed_rate_det = (dbpm_dynamic_inputs['ben_tempeffect']*detritus_multiplier/
-                         (1+gridded_params['handling']*detritus_multiplier))
+                         (1 + gridded_params['handling']*detritus_multiplier))
         
         #Create dataset with feeding and satiation outputs
         feed_sat_rates = xr.Dataset(data_vars = {'f_det': feed_rate_det})
@@ -1258,9 +1323,9 @@ def mortality_calc(gridded_params, dbpm_fixed_inputs, dbpm_init_inputs,
                           rename({'sc': 'size_class'}))
         # Total mortality
         # Predators (Z.u)
-        tot_mort_pred = (pred_mort_pred+dbpm_dynamic_inputs['pel_tempeffect']*
-                         dbpm_fixed_inputs['other_mort_pred']+
-                         dbpm_fixed_inputs['senes_mort_pred']+fishing_mort_pred)
+        tot_mort_pred = (pred_mort_pred + dbpm_dynamic_inputs['pel_tempeffect']*
+                         dbpm_fixed_inputs['other_mort_pred'] +
+                         dbpm_fixed_inputs['senes_mort_pred'] + fishing_mort_pred)
         
         # Create dataset with mortality for predators
         mortality_terms = xr.Dataset(data_vars = {'Fvec_u': fishing_mort_pred,
@@ -1285,9 +1350,9 @@ def mortality_calc(gridded_params, dbpm_fixed_inputs, dbpm_init_inputs,
                                   rename({'sc': 'size_class'})), 0)
         # Total mortality
         # Detritivores (Z.v)
-        tot_mort_det = (pred_mort_det+dbpm_dynamic_inputs['ben_tempeffect']*
-                        dbpm_fixed_inputs['other_mort_det']+
-                        dbpm_fixed_inputs['senes_mort_det']+fishing_mort_det)
+        tot_mort_det = (pred_mort_det + dbpm_dynamic_inputs['ben_tempeffect']*
+                        dbpm_fixed_inputs['other_mort_det'] +
+                        dbpm_fixed_inputs['senes_mort_det'] + fishing_mort_det)
 
         # Create dataset with mortality for detritivores
         mortality_terms = xr.Dataset(data_vars = {'Fvec_v': fishing_mort_det,
@@ -1324,7 +1389,7 @@ def growth_rates_calc(gridded_params, feed_sat_rates, dbpm_fixed_inputs):
     '''
     # Predator growth integral (GG_u)
     growth_int_pred = (gridded_params['growth_prop']*gridded_params['growth_pred']*
-                       feed_sat_rates['f_pel']+gridded_params['high_prop']*
+                       feed_sat_rates['f_pel'] + gridded_params['high_prop']*
                        gridded_params['growth_detritivore']*feed_sat_rates['f_ben'])
     # Benthos growth integral yr-1 (GG_v)
     growth_int_det = (gridded_params['high_prop']*gridded_params['growth_detritus']*
@@ -1366,13 +1431,13 @@ def reproduction_rates(gridded_params, feed_sat_rates, dbpm_fixed_inputs, group)
         #Keep relevant size classes
         feed_sat_rates = (feed_sat_rates.
                           isel(size_class = 
-                               slice(gridded_params['ind_min_pred_size']+1, None)))
+                               slice(gridded_params['ind_min_pred_size'] + 1, None)))
         #Predators
         reprod_pred = (gridded_params['growth_prop']*
-                       (1-(gridded_params['growth_pred']+
+                       (1-(gridded_params['growth_pred'] +
                            gridded_params['energy_pred']))*
-                       feed_sat_rates['f_pel']+gridded_params['growth_prop']*
-                       (1-(gridded_params['growth_detritivore']+
+                       feed_sat_rates['f_pel'] + gridded_params['growth_prop']*
+                       (1-(gridded_params['growth_detritivore'] +
                            gridded_params['energy_detritivore']))*
                        feed_sat_rates['f_ben'])
         #Adding to output dataset
@@ -1382,11 +1447,11 @@ def reproduction_rates(gridded_params, feed_sat_rates, dbpm_fixed_inputs, group)
         #Keep relevant size classes
         feed_sat_rates = (feed_sat_rates.
                           isel(size_class = 
-                               slice(gridded_params['ind_min_detritivore_size']+1, 
+                               slice(gridded_params['ind_min_detritivore_size'] + 1, 
                                      None)))
         #Detritivores
         reprod_det = (gridded_params['high_prop']*
-                      (1-(gridded_params['growth_detritus']+
+                      (1-(gridded_params['growth_detritus'] +
                           gridded_params['energy_detritivore']))*
                       feed_sat_rates['f_det'])
         #Adding to output dataset
@@ -1466,7 +1531,7 @@ def defecation_predators(gridded_params, dbpm_fixed_inputs, dbpm_init_inputs,
     # Total biomass density defecated by pred (g.m-2.yr-1)
     defbypred = ((gridded_params['defecate_prop']*feed_sat_rates['f_pel']*
                   dbpm_fixed_inputs['size_bin_vals']*
-                  pred+gridded_params['def_low']*feed_sat_rates['f_ben']*
+                  pred + gridded_params['def_low']*feed_sat_rates['f_ben']*
                   dbpm_fixed_inputs['size_bin_vals']*pred)*
                  gridded_params['log_size_increase']).sum('size_class')  
 
@@ -1517,22 +1582,22 @@ def detritus_pool(gridded_params, dbpm_fixed_inputs, dbpm_init_inputs,
             # Export ratio used for "sinking rate" + benthic spectrum 
             # inputs (dead stuff already on/in seafloor)
             input_w = (dbpm_dynamic_inputs['sinking_rate']*
-                       (defbypred+
+                       (defbypred +
                         ((dbpm_fixed_inputs['other_mort_pred']*
                           dbpm_dynamic_inputs['pel_tempeffect']*
                           dbpm_init_inputs['predators']*
                           dbpm_fixed_inputs['size_bin_vals']*
-                          gridded_params['log_size_increase'])+
+                          gridded_params['log_size_increase']) +
                          (dbpm_fixed_inputs['senes_mort_pred']*
                           dbpm_dynamic_inputs['pel_tempeffect']*
                           dbpm_init_inputs['predators']*
                           dbpm_fixed_inputs['size_bin_vals']*
-                          gridded_params['log_size_increase'])+
+                          gridded_params['log_size_increase']) +
                          (dbpm_fixed_inputs['other_mort_det']*
                           dbpm_dynamic_inputs['ben_tempeffect']*
                           dbpm_fixed_inputs['size_bin_vals']*
                           gridded_params['log_size_increase']*
-                          dbpm_init_inputs['detritivores'])+
+                          dbpm_init_inputs['detritivores']) +
                         (dbpm_fixed_inputs['senes_mort_det']*
                           dbpm_dynamic_inputs['ben_tempeffect']*
                           dbpm_fixed_inputs['size_bin_vals']*
@@ -1550,8 +1615,8 @@ def detritus_pool(gridded_params, dbpm_fixed_inputs, dbpm_init_inputs,
         input_w = kwargs.get('detritus_input')
    
     # Get burial rate from Dunne et al. 2007 equation 3
-    burial = input_w*(0.013+0.53*input_w**2/(7+input_w)**2)
-    output_w = output_w+burial
+    burial = input_w*(0.013 + 0.53*input_w**2/(7 + input_w)**2)
+    output_w = output_w + burial
     
     # Losses from detritivory + burial rate (not including 
     # remineralisation because that goes to p.p. after sediment, 
@@ -1618,9 +1683,9 @@ def biomass_density(gridded_params, dbpm_fixed_inputs, growth_rate,
           reindex(size_class = dbpm_fixed_inputs['log10_size_bins'], 
                   fill_value = 0))     
     
-    Bi = ((1+(1/np.log(10))*growth_rate.isel(size_class = index_sc)*
+    Bi = ((1 + (1/np.log(10))*growth_rate.isel(size_class = index_sc)*
            gridded_params['timesteps_years']/
-           gridded_params['log_size_increase']+
+           gridded_params['log_size_increase'] +
            total_mortality.isel(size_class = index_sc)*
              gridded_params['timesteps_years']).
             reindex(size_class = dbpm_fixed_inputs['log10_size_bins'],
@@ -1678,7 +1743,7 @@ def tot_biomass_calc(gridded_params, dbpm_fixed_inputs, group, biomass_current,
             growth_rate = growth_rate.sel(size_class = ref_sc)
             total_mortality = total_mortality.sel(size_class = ref_sc)
         bio_ref = biomass_current.sel(size_class = ref_sc)
-        bio_ref_next = (bio_ref+
+        bio_ref_next = (bio_ref +
                         ((reprod_rate*dbpm_fixed_inputs['size_bin_vals']*
                           biomass_current*gridded_params['log_size_increase']).
                          sum('size_class')*gridded_params['timesteps_years'])/
@@ -1700,7 +1765,7 @@ def tot_biomass_calc(gridded_params, dbpm_fixed_inputs, group, biomass_current,
 
     #main loop calculation
     biomass_density = biomass_density.drop_vars('time').squeeze()
-    for sc in range(ref+1, gridded_params['numb_size_bins']):
+    for sc in range(ref + 1, gridded_params['numb_size_bins']):
         bio_next_shift = biomass_next.isel(size_class = sc-1).drop_vars('size_class')
         da = ((biomass_density['Si'].isel(size_class = sc)-
                biomass_density['Ai'].isel(size_class = sc)*bio_next_shift)/
@@ -2097,7 +2162,7 @@ def gridded_sizemodel(gridded_params, dbpm_fixed_inputs, dbpm_init_inputs,
                              dbpm_dynamic_inputs, defbypred, output_w)
 
     # Biomass density of detritus g.m-2
-    detritus = (dbpm_init_inputs['detritus']+det_pool['dW']*
+    detritus = (dbpm_init_inputs['detritus'] + det_pool['dW']*
                 gridded_params['timesteps_years']).load()
     # detritus = (dbpm_init_inputs['detritus']*det_pool['dW']).load()
 
