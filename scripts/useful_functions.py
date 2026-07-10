@@ -283,13 +283,14 @@ def extract_gfdl(file_path, mask, path_out, cross_dateline = False):
 
 
 ## Calculating area weighted means
-def weighted_mean_timestep(file_paths, weights, region):
+def weighted_mean_timestep(file_paths, weights, area, region):
     '''
     Inputs:
     - file_paths (list) File paths pointing to zarr files from which weighted
     means will be calculated and stored in a single data frame
     - weights (data array) Contains the weights to be used when calculating 
     weighted mean. It should NOT include NaN, zeroes (0) should be used instead.
+    - area (data array) Contains the area of grid cells within region
     - region (character) Name of the region to be recorded in data frame
 
     Outputs:
@@ -320,14 +321,14 @@ def weighted_mean_timestep(file_paths, weights, region):
     [exp] = re.findall('cobalt2_(.*?)_', file_paths[0])
 
     #Add metadata to data frame
-    df['tot_area_m2'] = area.values.sum()
+    df['area_m2'] = area.sum().values.tolist()
     df['year'] = df.apply(lambda x: x.time.year, axis = 1)
     df['month'] = df.apply(lambda x: x.time.strftime('%B'), axis = 1)
     df['region'] = region
     df['scenario'] = exp
 
     #Rearrange columns 
-    names = (['region', 'scenario', 'time', 'year', 'month', 'tot_area_m2'] +
+    names = (['region', 'scenario', 'time', 'year', 'month', 'area_m2'] +
              col_names)
     df = df[names]
 
