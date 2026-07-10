@@ -24,7 +24,7 @@ if __name__ == '__main__':
     
     # Define variables for which data will be extracted
     vars_int = ['input-w20m', 'er', 'intercept', 'slope', 'expc-bot', 'simask', 'tob', 
-                 'tos', 'deptho', 'areacello']
+                'ocean-temp-weighted', 'deptho', 'areacello', 'sphy', 'lphy']
 
     # Define resolutions
     resolutions = ['1deg', '025deg']
