@@ -71,7 +71,7 @@ for aoi in fao_lme_code:
             [var_fn] = [fn for fn in all_fn if f'_{var}_' in fn]
             exp_fn.append(var_fn)
 
-        weighted_inputs = uf.weighted_mean_timestep(exp_fn, weights, region_int)
+        weighted_inputs = uf.weighted_mean_timestep(exp_fn, weights, area, region_int)
 
         weighted_inputs['intercept'], weighted_inputs['slope'] = uf.GetPPIntSlope(
             sphy_file = weighted_inputs['sphy'].values, lphy_file = weighted_inputs['lphy'].values)
