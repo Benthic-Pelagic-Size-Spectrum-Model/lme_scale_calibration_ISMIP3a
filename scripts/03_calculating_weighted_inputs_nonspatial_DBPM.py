@@ -12,6 +12,12 @@ base_dir = '/g/data/vf71/fishmip_inputs/ISIMIP3a/fao_lme_inputs/'
 fao_lme_code = [f for f in os.listdir(base_dir) if 'fao_lme' in f]
 # Using higher resolution inputs only - Non-spatial calibration is done only once
 res = '025deg'
+# Variables to be processed
+vars_int = ['tob', 'er', 'simask', 'ocean-temp-weighted', 'lphy', 'sphy',
+            'expc-bot', 'input-w20m']
+# Experiments
+exp_name = ['obsclim', 'ctrlclim', 'spinup', 'stable-spin']
+
 # Choose whether smoothing of inputs will be performed by LOESS (smoothed) or
 # deseasoning data (deseasoned)
 smoothing = None
@@ -27,52 +33,58 @@ else:
 
 # Apply data processing workflow to all regions - High resolution only
 for aoi in fao_lme_code:
+    # Defining input and output folders
     gridded_folder = os.path.join(base_dir, aoi, f'gridded{smoothing}', res)
-    
-    #Extracting data for FAO-LME area
-    #Load area of grid cell to be used as weights
-    weights = xr.open_zarr(
-        glob(os.path.join(gridded_folder, '*area*'))[0]).cellareao
-    #Areas outside LME need to be given a value of 0
-    weights = weights.fillna(0)
-    
-    region_int = aoi.replace('-', ' ').upper()
-    
-    obs_fn = glob(os.path.join(gridded_folder, f'gfdl*obsclim*'))
-    weighted_obs_df = uf.weighted_mean_timestep(obs_fn, weights, region_int)
-    
-    ctrl_fn = glob(os.path.join(gridded_folder, f'gfdl*ctrlclim*'))
-    weighted_ctrl_df = uf.weighted_mean_timestep(ctrl_fn, weights, region_int)
-    
-    spinup_fn = (glob(os.path.join(gridded_folder, f'gfdl*spinup*'))+
-                 glob(os.path.join(gridded_folder, f'*ctrlclim_deptho*')))
-    weighted_spinup_df = uf.weighted_mean_timestep(spinup_fn, weights, region_int)
-    
-    stable_fn = (glob(os.path.join(gridded_folder, f'gfdl*stable-spin*'))+
-                 glob(os.path.join(gridded_folder, f'*ctrlclim_deptho*')))
-    weighted_stable_spin_df = uf.weighted_mean_timestep(stable_fn, weights, region_int)
-
-    #Defining output folder
-    gfdl_out = os.path.join(base_dir, f'{aoi}/monthly_weighted{smoothing}')
+    gfdl_out = os.path.join(base_dir, aoi, f'monthly_weighted{smoothing}')
     os.makedirs(gfdl_out, exist_ok = True)
 
-    #Saving data
-    weighted_obs_df.to_parquet(
-        os.path.join(gfdl_out, 
-                     f'obsclim_dbpm_clim-inputs{weighted_fn}_{aoi}_1961-2010.parquet'), 
-        index = False)
+    # Load area of grid cells
+    area = xr.open_zarr(
+            glob(os.path.join(gridded_folder, '*area*'))[0]).cellareao
     
-    weighted_ctrl_df.to_parquet(
-        os.path.join(gfdl_out,
-                     f'ctrlclim_dbpm_clim-inputs{weighted_fn}_{aoi}_1961-2010.parquet'), 
-        index = False)
-    
-    weighted_spinup_df.to_parquet(
-        os.path.join(gfdl_out,
-                     f'spinup_dbpm_clim-inputs{weighted_fn}_{aoi}_1841-1960.parquet'), 
-        index = False)
-    
-    weighted_stable_spin_df.to_parquet(
-        os.path.join(gfdl_out, 
-                     f'stable-spin_dbpm_clim-inputs{weighted_fn}_{aoi}_1741-1840.parquet'), 
-        index = False)
+    for exp in exp_name:
+        if exp == 'obsclim':
+            [depth_file] = glob(os.path.join(gridded_folder, '*obsclim_deptho*'))
+        else:
+            [depth_file] = glob(os.path.join(gridded_folder, '*ctrlclim_deptho*'))
+        
+        depth = xr.open_zarr(depth_file).deptho
+        
+        # Calculating total phytoplankton biomass
+        lphy = xr.open_zarr(glob(os.path.join(gridded_folder, 
+                                              f'*{exp}*lphy*'))[0])['lphy']
+        sphy = xr.open_zarr(glob(os.path.join(gridded_folder, 
+                                              f'*{exp}*sphy*'))[0])['sphy']
+        # Weighting by phytoplankton biomass per area of grid cell
+        weights = ((lphy+sphy)*area).fillna(0)
+
+        area_weighted_depth = (depth.weighted(area.fillna(0)).
+            mean(('lat', 'lon')).values)
+        
+        region_int = aoi.replace('-', ' ').upper()
+
+        # Getting a list of all files contained in the LME/FAO folder
+        all_fn = glob(os.path.join(gridded_folder, f'gfdl*{exp}*'))
+
+        exp_fn = []
+        for var in vars_int:
+            [var_fn] = [fn for fn in all_fn if f'_{var}_' in fn]
+            exp_fn.append(var_fn)
+
+        weighted_inputs = uf.weighted_mean_timestep(exp_fn, weights, region_int)
+
+        weighted_inputs['intercept'], weighted_inputs['slope'] = 
+        uf.GetPPIntSlope(sphy_file = weighted_inputs['sphy'].values, 
+                         lphy_file = weighted_inputs['lphy'].values)
+        
+        weighted_inputs['depth_m'] = area_weighted_depth
+        weighted_inputs['depth_m_bio_weighted'] = (depth.weighted(weights.fillna(0)).
+            mean(('lat', 'lon')).values)
+        
+        #Saving data
+        start_yr = lphy.time.dt.year.min().values.tolist()
+        end_yr = lphy.time.dt.year.max().values.tolist()
+        
+        weighted_inputs.to_parquet(os.path.join(
+            gfdl_out, f'{exp}_dbpm_clim-inputs{weighted_fn}_{aoi}_{start_yr}-{end_yr}.parquet'), 
+                                   index = False)
