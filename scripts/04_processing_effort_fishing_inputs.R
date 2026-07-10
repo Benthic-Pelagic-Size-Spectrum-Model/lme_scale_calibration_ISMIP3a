@@ -22,7 +22,7 @@ fishing_folder <- "/g/data/vf71/fishmip_inputs/ISIMIP3a"
 # This step needs to be completed only once at a global scale
 # Creating summaries of effort per year and region of interest
 effort_data_global <- file.path(fishing_folder, "DKRZ_EffortFiles",
-                         "effort_isimip3a_histsoc_1841_2010.csv") |> 
+                                "effort_isimip3a_histsoc_1841_2010.csv") |> 
   read_csv_arrow(col_select = c("Year", "fao_area", "LME", "NomActive")) |> 
   clean_names() |>
   mutate(region = case_when(lme == 0 ~ fao_area+100, .default = lme)) |> 
@@ -42,7 +42,8 @@ effort_data_global |>
 # This step needs to be completed only once at a global scale
 catch_watson <- file.path(fishing_folder, "DKRZ_EffortFiles",
                           "catch_histsoc_1869_2017_EEZ_addFAO.csv") |> 
-  read_csv_arrow(col_select = c("Year", "fao_area", "LME", "Reported", "IUU")) |>
+  read_csv_arrow(col_select = c("Year", "fao_area", "LME", "Reported", 
+                                "IUU")) |>
   clean_names() |> 
   mutate(region = case_when(lme == 0 ~ fao_area+100, .default = lme)) |> 
   group_by(year, region) |> 
@@ -137,10 +138,7 @@ for(f in fao_lme){
     bind_rows(stable_spin) |>
     arrange(time) |> 
     clean_names() |> 
-    mutate(time = as_date(time),
-           depth = ifelse(is.na(depth_m), mean(depth_m, na.rm = T), depth_m)) |> 
-    rename(area_m2 = tot_area_m2) |> 
-    select(!depth_m)
+    mutate(time = as_date(time))
   
   ## Dynamic stable spinup period for the Arctic only -----------------------
   if(fao_lme_id == 64){
@@ -166,11 +164,7 @@ for(f in fao_lme){
       bind_rows(dyn_spinup, spinup) |> 
       arrange(time) |> 
       clean_names() |> 
-      mutate(time = as_date(time), 
-             depth = ifelse(is.na(depth_m), mean(depth_m, na.rm = T),
-                            depth_m)) |> 
-      rename(area_m2 = tot_area_m2) |> 
-      select(!depth_m)
+      mutate(time = as_date(time))
   }
     
   # Getting the mean depth and area of the region of interest
