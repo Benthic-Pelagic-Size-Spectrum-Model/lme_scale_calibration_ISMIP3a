@@ -312,29 +312,23 @@ def weighted_mean_timestep(file_paths, weights, region):
     
     #Transform to data frame
     df = da_weighted_mean.to_dataframe().reset_index()
+    df = df.rename(columns = {'ocean-temp-weighted': 'weighted_sea_temp'})
 
     #Getting names of variables in data frame
     col_names = [i for i in df.columns if i != 'time']
     #Getting name of experiment from file path
     [exp] = re.findall('cobalt2_(.*?)_', file_paths[0])
 
-    #If no depth file is included, add variable and leave it empty
-    if 'deptho' not in col_names:
-        df['depth_m'] = np.nan
-    else:
-        col_names.remove('deptho')
-        df = df.rename(columns = {'deptho': 'depth_m'})
-    
     #Add metadata to data frame
-    df['tot_area_m2'] = weights.values.sum()
+    df['tot_area_m2'] = area.values.sum()
     df['year'] = df.apply(lambda x: x.time.year, axis = 1)
     df['month'] = df.apply(lambda x: x.time.strftime('%B'), axis = 1)
     df['region'] = region
     df['scenario'] = exp
 
     #Rearrange columns 
-    names = ['region', 'scenario', 'time', 'year', 'month', 
-             'depth_m', 'tot_area_m2'] + col_names
+    names = (['region', 'scenario', 'time', 'year', 'month', 'tot_area_m2'] +
+             col_names)
     df = df[names]
 
     return df
@@ -632,7 +626,6 @@ def GetPPIntSlope(gfdl_folder = None, gfdl_exp = None, lphy_file = None,
     has_lphy = lphy_file is not None
     has_sphy = sphy_file is not None
     
-    
     if gfdl_folder is None and not has_lphy and not has_sphy:
         raise ValueError('You must provide either the "gfdl_folder" parameter or' +
                          ' both: the "lphy_file" and "sphy_file" parameters, but' +
@@ -661,7 +654,7 @@ def GetPPIntSlope(gfdl_folder = None, gfdl_exp = None, lphy_file = None,
     elif has_lphy is True and has_sphy is True:
         if isinstance(lphy_file, str):
             lphy = xr.open_zarr(lphy_file)['lphy']
-        elif isinstance(lphy_file, xr.DataArray):
+        elif isinstance(lphy_file, xr.DataArray) or isinstance(lphy_file, np.ndarray):
             lphy = lphy_file
         else:
             raise ValueError('You must provide either a full file path to the ' + 
@@ -670,7 +663,7 @@ def GetPPIntSlope(gfdl_folder = None, gfdl_exp = None, lphy_file = None,
 
         if isinstance(sphy_file, str):
             sphy = xr.open_zarr(sphy_file)['sphy']
-        elif isinstance(sphy_file, xr.DataArray):
+        elif isinstance(sphy_file, xr.DataArray) or isinstance(sphy_file, np.ndarray):
             sphy = sphy_file
         else:
             raise ValueError('You must provide either a full file path to the ' + 
@@ -699,25 +692,26 @@ def GetPPIntSlope(gfdl_folder = None, gfdl_exp = None, lphy_file = None,
     #convert to log10 (gww/size class median size) for log10 abundance
     large = (np.log10((lphy*10)/10**midlarge))
 
-    #Calculating slope
+    #Calculating slope and intercept
     slope = ((small-large)/(midsmall-midlarge))
-    slope.name = 'slope'
-    slope = slope.assign_attrs({
-        'short_name': 'slope',
-        'long_name': 'Slope of primary producer spectrum',
-        'comment': ('Calculations described in full in Woodworth-' +
-                    'Jefcoats et al 2013 (DOI: 10.1111/gcb.12076)')})
-    slope = slope.drop_encoding()
-
-    #a is really log10(a), same a when small, midsmall are used
     intercept = (large-(slope*midlarge))
-    intercept.name = 'intercept'
-    intercept = intercept.assign_attrs({
-        'short_name': 'intercept',
-        'long_name': 'Intercept of primary producer spectrum',
-        'comment': ('Calculations described in full in Woodworth-' +
-                    'Jefcoats et al 2013 (DOI: 10.1111/gcb.12076)')})
-    intercept = intercept.drop_encoding()
+    
+    if isinstance(lphy_file, xr.DataArray) or isinstance(sphy_file, xr.DataArray):
+        slope.name = 'slope'
+        slope = slope.assign_attrs({
+            'short_name': 'slope',
+            'long_name': 'Slope of primary producer spectrum',
+            'comment': ('Calculations described in full in Woodworth-' +
+                        'Jefcoats et al 2013 (DOI: 10.1111/gcb.12076)')})
+        slope = slope.drop_encoding()
+
+        intercept.name = 'intercept'
+        intercept = intercept.assign_attrs({
+            'short_name': 'intercept',
+            'long_name': 'Intercept of primary producer spectrum',
+            'comment': ('Calculations described in full in Woodworth-' +
+                        'Jefcoats et al 2013 (DOI: 10.1111/gcb.12076)')})
+        intercept = intercept.drop_encoding()
 
     # a could be used directly to replace 10^pp in sizemodel()
     if output == 'slope':
