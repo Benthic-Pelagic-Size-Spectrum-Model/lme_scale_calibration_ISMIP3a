@@ -76,7 +76,7 @@ for aoi in fao_lme_code:
         weighted_inputs['intercept'], weighted_inputs['slope'] = uf.GetPPIntSlope(
             sphy_file = weighted_inputs['sphy'].values, lphy_file = weighted_inputs['lphy'].values)
         
-        weighted_inputs['depth_m'] = area_weighted_depth
+        weighted_inputs['depth'] = area_weighted_depth
         weighted_inputs['depth_m_bio_weighted'] = (depth.weighted(weights.fillna(0)).
             mean(('lat', 'lon')).values)
         
