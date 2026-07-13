@@ -80,7 +80,7 @@ sizeparam <- function(dbpm_inputs, fishing_params, dx = 0.1, xmin = -12,
     param$slope_phy_zoo <- dbpm_inputs$slope
     # temperature parameters 
     # sea-surface temperature - degrees Celsius (sst)
-    param$sea_surf_temp <- dbpm_inputs$tos
+    param$sea_surf_temp <- dbpm_inputs$weighted_sea_temp
     # near sea-floor temperature - degrees Celsius (sft)
     param$sea_floor_temp <- dbpm_inputs$tob
     
