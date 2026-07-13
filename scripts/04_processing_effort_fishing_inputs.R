@@ -252,7 +252,7 @@ for(f in fao_lme){
   DBPM_effort_catch_input <- effort_data |> 
     full_join(catch_data, by = "year") |> 
     mutate(region = case_when(fao_lme_id < 100 ~ paste0("LME ", region),
-                              T ~ paste0("FAO ", region-100)),
+                              fao_lme_id >= 100 ~ paste0("FAO ", region-100)),
            region_name = unique(ss_catches_summ$region_name)) |> 
     relocate(region_name, .after = region) |> 
     filter(year <= 2010)
