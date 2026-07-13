@@ -10,7 +10,8 @@ from glob import glob
 base_dir = '/g/data/vf71/fishmip_inputs/ISIMIP3a/fao_lme_inputs/'
 # Getting list of FAO regions
 fao_lme_code = [f for f in os.listdir(base_dir) if 'fao_lme' in f]
-# Using higher resolution inputs only - Non-spatial calibration is done only once
+# Using higher resolution inputs only - Non-spatial calibration is done only
+# once
 res = '025deg'
 # Variables to be processed
 vars_int = ['tob', 'er', 'simask', 'ocean-temp-weighted', 'lphy', 'sphy',
@@ -22,8 +23,8 @@ exp_name = ['obsclim', 'ctrlclim', 'spinup', 'stable-spin']
 # deseasoning data (deseasoned)
 smoothing = None
 
-# Set variables to find correct input files based on 'smoothing' variable - Also
-# used to name processed inputs
+# Set variables to find correct input files based on 'smoothing' variable - 
+# Also used to name processed inputs
 if smoothing != None:
     smoothing = f'-{smoothing}'
     weighted_fn = '-smoothed'
@@ -44,9 +45,11 @@ for aoi in fao_lme_code:
     
     for exp in exp_name:
         if exp == 'obsclim':
-            [depth_file] = glob(os.path.join(gridded_folder, '*obsclim_deptho*'))
+            [depth_file] = glob(os.path.join(gridded_folder, 
+                                             '*obsclim_deptho*'))
         else:
-            [depth_file] = glob(os.path.join(gridded_folder, '*ctrlclim_deptho*'))
+            [depth_file] = glob(os.path.join(gridded_folder, 
+                                             '*ctrlclim_deptho*'))
         
         depth = xr.open_zarr(depth_file).deptho
         
@@ -71,19 +74,22 @@ for aoi in fao_lme_code:
             [var_fn] = [fn for fn in all_fn if f'_{var}_' in fn]
             exp_fn.append(var_fn)
 
-        weighted_inputs = uf.weighted_mean_timestep(exp_fn, weights, area, region_int)
+        weighted_inputs = uf.weighted_mean_timestep(exp_fn, weights, area,
+                                                    region_int)
 
         weighted_inputs['intercept'], weighted_inputs['slope'] = uf.GetPPIntSlope(
-            sphy_file = weighted_inputs['sphy'].values, lphy_file = weighted_inputs['lphy'].values)
+            sphy_file = weighted_inputs['sphy'].values, 
+            lphy_file = weighted_inputs['lphy'].values)
         
         weighted_inputs['depth'] = area_weighted_depth
-        weighted_inputs['depth_m_bio_weighted'] = (depth.weighted(weights.fillna(0)).
-            mean(('lat', 'lon')).values)
+        weighted_inputs['depth_m_bio_weighted'] = (depth.weighted(weights.
+            fillna(0)).mean(('lat', 'lon')).values)
         
         #Saving data
         start_yr = lphy.time.dt.year.min().values.tolist()
         end_yr = lphy.time.dt.year.max().values.tolist()
         
         weighted_inputs.to_parquet(os.path.join(
-            gfdl_out, f'{exp}_dbpm_clim-inputs{weighted_fn}_{aoi}_{start_yr}-{end_yr}.parquet'), 
+            gfdl_out, 
+            f'{exp}_dbpm_clim-inputs{weighted_fn}_{aoi}_{start_yr}-{end_yr}.parquet'), 
                                    index = False)
