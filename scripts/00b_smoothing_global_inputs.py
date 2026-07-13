@@ -31,8 +31,8 @@ if __name__ == '__main__':
     #Define variables of interest
     dynamic_vars = ['er', 'intercept', 'slope', 'tob', 'tos']
     
-    # Choose whether smoothing of inputs will be performed by LOESS (smoothed) or
-    # deseasoning data (deseasoned)
+    # Choose whether smoothing of inputs will be performed by LOESS (smoothed) 
+    # or deseasoning data (deseasoned)
     smoothing = 'deseasoned'
     #Create folder for smoothed data if needed
     smooth_folder = base_dir.replace('_gridded_', f'_gridded-{smoothing}_')
@@ -65,8 +65,8 @@ if __name__ == '__main__':
             for dv in dynamic_vars:
                 [file_in] = glob(os.path.join(f_in, f'*{exp}_{dv}_*'))
                 file_out = os.path.join(
-                    f_out, os.path.basename(file_in).replace('_monthly_',
-                                                             '_monthly-smoothed_'))
+                    f_out, os.path.basename(file_in).replace(
+                        '_monthly_', '_monthly-smoothed_'))
                 if smoothing == 'deseasoned':
                     
                     # Seasonal decomposition 
