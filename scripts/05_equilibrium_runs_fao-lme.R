@@ -43,6 +43,9 @@ fish_param <- data.frame("region" = NA, "fmort_u" = 0, "fmort_v" = 0,
 # to be calculated by DBPM. Otherwise provide data (e.g., dbpm_inputs$input_w)
 detritus_input <- NULL
 
+# Name of folder where outputs will be stored
+fout <- "equilibrium_run_fixed-bug"
+
 # Parallelising runs using parallelly and furrr
 plan(multisession, workers = availableCores())
 
@@ -52,7 +55,8 @@ for(f in fao_lme){
   # results_folder <- file.path(out_folder, f, "equilibrium_run")
   # results_folder <- file.path(out_folder, f, "dynamic_equilibrium_run_input-w")
   # results_folder <- file.path(out_folder, f, "equilibrium_run_no-tempeff")
-  results_folder <- file.path(out_folder, f, "equilibrium_run_no-tempeff_no-det-input")
+  # results_folder <- file.path(out_folder, f, "equilibrium_run_no-tempeff_no-det-input")
+  results_folder <- file.path(out_folder, f, fout)
   
   # If the folder does not exist, create a new one
   if(!dir.exists(results_folder)){
@@ -68,8 +72,12 @@ for(f in fao_lme){
     file.path(base_folder, f, paste0("monthly_weighted", smoothed),
               paste0("dbpm_clim-fish-inputs", fn_search, "_", f, 
                      "_1641-2010.parquet"))) |> 
-    filter(str_detect(scenario, "stable")) 
-  
+    # filter(str_detect(scenario, "stable")) 
+    # Weekly 
+    uncount(4)
+    #Every third day
+    # uncount(10)
+    
   # Print message to console to keep track of region being processed
   print(paste0("Running DBPM for region: ", f))
   
@@ -95,7 +103,8 @@ for(f in fao_lme){
 
     ## Size spectrum plots per group (predators and detritivores) ---------
     # Transform density matrix to data frame to create plots
-    density_df <- dbpm_output_mat_to_df(init_results, dbpm_inputs$time, 
+    # density_df <- dbpm_output_mat_to_df(init_results, dbpm_inputs$time, 
+    density_df <- dbpm_output_mat_to_df(init_results, unique(dbpm_inputs$time), 
                                         "density")
     
     den_data <- plotsizespectrum(density_df, init_results$params, f, 
@@ -107,11 +116,14 @@ for(f in fao_lme){
     
     
     ## Creating growth rate plots -------------------------------------------
-    dates_model <- c(min(dbpm_inputs$time)%m-% months(1), dbpm_inputs$time)
-    growth_df <- dbpm_output_mat_to_df(init_results, dates_model, "growth") |>
+    # dates_model <- c(min(unique(dbpm_inputs$time))%m-% months(1), 
+    #                  unique(dbpm_inputs$time))
+    # growth_df <- dbpm_output_mat_to_df(init_results, dates_model, "growth") |>
+    growth_df <- dbpm_output_mat_to_df(init_results, unique(dbpm_inputs$time),
+                                       "growth") #|>
       # Excluding growth value for first time step as it is used for model
       # initialisation only
-      filter(time >= min(as_date(dbpm_inputs$time))) 
+      # filter(time >= min(as_date(dbpm_inputs$time))) 
     
     growth_data <- plot_growth_rate(growth_df, init_results$params, f,
                      fishing_params = fish_param[i,], return_data = T)
@@ -132,6 +144,7 @@ for(f in fao_lme){
     # Create plots of biomass (predators, detritivores and detritus)
     calib_run |>
       select(year, ends_with("biomass"), total_detritus) |>
+      distinct() |> 
       group_by(year) |>
       summarise(across(starts_with("total"), ~ mean(.x, na.rm = T))) |> 
       pivot_longer(!year, names_to = "group", values_to = "values",
@@ -151,7 +164,8 @@ for(f in fao_lme){
 for(f in fao_lme){
   # results_folder <- file.path(out_folder, f, "equilibrium_run")
   # results_folder <- file.path(out_folder, f, "equilibrium_run_no-tempeff")
-  results_folder <- file.path(out_folder, f, "equilibrium_run_no-tempeff_no-det-input")
+  # results_folder <- file.path(out_folder, f, "equilibrium_run_no-tempeff_no-det-input")
+  results_folder <- file.path(out_folder, f, fout)
   
   print(paste0("Running DBPM for region: ", f))
   
@@ -167,16 +181,16 @@ for(f in fao_lme){
     # Removing rows where growth rate is equal or less than 0
     filter(values >= 0) 
   
-  good_search_vol <- bio_df |> 
-    filter(group != "plankton") |> 
-    count(search_vol) |> 
+  good_search_vol <- bio_df |>
+    filter(group != "plankton") |>
+    count(search_vol) |>
     # A total of 600, which includes 200 timesteps and three groups (predators,
     # detritivores and detritus)
-    filter(n == 600) 
+    filter(n == length(unique(bio_df$year))*3)
   
   # Plotting data for entire simulation
   bio_fig <- bio_df |> 
-    filter(search_vol %in% good_search_vol$search_vol) |> 
+    filter(search_vol %in% good_search_vol$search_vol) |>
     ggplot(aes(year, values, colour = factor(search_vol), 
                group = search_vol))+
     geom_line(alpha = 0.5)+
@@ -196,9 +210,9 @@ for(f in fao_lme){
   ## Size spectrum plots --------------------------------------------------
   # Loading data
   density_df <- list.files(
-    results_folder, pattern = paste0("size_spectrum_data.*vol-", 
+    results_folder, pattern = paste0("size_spectrum_data.*vol-",
                                      good_search_vol$search_vol, "_.*",
-                                     collapse = "|"), full.names = T) |> 
+                                     collapse = "|"), full.names = T) |>
     map(\(x) read_parquet(x)) |> 
     bind_rows() |> 
     # Removing rows with no data
@@ -227,7 +241,7 @@ for(f in fao_lme){
   ## Growth rate plots ----------------------------------------------------
   # Loading data
   growth_df <- list.files(
-    results_folder, pattern = paste0("growth_rates_data.*", 
+    results_folder, pattern = paste0("growth_rates_data.*",
                                     good_search_vol$search_vol, 
                                     collapse = "|"), full.names = T) |> 
     map(\(x) read_parquet(x)) |> 
@@ -263,7 +277,8 @@ for(f in fao_lme){
 for(f in fao_lme){
   # results_folder <- file.path(out_folder, f, "equilibrium_run")
   # results_folder <- file.path(out_folder, f, "equilibrium_run_no-tempeff")
-  results_folder <- file.path(out_folder, f, "equilibrium_run_no-tempeff_no-det-input")
+  # results_folder <- file.path(out_folder, f, "equilibrium_run_no-tempeff_no-det-input")
+  results_folder <- file.path(out_folder, f, fout)
   
   print(paste0("Running DBPM for region: ", f))
   
@@ -292,7 +307,7 @@ for(f in fao_lme){
     count(search_vol) |> 
     # A total of 600, which includes 200 timesteps and three groups (predators,
     # detritivores and detritus)
-    filter(n == 600) 
+    filter(n == length(unique(bio_df$year))*3) 
   
   # Get files for successful runs only
   init_files <- list.files(
@@ -352,8 +367,9 @@ for(f in fao_lme){
 global_success <- fao_lme |> 
   # map(\(x) list.files(file.path(out_folder, x, "equilibrium_run"),
   # map(\(x) list.files(file.path(out_folder, x, "equilibrium_run_no-tempeff"),
-  map(\(x) list.files(file.path(out_folder, x, "equilibrium_run_no-tempeff_no-det-input"),
-                      "successful", full.names = T) |> 
+  # map(\(x) list.files(file.path(out_folder, x, "equilibrium_run_no-tempeff_no-det-input"),
+  map(\(x) list.files(file.path(out_folder, x, fout), "successful", 
+                      full.names = T) |> 
         read_parquet()) |> 
   bind_rows()
 
