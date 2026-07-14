@@ -34,7 +34,7 @@ if __name__ == '__main__':
     resolutions = ['1deg', '025deg']
 
     #Define variables of interest
-    dbpm_var = ['phyc', 'phypico', 'siconc', 'deptho', 'expc-bot', 'tob', 
+    dbpm_var = ['phyc', 'phypico', 'siconc', 'deptho', 'expc-bot', 'tob', 'tos',
                 'thetao', 'mlotst-0125']
     
     #Loop through experiments and resolutions
