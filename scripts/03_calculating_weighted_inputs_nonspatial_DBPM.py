@@ -14,8 +14,8 @@ fao_lme_code = [f for f in os.listdir(base_dir) if 'fao_lme' in f]
 # once
 res = '025deg'
 # Variables to be processed
-vars_int = ['tob', 'er', 'simask', 'ocean-temp-weighted', 'lphy', 'sphy',
-            'expc-bot', 'input-w20m']
+vars_int = ['tob', 'tos', 'er', 'simask', 'ocean-temp-weighted', 'lphy', 
+            'sphy', 'expc-bot', 'input-w20m']
 # Experiments
 exp_name = ['obsclim', 'ctrlclim', 'spinup', 'stable-spin']
 
@@ -91,5 +91,5 @@ for aoi in fao_lme_code:
         
         weighted_inputs.to_parquet(os.path.join(
             gfdl_out, 
-            f'{exp}_dbpm_clim-inputs{weighted_fn}_{aoi}_{start_yr}-{end_yr}.parquet'), 
+            f'{exp}_dbpm_clim-inputs{weighted_fn}_{aoi}_{start_yr}-{end_yr}.parquet'),
                                    index = False)
