@@ -14,7 +14,7 @@ fao_lme_code = [f for f in os.listdir(base_dir) if 'fao_lme' in f]
 # once
 res = '025deg'
 # Variables to be processed
-vars_int = ['tob', 'tos', 'er', 'simask', 'ocean-temp-weighted', 'lphy', 
+vars_int = ['tob', 'tos', 'ocean-temp-weighted', 'er', 'simask', 'lphy', 
             'sphy', 'expc-bot', 'input-w20m']
 # Experiments
 exp_name = ['obsclim', 'ctrlclim', 'spinup', 'stable-spin']
