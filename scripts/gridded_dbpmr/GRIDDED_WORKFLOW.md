@@ -137,6 +137,20 @@ horizontal regional aggregate (Σ_i b_i·X_i / Σ_i b_i, the same operator the 0
 `lme_dint_hbw_all.csv`) equals the LME series the 0-D q was fit against — so per-cell spatiotemporal
 detail is added WITHOUT moving the regional mean, and the calibrated q_pel/q_ben stay valid.
 
+> **Note — the horizontal biomass-weighting is a cell-AGGREGATION scheme, not a temporal signal, and
+> the 0-D workflow runs entirely on its CLIMATOLOGY form.** It defines only *how cells combine* into the
+> LME-representative value (weight each cell by its plankton carbon). In the **0-D (non-spatial)**
+> calibration there are no cells to run: the scheme collapses to a single **static offset per LME**,
+> `dint = int_bw − int_200m` computed from the `phyc` **climatology** (`lme_dint_hbw_all.csv`), added
+> onto the parquet's time-varying LME series. No per-timestep horizontal aggregation is needed and the
+> 0-D calibration operates fully on this climatology weighting. The **gridded** run applies the *same*
+> weighting per timestep ONLY to extract each cell's deviation from the regional mean, then re-anchors
+> those deviations onto the 0-D static-climatology target. So whether the horizontal weighting is read
+> as a climatology (0-D) or refined per-timestep (gridded), the LME mean the q was calibrated against is
+> identical — the two are consistent and q transfers. A future refinement could re-derive `dint` per
+> timestep (fully biomass-weighted LME series) and recalibrate; that is optional and does NOT affect
+> whether either workflow runs.
+
 --------------------------------------------------------------------------------
 ## 4. ASSUMPTIONS — resolution of every variable
 
