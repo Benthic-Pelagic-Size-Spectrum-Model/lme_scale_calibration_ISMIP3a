@@ -695,9 +695,11 @@ sizemodel <- function(params, temp_effect = T, use_init = F, trunc_size = TRUE,
       (ui0*10^(slope_phy_zoo_mat*log10_size_bins_mat))[1:(ind_min_pred_size-1),]
     if(set_plankton == T){
       # set (phyto+zoo)plankton size spectrum from previous run
-      predators[1:(ind_min_pred_size-1), 1] <- init_pred[1:(ind_min_pred_size-1)]
+      predators[1:(ind_min_pred_size-1), 1] <- 
+        init_pred[1:(ind_min_pred_size-1)]
     }else{
-      predators[1:(ind_min_pred_size-1), 1] <- predators[1:(ind_min_pred_size-1), 2]
+      predators[1:(ind_min_pred_size-1), 1] <- 
+        predators[1:(ind_min_pred_size-1), 2]
     }
     
     # set initial size spectrum 
@@ -824,7 +826,8 @@ sizemodel <- function(params, temp_effect = T, use_init = F, trunc_size = TRUE,
       # yr-1 (PM_u)
       pred_mort_pred[, i] <- as.vector(
         (pref_pelagic*hr_volume_search*met_req_log10_size_bins)*
-          (predators[, i]*sat_pel*log_size_increase*log(10))%*%(constant_mortality))
+          (predators[, i]*sat_pel*log_size_increase*
+             log(10))%*%(constant_mortality))
       
       # yr-1 (Z_u)
       tot_mort_pred[, i] <- pred_mort_pred[, i]+
@@ -1382,11 +1385,13 @@ corr_calib_plots <- function(fishing_params, dbpm_inputs,
 
 # Extracting density data from DBPM calibration (non-spatial) runs ----
 dbpm_output_mat_to_df <- function(dbpm_outputs, dbpm_temporal_range, 
-                                   output_var){
+                                  temporal_res = "monthly", output_var){
   #Inputs:
   # dbpm_outputs (named list) - Output from `run_model` function
   # dbpm_temporal_range (date vector) - Vector containing dates for each time
   # step included in the DBPM run. 
+  # temporal_res (character) - Default is monthly, which means DBPM outputs are
+  # available at monthly time steps. Choices: monthly, weekly or 3-daily
   # output_var (character) - Choices: 'density' or 'growth'. The first choice
   # returns density values for detritivores, predators and detritus. The second
   # returns growth rate values for detritivores and predators
@@ -1409,9 +1414,18 @@ dbpm_output_mat_to_df <- function(dbpm_outputs, dbpm_temporal_range,
     det_var <- "growth_det"
   }
   
-  # isave <- seq(from = 2, to = (length(dbpm_inputs$time)+1), 4)
-  isave <- seq(from = 2, to = (length(dbpm_inputs$time)+1), 10)
-    
+  if(temporal_res == "monthly"){
+    isave <- 1:dbpm_outputs$params$numb_time_steps
+  }else if(temporal_res == "weekly"){
+    isave <- seq(from = 2, to = (length(dbpm_inputs$time)+1), 4)  
+  }else if(temporal_res == "3-daily"){
+    isave <- seq(from = 2, to = (length(dbpm_inputs$time)+1), 10)
+  }else{
+    message(paste0("The 'temporal_res' parameter should be one of the ",
+                   "following: 'monthly', 'weekly', '3-daily'. ", temporal_res,
+                   " was provided instead."))
+  }
+  
   # Prepare predator data
   pred <- as.data.frame(dbpm_outputs[pred_var], row.names = size_bins)[, isave]
   # Add timestamps
@@ -1503,56 +1517,73 @@ plotsizespectrum <- function(density_df, params, region, fishing_params = NULL,
       plot_data <- plot_data |> 
         filter(time == max(time, na.rm = T)) 
     }
-    plot_data <- plot_data |> 
-      mutate(across(c(predators, detritivores, total), log10)) |>
-      pivot_longer(c(predators, detritivores, total), names_to = "group", 
-                   values_to = "bio")
     
-    # Find maximum biomass value to be included in plot
-    maxy <- max(plot_data$bio)*1.1
+    plot_data <- tryCatch({
+      #Calculate correlation between observed and predicted catches
+      plot_data |> 
+        mutate(across(c(predators, detritivores, total), log10)) |>
+        pivot_longer(c(predators, detritivores, total), names_to = "group", 
+                     values_to = "bio")
+    },
+    error = function(e){
+      message("Not enough data available to create a size spectrum plot")
+      message(conditionMessage(e))
+      NULL
+    },
+    warning = function(w){
+      message("Not enough data available to create a size spectrum plot")
+      message(conditionMessage(w))
+      NULL
+    })
     
-    # Calculate maximum predator value to set y-axis limit
-    miny <- -20
-    
-    # Create size spectrum plot
-    p1 <- plot_data |> 
-      ggplot(aes(size_class, bio, colour = group, linetype = group))+
-      geom_line(alpha = 0.5)+
-      scale_colour_manual(values = c("#1b9e77", "#d95f02", "#7570b3"))+
-      scale_linetype_manual(values = c(2, 6, 1))+
-      labs(colour = "Size-structured\ncommunities",
-           linetype = "Size-structured\ncommunities")+
-      theme(legend.title.position = "left",
-            legend.title = element_text(hjust = 0.5, size = 10),
-            legend.position = "top", legend.text = element_text(size = 10),
-            legend.direction = "horizontal")+
-      lims(x = c(min_log10_detritivore, max_log10_pred), y = c(miny, maxy))+
-      labs(y = expression("" *log[10] ~ "abundance density (m"^-3* ")"),
-           x = expression("" *log[10] ~ "body mass (g)"),
-           title = paste0("Calibration (non-spatial) run - ", region),
-           caption = paste0("Pelagic preference: ", 
-                            round(params$pref_pelagic, 3),
-                            "\nBenthic preference: ", 
-                            round(params$pref_benthos, 3)))+
-      theme_bw()+
-      theme(panel.grid.minor = element_blank(),
-            plot.caption = element_text(size = 11),
-            plot.title = element_text(hjust = 0.5, face = "bold"))
-    
-    if(mean_decade){
-      p1 <- p1+facet_wrap(~decade, nrow = nrow)
+    if(is.data.frame(plot_data)){
+      # Find maximum biomass value to be included in plot
+      maxy <- max(plot_data$bio)*1.1
+      
+      # Calculate maximum predator value to set y-axis limit
+      miny <- -20
+      
+      # Create size spectrum plot
+      p1 <- plot_data |> 
+        ggplot(aes(size_class, bio, colour = group, linetype = group))+
+        geom_line(alpha = 0.5)+
+        scale_colour_manual(values = c("#1b9e77", "#d95f02", "#7570b3"))+
+        scale_linetype_manual(values = c(2, 6, 1))+
+        labs(colour = "Size-structured\ncommunities",
+             linetype = "Size-structured\ncommunities")+
+        theme(legend.title.position = "left",
+              legend.title = element_text(hjust = 0.5, size = 10),
+              legend.position = "top", legend.text = element_text(size = 10),
+              legend.direction = "horizontal")+
+        lims(x = c(min_log10_detritivore, max_log10_pred), y = c(miny, maxy))+
+        labs(y = expression("" *log[10] ~ "abundance density (m"^-3* ")"),
+             x = expression("" *log[10] ~ "body mass (g)"),
+             title = paste0("Calibration (non-spatial) run - ", region),
+             caption = paste0("Pelagic preference: ", 
+                              round(params$pref_pelagic, 3),
+                              "\nBenthic preference: ", 
+                              round(params$pref_benthos, 3)))+
+        theme_bw()+
+        theme(panel.grid.minor = element_blank(),
+              plot.caption = element_text(size = 11),
+              plot.title = element_text(hjust = 0.5, face = "bold"))
+      
+      if(mean_decade){
+        p1 <- p1+facet_wrap(~decade, nrow = nrow)
+      }
+      
+      if(!is.null(fishing_params)){
+        p1 <- plot_grid(
+          p1, grid.arrange(tableGrob(fishing_params, rows = NULL)), nrow = 2,
+          rel_heights = c(1, 0.1))
+      }
+      if(return_data){
+        return(list(plot = p1, data = plot_data))
+      }else{
+        return(p1)
+      }
     }
-    
-    if(!is.null(fishing_params)){
-      p1 <- plot_grid(p1, grid.arrange(tableGrob(fishing_params, rows = NULL)),
-                      nrow = 2, rel_heights = c(1, 0.1))
-    }
-    if(return_data){
-      return(list(plot = p1, data = plot_data))
-    }else{
-      return(p1)
-    }
-  })
+    })
 }
 
 
@@ -1590,6 +1621,7 @@ plot_growth_rate <- function(growth_df, params, region, fishing_params = NULL,
     p1 <- plot_data |> 
       ggplot(aes(size_class, growth, colour = group))+
       geom_line()+
+      geom_point()+
       scale_y_continuous(trans = "log10", 
                          name = "Relative growth rate per year")+
       scale_x_continuous(trans = "log10", name = "Body mass (g)")+
