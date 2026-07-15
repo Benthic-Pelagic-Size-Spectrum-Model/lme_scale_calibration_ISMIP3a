@@ -28,6 +28,7 @@ Full spec + assumptions: [`GRIDDED_WORKFLOW.md`](GRIDDED_WORKFLOW.md).
 
 | Script | Role | Relates to stage |
 |---|---|---|
+| `07b_gridded_calibration_inputs.R` | **shim**: map stage-07 `best-fishing-parameters_*.parquet` (fmort_u/v → q_pel/q_ben) + the stage-04 U/V catch split into the per-region rds the gridded scripts read | bridges `07_estimating_best_vals` → gridded |
 | `build_percell_bw.R` | per-cell, per-timestep biomass-weighted intercept/slope/T_exp/tob/export from the gridded GFDL-MOM6-COBALT2 netcdfs (+ gridded spin-up, 6× cycle of 1961-1980) | `01`, `03`, `07_setup_gridded` + `integrating_phyto(weighting="biomass")` |
 | `build_center.R` | LME-center per-cell series on the biomass-weighted aggregate (preserves 0-D q) | new (post-`03`) |
 | `gridded_calib.R` | re-fit (q_pel,q_ben) inside the gridded model (spin cached, BOBYQA on the transient aggregate) | new (post-`07_estimating_best_vals`) |
@@ -56,11 +57,17 @@ expc-bot/intpp`, 60 arcmin, in `gridded_nc/`), the `_uv` region parquets (`INPUT
 `./dbpm_inputs_uv`), the 1° FAO-LME mask, and the 0-D calibration rds (`calib_A3/lme<L>.rds`).
 
 ```sh
+# bridge the pipeline's 0-D calibration (stage 07) into the rds the gridded scripts read:
+Rscript 07b_gridded_calibration_inputs.R --regions=158,148,.. --results=<07_out> --catch=<uv_split> --out=calib_A3
 Rscript build_percell_bw.R <L..> --par=4          # per-cell biomass-weighted spatiotemporal inputs
 Rscript build_center.R      <L..> --par=4          # LME-center -> percell_c_lme<L>.parquet
 sh run_gridded.sh                                  # per region: gridded_calib.R (q refit) -> gridded_run.R (full grid)
 Rscript plot_gridded.R                             # figures
 ```
+
+`<CALIB_DIR>/lme<L>.rds` schema (produced by `07b`, read by the gridded scripts): `q_pel, q_ben`
+(0-D catchabilities), `year, obs_pel, obs_ben` (observed U/V catch density — needed for the gridded
+q refit), `region, corr_pel, corr_ben`.
 
 Compute notes (laptop): dbpmr's warm-restart is file-I/O heavy — use a RAM-disk `TMPDIR` and (on
 managed machines) exclude it from real-time AV scanning; `run_gridded.sh` is resumable at the region
