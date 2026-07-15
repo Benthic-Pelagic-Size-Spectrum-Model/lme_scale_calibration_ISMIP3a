@@ -34,20 +34,22 @@ if(!is.null(smoothed)){
   smoothed <- ""
 }
 
+temporal_res <- "weekly"
+
 # Testing no-fishing and search volume values between 0.64 and 640
 fish_param <- data.frame("region" = NA, "fmort_u" = 0, "fmort_v" = 0,
                          "fminx_u" = 0, "fminx_v" = 0, 
-                         "search_vol" = 64*seq(0.1, 10, by = 0.1))
+                         "search_vol" = 64)#*seq(0.1, 10, by = 0.1))
 
 # Define whether detritus should be calculated or not. Set NULL if detritus is
 # to be calculated by DBPM. Otherwise provide data (e.g., dbpm_inputs$input_w)
 detritus_input <- NULL
 
 # Name of folder where outputs will be stored
-fout <- "equilibrium_run_fixed-bug"
+fout <- "equilibrium_run_fixed-bug_weekly"
 
 # Parallelising runs using parallelly and furrr
-plan(multisession, workers = availableCores())
+# plan(multisession, workers = availableCores())
 
 # Initial calibration loop ------------------------------------------------
 for(f in fao_lme){
@@ -82,81 +84,89 @@ for(f in fao_lme){
   print(paste0("Running DBPM for region: ", f))
   
   # Parallelising equilibrium runs per region of interest
-  future_walk(1:nrow(fish_param), ~{
-    i <- .x
+  # future_walk(1:nrow(fish_param), ~{
+    # i <- .x
     # File name to be added to end
-    end_fn <- paste0("_", f, "_searchvol-", fish_param[i,]$search_vol, "_", 
-                     min(dbpm_inputs$year), "-", max(dbpm_inputs$year))
+  # end_fn <- paste0("_", f, "_searchvol-", fish_param[i,]$search_vol, "_", 
+  end_fn <- paste0("_", f, "_searchvol-", fish_param$search_vol, "_", 
+                   min(dbpm_inputs$year), "-", max(dbpm_inputs$year))
 
-    # Run non-spatial DBPM.  This step is necessary to get the initial
-    # conditions to be used in the gridded DBPM
-    init_results <- run_model(fish_param[i,], dbpm_inputs, withinput = F,
-                              xmin_consumer_u = -3, xmin_consumer_v = -3,
-                              include_plankton = T, trunc_size = TRUE,
-                              detritus_input = detritus_input)
+  # Run non-spatial DBPM.  This step is necessary to get the initial
+  # conditions to be used in the gridded DBPM
+  # init_results <- run_model(fish_param[i,], dbpm_inputs, withinput = F,
+  init_results <- run_model(fish_param, dbpm_inputs, withinput = FALSE,
+                            xmin_consumer_u = -3, xmin_consumer_v = -3,
+                            include_plankton = TRUE, trunc_size = TRUE,
+                            detritus_input = detritus_input)
 
-    # Saving initial results for non-spatial run
-    write_json(init_results,
-               file.path(results_folder, 
-                         paste0("init_dbpm_nonspatial", end_fn, ".json")), 
-               digits = 10)
+  # Saving initial results for non-spatial run
+  write_json(init_results,
+             file.path(results_folder, 
+                       paste0("init_dbpm_nonspatial", end_fn, ".json")), 
+             digits = 10)
 
-    ## Size spectrum plots per group (predators and detritivores) ---------
-    # Transform density matrix to data frame to create plots
-    # density_df <- dbpm_output_mat_to_df(init_results, dbpm_inputs$time, 
-    density_df <- dbpm_output_mat_to_df(init_results, unique(dbpm_inputs$time), 
-                                        "density")
-    
-    den_data <- plotsizespectrum(density_df, init_results$params, f, 
-                                 fishing_params = fish_param[i,], 
-                                 mean_decade = T, return_data = T)
-    
+  ## Size spectrum plots per group (predators and detritivores) ---------
+  # Transform density matrix to data frame to create plots
+  # density_df <- dbpm_output_mat_to_df(init_results, dbpm_inputs$time, 
+  density_df <- dbpm_output_mat_to_df(init_results, unique(dbpm_inputs$time), 
+                                      temporal_res, "density")
+  
+  den_data <- plotsizespectrum(density_df, init_results$params, f, 
+                               # fishing_params = fish_param[i,], 
+                               fishing_params = fish_param, 
+                               mean_decade = TRUE, return_data = TRUE)
+  
+  if(!is.null(den_data)){
     write_parquet(den_data$data, file.path(
       results_folder, paste0("size_spectrum_data", end_fn, ".parquet")))
-    
-    
-    ## Creating growth rate plots -------------------------------------------
-    # dates_model <- c(min(unique(dbpm_inputs$time))%m-% months(1), 
-    #                  unique(dbpm_inputs$time))
-    # growth_df <- dbpm_output_mat_to_df(init_results, dates_model, "growth") |>
-    growth_df <- dbpm_output_mat_to_df(init_results, unique(dbpm_inputs$time),
-                                       "growth") #|>
-      # Excluding growth value for first time step as it is used for model
-      # initialisation only
-      # filter(time >= min(as_date(dbpm_inputs$time))) 
-    
-    growth_data <- plot_growth_rate(growth_df, init_results$params, f,
-                     fishing_params = fish_param[i,], return_data = T)
-    
-    write_parquet(growth_data$data,
-                  file.path(results_folder, 
-                            paste0("growth_rates_data", end_fn, ".parquet")))
-    
-    #Equilibrium run
-    calib_run <- run_model(fish_param[i,], dbpm_inputs, xmin_consumer_u = -3,
-                           xmin_consumer_v = -3, include_plankton = T)
+  }
+  
+  ## Creating growth rate plots -------------------------------------------
+  # dates_model <- c(min(unique(dbpm_inputs$time))%m-% months(1), 
+  #                  unique(dbpm_inputs$time))
+  # growth_df <- dbpm_output_mat_to_df(init_results, dates_model, "growth") |>
+  growth_df <- dbpm_output_mat_to_df(init_results, unique(dbpm_inputs$time),
+                                     # "growth") #|>
+                                     temporal_res, "growth") #|>
+    # Excluding growth value for first time step as it is used for model
+    # initialisation only
+    # filter(time >= min(as_date(dbpm_inputs$time))) 
+  
+  growth_data <- plot_growth_rate(growth_df, init_results$params, f,
+                                  fishing_params = fish_param, return_data = T)
+                   # fishing_params = fish_param[i,], return_data = T)
+  
+  write_parquet(growth_data$data,
+                file.path(results_folder, 
+                          paste0("growth_rates_data", end_fn, ".parquet")))
+  
+  #Equilibrium run
+  # calib_run <- run_model(fish_param[i,], dbpm_inputs, xmin_consumer_u = -3,
+  calib_run <- run_model(fish_param, dbpm_inputs, xmin_consumer_u = -3,
+                         xmin_consumer_v = -3, include_plankton = T)
 
-    # Save results
-    write_parquet(calib_run,
-                  file.path(results_folder, 
-                            paste0("dbpm_nonspatial", end_fn, ".parquet")))
+  # Save results
+  write_parquet(calib_run,
+                file.path(results_folder, 
+                          paste0("dbpm_nonspatial", end_fn, ".parquet")))
 
-    # Create plots of biomass (predators, detritivores and detritus)
-    calib_run |>
-      select(year, ends_with("biomass"), total_detritus) |>
-      distinct() |> 
-      group_by(year) |>
-      summarise(across(starts_with("total"), ~ mean(.x, na.rm = T))) |> 
-      pivot_longer(!year, names_to = "group", values_to = "values",
-                   names_prefix = "total_") |>
-      separate_wider_delim(group, delim = "_", names = c("group", "type"),
-                           too_few = "align_start") |>
-      replace_na(list(type = "detritus")) |> 
-      mutate(search_vol = fish_param[i,]$search_vol) |> 
-      write_parquet(file.path(
-        results_folder, paste0("plankton-pred-detritus-bio_detritus", end_fn, 
-                               ".parquet")))
-  }, .options = furrr_options(seed = T))
+  # Create plots of biomass (predators, detritivores and detritus)
+  calib_run |>
+    select(year, ends_with("biomass"), total_detritus) |>
+    distinct() |> 
+    group_by(year) |>
+    summarise(across(starts_with("total"), ~ mean(.x, na.rm = T))) |> 
+    pivot_longer(!year, names_to = "group", values_to = "values",
+                 names_prefix = "total_") |>
+    separate_wider_delim(group, delim = "_", names = c("group", "type"),
+                         too_few = "align_start") |>
+    replace_na(list(type = "detritus")) |> 
+    # mutate(search_vol = fish_param[i,]$search_vol) |> 
+    mutate(search_vol = fish_param$search_vol) |> 
+    write_parquet(file.path(
+      results_folder, paste0("plankton-pred-detritus-bio_detritus", end_fn, 
+                             ".parquet")))
+  # }, .options = furrr_options(seed = T))
 }
 
 
