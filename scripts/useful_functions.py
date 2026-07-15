@@ -405,15 +405,20 @@ def detrital_input_seafloor(folder_gridded_data, gfdl_exp, benthic_habitat_depth
     
 
 # Integrating (mean) phytoplankton inputs to threshold depth
-def integrating_phyto(folder_gridded_data, gfdl_exp, thresh_depth = 200):
+def integrating_phyto(folder_gridded_data, gfdl_exp, thresh_depth = 200, weighting = "depth"):
     '''
     Inputs:
     - folder_gridded_data (character) File path pointing to folder containing
-    zarr files with vertically resolved phytopklankton outputs (`phyc` and `phypico`) 
+    zarr files with vertically resolved phytopklankton outputs (`phyc` and `phypico`)
     from GFDL
     - gfdl_exp (character) Select GFDL experiment 'ctrl_clim' or 'obs_clim'
-    - thresh_depth (numeric) Default is 200 (m) Maximum depth in meters to be considered 
+    - thresh_depth (numeric) Default is 200 (m) Maximum depth in meters to be considered
     when processing DBPM phytoplankton inputs
+    - weighting (character) Default 'depth': layer-thickness weighted mean over 0-thresh_depth.
+    'biomass': phytoplankton-carbon weighted mean, <X> = sum(X*phyc*dz)/sum(phyc*dz) -- the
+    vertically BIOMASS-weighted "experienced" mean used by the gridded_dbpmr spatiotemporal
+    workflow (predators feed through the column where the food is, so the effective plankton
+    concentration is weighted by carbon, not by layer thickness). See scripts/gridded_dbpmr/.
 
     Outputs:
     - phyc (data array) Contains integrated phytoplankton values up to threshold depth.
@@ -421,31 +426,37 @@ def integrating_phyto(folder_gridded_data, gfdl_exp, thresh_depth = 200):
     depth.
     '''
 
-    #load depth
-    depth = (xr.open_zarr(glob(os.path.join(folder_gridded_data, 
+    #load depth (layer thickness)
+    depth = (xr.open_zarr(glob(os.path.join(folder_gridded_data,
                                             f'*_thkcello_*'))[0])['thkcello'].
         drop_vars('time').squeeze().sel(lev = slice(None, thresh_depth)).fillna(0))
-    
+
+    #Load phyc (needed first: it forms the biomass weights when weighting='biomass')
+    phyc = (xr.open_zarr(glob(
+        os.path.join(folder_gridded_data, f'*{gfdl_exp}_phyc_*'))[0])['phyc'].
+        sel(lev = slice(None, thresh_depth)))
+
     #Load phypico
     phypico = (xr.open_zarr(glob(
         os.path.join(folder_gridded_data, f'*{gfdl_exp}_phypico_*'))[0])['phypico'].
         sel(lev = slice(None, thresh_depth)))
-    phypico_weighted = phypico.weighted(depth).mean('lev')
+
+    #Vertical weights: layer thickness (depth) OR carbon*thickness (biomass-weighted)
+    wts = depth if weighting == "depth" else (phyc.fillna(0) * depth)
+    wlab = "Depth" if weighting == "depth" else "Biomass"
+
+    phypico_weighted = phypico.weighted(wts).mean('lev')
     phypico_weighted = phypico_weighted.assign_attrs(
         {'standard_name': 'mean_mole_concentration_of_picophytoplankton_expressed_as_carbon_in_sea_water',
-         'long_name': 'Depth Weighted Mean of Picophytoplankton Carbon Concentration', 
+         'long_name': f'{wlab} Weighted Mean of Picophytoplankton Carbon Concentration',
          'units': 'mol m-3'})
-    
-    #Load phyc
-    phyc = (xr.open_zarr(glob(
-        os.path.join(folder_gridded_data, f'*{gfdl_exp}_phyc_*'))[0])['phyc'].
-        sel(lev = slice(None, thresh_depth)))
-    phyc_weighted = phyc.weighted(depth).mean('lev')
+
+    phyc_weighted = phyc.weighted(wts).mean('lev')
     phyc_weighted = phyc_weighted.assign_attrs(
         {'standard_name': 'mean_mole_concentration_of_phytoplankton_expressed_as_carbon_in_sea_water',
-         'long_name': 'Depth Weighted Mean of Phytoplankton Carbon Concentration', 
+         'long_name': f'{wlab} Weighted Mean of Phytoplankton Carbon Concentration',
          'units': 'mol m-3'})
-    
+
     return phyc_weighted, phypico_weighted
 
 
