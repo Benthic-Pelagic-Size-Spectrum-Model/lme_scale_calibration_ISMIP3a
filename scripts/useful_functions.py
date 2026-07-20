@@ -2,7 +2,7 @@
 
 # Library of useful functions
 # Authors: Denisse Fierro Arcos
-# Date last update: 2026-07-08
+# Date last update: 2026-07-20
 
 # Loading libraries
 import xarray as xr
@@ -20,7 +20,8 @@ def netcdf_to_zarr(file_path, path_out):
     '''
     Inputs:
     - file_path (character) File path where GFDL output is located
-    - path_out (character) File path where outputs should be stored as zarr files
+    - path_out (character) File path where outputs should be stored as zarr 
+    files
 
     Outputs:
     - None. This function saves results as zarr files in the path provided.
@@ -382,24 +383,26 @@ def get_threshold_depth(folder_gridded_data, gfdl_exp, max_depth = 200):
 
 
 # Calculating detrital input near seafloor
-def detrital_input_seafloor(folder_gridded_data, gfdl_exp, benthic_habitat_depth = 20):
+def detrital_input_seafloor(folder_gridded_data, gfdl_exp, 
+                            benthic_habitat_depth = 20):
     '''
     Inputs:
-    - folder_gridded_data (character) File path pointing to folder containing zarr files 
-    for Sinking Particulate Organic Carbon Flux on Bottom (`expc-bot`) from GFDL
+    - folder_gridded_data (character) File path pointing to folder containing 
+    zarr files for Sinking Particulate Organic Carbon Flux on Bottom 
+    (`expc-bot`) from GFDL
     - gfdl_exp (character) Select GFDL experiment 'ctrl_clim' or 'obs_clim'
-    - benthic_habitat_depth (numeric) Default is 20 (m). Vertical habitat thickness (in 
-    meters) for the benthic group. This parameter represents the depth above seafloor
-    where benthic processes affecting detrital input occur
+    - benthic_habitat_depth (numeric) Default is 20 (m). Vertical habitat 
+    thickness (in meters) for the benthic group. This parameter represents the 
+    depth above seafloor where benthic processes affecting detrital input occur
 
     Outputs:
-    - input_w (data array) Contains detrital input near seabed needed by DBPM to calculate
-    total detritus biomass
+    - input_w (data array) Contains detrital input near seabed needed by DBPM 
+    to calculate total detritus biomass
     '''
 
     # Load expc-bot
-    eb = xr.open_zarr(glob(os.path.join(folder_gridded_data, 
-                                        f'*{gfdl_exp}_expc-bot_*'))[0])['expc-bot']
+    eb = xr.open_zarr(glob(os.path.join(
+      folder_gridded_data, f'*{gfdl_exp}_expc-bot_*'))[0])['expc-bot']
     # Multiplier to transform seconds to years
     time_conv = eb.time.dt.days_in_year*60*60*24
 
@@ -408,10 +411,10 @@ def detrital_input_seafloor(folder_gridded_data, gfdl_exp, benthic_habitat_depth
 
     # Updating metada
     input_w.name = 'input_w'
-    input_w = input_w.assign_attrs({'short_name': 'detrital_input_seafloor',
-                                    'long_name': ('Input fluxes to detritus pool ' +
-                                                  'near seafloor'),
-                                    'units': 'gWW m-3 yr-1'})
+    input_w = input_w.assign_attrs(
+      {'short_name': 'detrital_input_seafloor', 
+       'long_name': 'Input fluxes to detritus pool near seafloor',
+       'units': 'gWW m-3 yr-1'})
 
     return input_w
     
@@ -422,49 +425,50 @@ def integrating_inputs(folder_gridded_data, gfdl_exp, thresh_depth = 200,
     '''
     Inputs:
     - folder_gridded_data (character) File path pointing to folder containing
-    zarr files with vertically resolved phytopklankton outputs (`phyc` and `phypico`), 
-    mixed layer depth (`mlotst-0125`) and depth (`deptho`) from GFDL
+    zarr files with vertically resolved phytopklankton outputs (`phyc` and 
+    `phypico`), mixed layer depth (`mlotst-0125`) and depth (`deptho`) from GFDL
     - gfdl_exp (character) Select GFDL experiment 'ctrl_clim' or 'obs_clim'
-    - thresh_depth (numeric) Default 200 (m). Maximum depth in meters to be considered 
-    when processing DBPM phytoplankton inputs.
-     - averaging (character) Default 'biomass_weighted'. Defines how to collapse the
-     depth dimension. There are four choices available:
+    - thresh_depth (numeric) Default 200 (m). Maximum depth in meters to be 
+    considered when processing DBPM phytoplankton inputs.
+     - averaging (character) Default 'biomass_weighted'. Defines how to collapse 
+     the depth dimension. There are four choices available:
          'fixed'            thickness-weighted mean over the `thresh_depth`.
          'mld'              thickness-weighted mean over the mixed layer
                             (out from `get_threshold_depth` function). De-biases 
                             phytoplankton inputs but truncates a DCM.
-         'cumulative90'     mean over the layer holding 90% of the column-integrated
-                            TOTAL phytoplankton biomass (threshold-free productive
-                            layer).
-         'biomass_weighted' (default) TOTAL-phytoplankton-biomass weighted by mean 
-                            concentration over the whole column. That is
-                              (column biomass) / (effective productive thickness)
-                            Threshold- and light-free; the total-phytoplankton weight 
-                            keeps small and large fractions on the same layer. Best
-                            matches the food density a vertically-migrating, 
-                            food-tracking pelagic forager experiences. It captures 
-                            surface + deep chlorophyll maximum, ignores phytoplankton-
+         'cumulative90'     mean over the layer holding 90% of the column-
+                            integrate TOTAL phytoplankton biomass (threshold-
+                            free productive layer).
+         'biomass_weighted' (default) TOTAL-phytoplankton-biomass weighted by 
+                            mean concentration over the whole column. That is
+                            (column biomass) / (effective productive thickness)
+                            Threshold- and light-free; the total-phytoplankton 
+                            weight keeps small and large fractions on the same 
+                            layer. Best matches the food density a vertically-
+                            migrating, food-tracking pelagic forager 
+                            experiences. It captures surface and deep 
+                            chlorophyll maximum, ignores phytoplankton-
                             poor waters it passes through but does not feed in.
 
     Outputs:
-    - phyc_weighted, phypico_weighted (data arrays, mol m-3). Integrated phytoplankton 
-    values up to threshold depth.
+    - phyc_weighted, phypico_weighted (data arrays, mol m-3). Integrated 
+    phytoplankton values up to threshold depth.
     '''
 
     #load depth bins
-    depth_bins = (xr.open_zarr(
-        glob(os.path.join(folder_gridded_data, f'*_thkcello_*'))[0])['thkcello'].
+    depth_bins = (xr.open_zarr(glob(
+        os.path.join(folder_gridded_data, f'*_thkcello_*'))[0])['thkcello'].
         drop_vars('time').squeeze().fillna(0))
     
     #Load phytoplankton and ocean temperature variables
-    phypico = (xr.open_zarr(glob(
-        os.path.join(folder_gridded_data, f'*{gfdl_exp}_phypico_*'))[0])['phypico'].
+    phypico = (xr.open_zarr(glob(os.path.join(
+        folder_gridded_data, f'*{gfdl_exp}_phypico_*'))[0])['phypico'].
         fillna(0))
     phyc = (xr.open_zarr(glob(
         os.path.join(folder_gridded_data, f'*{gfdl_exp}_phyc_*'))[0])['phyc'].
         fillna(0))
-    temp_ocean = (xr.open_zarr(glob(
-        os.path.join(folder_gridded_data, f'*{gfdl_exp}_thetao_*'))[0])['thetao'].
+    temp_ocean = (xr.open_zarr(glob(os.path.join(
+        folder_gridded_data, f'*{gfdl_exp}_thetao_*'))[0])['thetao'].
         fillna(0))
 
     #Create weights based on choice provided `averaging` parameter
@@ -498,15 +502,16 @@ def integrating_inputs(folder_gridded_data, gfdl_exp, thresh_depth = 200,
         return (phyto*weights).sum('lev') / weights.sum('lev')
 
     phypico_weighted = _wmean(phypico, weights).assign_attrs(
-        {'standard_name': ('mean_mole_concentration_of_picophytoplankton_expressed_' +
-                           'as_carbon_in_sea_water'),
-         'long_name': f'{averaging} mean of picophytoplankton carbon concentration', 
+        {'standard_name': ('mean_mole_concentration_of_picophytoplankton_' +
+                           'expressed_as_carbon_in_sea_water'),
+         'long_name': (f'{averaging} mean of picophytoplankton carbon ' +
+                       'concentration'), 
          'units': 'mol m-3'})
     phypico_weighted.name = 'phypico'
     
     phyc_weighted = _wmean(phyc, weights).assign_attrs(
-        {'standard_name': ('mean_mole_concentration_of_phytoplankton_expressed_as_' +
-                           'carbon_in_sea_water'),
+        {'standard_name': ('mean_mole_concentration_of_phytoplankton_' +
+                           'expressed_as_carbon_in_sea_water'),
          'long_name': f'{averaging} mean of phytoplankton carbon concentration', 
          'units': 'mol m-3'})
     phyc_weighted.name = 'phyc'
@@ -522,31 +527,34 @@ def integrating_inputs(folder_gridded_data, gfdl_exp, thresh_depth = 200,
 
 
 #Calculating export ratio
-def getExportRatio(folder_gridded_data, gfdl_exp, temp_source = 'ocean-temp-weighted'):
+def getExportRatio(folder_gridded_data, gfdl_exp, 
+                   temp_source = 'ocean-temp-weighted'):
     '''
     Inputs:
     - folder_gridded_data (character) File path pointing to folder containing
     zarr files with GFDL data for the region of interest
     - gfdl_exp (character) Select GFDL experiment 'ctrl_clim' or 'obs_clim'
-    - mean_ocean_temp (character). Default "ocean-temp-weighted", sets temperature 
-    to be phytoplankton biomass weighted ocean temperature mean. Setting to "tos" 
-    uses sea surface temperature
+    - mean_ocean_temp (character). Default "ocean-temp-weighted", sets 
+    temperature to be phytoplankton biomass weighted ocean temperature mean. 
+    Setting to "tos" uses sea surface temperature
 
     Outputs:
     - sphy (data array) Contains small phytoplankton. This is data frame simply
     renames 'phypico-vint' data
-    - lphy (data array) Contains large phytoplankton: difference between 'phyc_vint'
-    and 'phypico_vint'
+    - lphy (data array) Contains large phytoplankton: difference between 
+    'phyc_vint' and 'phypico_vint'
     - er (data array) Contains export ratio
     '''
 
     #Load sea surface temperature
     ocean_temp = xr.open_zarr(glob(
-        os.path.join(folder_gridded_data, f'*{gfdl_exp}_{temp_source}_*'))[0])[temp_source]
+        os.path.join(folder_gridded_data, 
+        f'*{gfdl_exp}_{temp_source}_*'))[0])[temp_source]
     
     #load depth
     depth = xr.open_zarr(glob(
-        os.path.join(folder_gridded_data, f'*{gfdl_exp}_deptho_*'))[0])['deptho']
+        os.path.join(folder_gridded_data, 
+        f'*{gfdl_exp}_deptho_*'))[0])['deptho']
     
     #Load phypico-vint
     sphy = xr.open_zarr(glob(
@@ -584,9 +592,10 @@ def getExportRatio(folder_gridded_data, gfdl_exp, temp_source = 'ocean-temp-weig
     #If values are above 1, assign a value of 1
     er = xr.where(er > 1, 1, er)
     er.name = 'export_ratio'
-    er = er.assign_attrs({'short_name': 'export_ratio_expressed_as_carbon_in_sea_water',
-                          'long_name': 'Export ratio of organic matter',
-                          'units': 'mol m-3'})
+    er = er.assign_attrs(
+      {'short_name': 'export_ratio_expressed_as_carbon_in_sea_water',
+      'long_name': 'Export ratio of organic matter',
+      'units': 'mol m-3'})
     
     return sphy, lphy, er.drop_encoding()
 
@@ -598,27 +607,27 @@ def GetPPIntSlope(gfdl_folder = None, gfdl_exp = None, lphy_file = None,
     '''
     Inputs:
     - gfdl_folder (character) OPTIONAL. File path pointing to folder containing
-    zarr files with GFDL data for the region of interest. If provided, do not use the
-    "lphy_file" and "sphy_file" parameters.
+    zarr files with GFDL data for the region of interest. If provided, do not 
+    use the "lphy_file" and "sphy_file" parameters.
     - gfdl_exp (character) If providing "gfdl_folder", a GFDL experiment, either
     'ctrl_clim' or 'obs_clim' should be provided.
-    - lphy_file (character or Data Array) OPTIONAL. Provide either the full file path 
-    to the large phytoplankton zarr file or a Data Array containing large 
-    phytoplankton data. Must only be provided if NOT providing "gfdl_folder", and it
-    should be provided together with "sphy_file" parameter.
-    - sphy_file (character or Data Array) OPTIONAL. Provide either the full file path 
-    to the small phytoplankton zarr file or a Data Array containing small 
-    phytoplankton data. Must only be provided if NOT providing "gfdl_folder", and it
-    should be provided together with "lphy_file" parameter.
+    - lphy_file (character or Data Array) OPTIONAL. Provide either the full 
+    file path to the large phytoplankton zarr file or a Data Array containing
+    large phytoplankton data. Must only be provided if NOT providing 
+    "gfdl_folder", and it should be provided together with "sphy_file" parameter.
+    - sphy_file (character or Data Array) OPTIONAL. Provide either the full 
+    file path to the small phytoplankton zarr file or a Data Array containing 
+    small phytoplankton data. Must only be provided if NOT providing 
+    "gfdl_folder", and it should be provided together with "lphy_file" parameter.
     - mmin (numeric)  Default is 10**(-14.25). Minimum body mass of primary
     producers representing phycophytoplankton
     - mmid (numeric)  Default is 10**(-10.184). Body mass of primary producers
     representing limit between phycophytoplankton (small phytoplankton) and 
     microphytoplankton (large phytoplankton)
-    - mmax (numeric)  Default is 10**(-5.25). Maximum body mas of primary producers
-    representing microphytoplankton
-    - output (character) Default is 'both'. Select what outputs should be returned. 
-    Choose from 'both', 'slope', or 'intercept'
+    - mmax (numeric)  Default is 10**(-5.25). Maximum body mas of primary 
+    producers representing microphytoplankton
+    - output (character) Default is 'both'. Select what outputs should be 
+    returned. Choose from 'both', 'slope', or 'intercept'
 
     Outputs:
     - (Data array) - Depends on value of 'output' parameter. 
@@ -628,48 +637,50 @@ def GetPPIntSlope(gfdl_folder = None, gfdl_exp = None, lphy_file = None,
     has_sphy = sphy_file is not None
     
     if gfdl_folder is None and not has_lphy and not has_sphy:
-        raise ValueError('You must provide either the "gfdl_folder" parameter or' +
-                         ' both: the "lphy_file" and "sphy_file" parameters, but' +
-                         ' none was provided')   
+        raise ValueError('You must provide either the "gfdl_folder" parameter' +
+                         ' or both: the "lphy_file" and "sphy_file" ' +
+                         'parameters, but none was provided')   
     
     elif gfdl_folder is not None and (has_lphy or has_sphy):
-        raise ValueError('You must provide either the "gfdl_folder" parameter or' +
-                         ' both: the "lphy_file" and "sphy_file" parameters, but' +
-                         ' not all.')
+        raise ValueError('You must provide either the "gfdl_folder" parameter' +
+                         ' or both: the "lphy_file" and "sphy_file" ' +
+                         'parameters, but not all.')
 
     if gfdl_folder is not None and gfdl_exp is None:
-        raise ValueError('If providing the "gfdl_folder" parameter, you must also ' +
-                         'provide the "gfdl_exp" parameter.')
+        raise ValueError('If providing the "gfdl_folder" parameter, you must' +
+                         ' also provide the "gfdl_exp" parameter.')
     elif gfdl_folder is not None and gfdl_exp is not None:
         #load large phytoplankton
-        lphy = xr.open_zarr(glob(os.path.join(gfdl_folder, 
-                                              f'*{gfdl_exp}_lphy_*'))[0])['lphy']
+        lphy = xr.open_zarr(glob(os.path.join(
+          gfdl_folder, f'*{gfdl_exp}_lphy_*'))[0])['lphy']
         
         #Load small phytoplankton
-        sphy = xr.open_zarr(glob(os.path.join(gfdl_folder, 
-                                              f'*{gfdl_exp}_sphy_*'))[0])['sphy']
+        sphy = xr.open_zarr(glob(os.path.join(
+          gfdl_folder, f'*{gfdl_exp}_sphy_*'))[0])['sphy']
 
     if has_lphy != has_sphy:
-        raise ValueError('You must provide both the "lphy_file" and "sphy_file" ' + 
-                         'parameters, but only one was provided.')
+        raise ValueError('You must provide both the "lphy_file" and ' + 
+                         '"sphy_file" parameters, but only one was provided.')
     elif has_lphy is True and has_sphy is True:
         if isinstance(lphy_file, str):
             lphy = xr.open_zarr(lphy_file)['lphy']
         elif isinstance(lphy_file, xr.DataArray) or isinstance(lphy_file, np.ndarray):
             lphy = lphy_file
         else:
-            raise ValueError('You must provide either a full file path to the ' + 
-                             'large phytoplankton data or data array containing ' + 
-                             'large phytoplankton data, but neither was provided.')
+            raise ValueError('You must provide either a full file path to ' + 
+                             'the large phytoplankton data or data array' + 
+                             'containing large phytoplankton data, but ' +
+                             'neither was provided.')
 
         if isinstance(sphy_file, str):
             sphy = xr.open_zarr(sphy_file)['sphy']
         elif isinstance(sphy_file, xr.DataArray) or isinstance(sphy_file, np.ndarray):
             sphy = sphy_file
         else:
-            raise ValueError('You must provide either a full file path to the ' + 
-                             'small phytoplankton data or data array containing ' + 
-                             'small phytoplankton data, but neither was provided.')
+            raise ValueError('You must provide either a full file path to ' + 
+                             'the small phytoplankton data or data array ' + 
+                             'containing small phytoplankton data, but ' +
+                             'neither was provided.')
     
     #Convert sphy and lphy from mol C / m^3 to g C / m^3
     sphy = sphy*12.0107
@@ -787,12 +798,13 @@ def gridded_spinup(file_path_or_data_array, start_spin, end_spin, spinup_period,
 def gridded_param_python(gridded_params):
     '''
     Inputs:
-    - gridded_params (dictionary) Containing the output from the `sizeparam` function in R.
-    Stored as a `json` file.
+    - gridded_params (dictionary) Containing the output from the `sizeparam`
+    function in R. Stored as a `json` file.
 
     Outputs:
-    griddded_python (dictionary) Containing gridded_params in a Python friendly format. New
-    entries calculated as needed, and entries not used in the DBPM gridded model were removed.
+    griddded_python (dictionary) Containing gridded_params in a Python friendly
+    format. New entries calculated as needed, and entries not used in the DBPM 
+    gridded model were removed.
     '''
 
     gridded_python = {'timesteps_years': gridded_params['timesteps_years'][0],
@@ -844,8 +856,8 @@ def gridded_param_python(gridded_params):
 
 
 ### DPBM functions ----
-# Build a lookup table for diet preference. Looks at all combinations of predator 
-# and prey body size: diet preference (in the predator spectrum only)
+# Build a lookup table for diet preference. Looks at all combinations of 
+# predator and prey body size: diet preference (in the predator spectrum only)
 def phi_f(q, log10_pred_prey_ratio, log_prey_pref):
     phi = np.where(q > 0, 
                    np.exp(-(q-log10_pred_prey_ratio)*(q-log10_pred_prey_ratio)/
@@ -882,8 +894,8 @@ def expax_f(log10_size_bins, metabolic_req_pred):
 def pred_prey_matrix(log10_size_bins):
     '''
     Inputs:
-    - log10_size_bins (numpy array) Containing the log of all sizes of predator and
-    prey items
+    - log10_size_bins (numpy array) Containing the log of all sizes of predator 
+    and prey items
     
     Outputs:
     ppm (numpy array) Contains all combinations of predator-prey sizes
@@ -899,8 +911,8 @@ def pred_prey_matrix(log10_size_bins):
 def init_da(log10_size_bins, time):
     '''
     Inputs:
-    - log10_size_bins (numpy array) Containing the log of all sizes of predator and
-    prey items
+    - log10_size_bins (numpy array) Containing the log of all sizes of predator 
+    and prey items
     - time (numpy array) Containing dates to be included in final data array
     
     Outputs:
@@ -913,19 +925,20 @@ def init_da(log10_size_bins, time):
 
 
 # Gravity model ----
-# Redistribute total effort across grid cells according to proportion of biomass in that 
-# grid cell using gravity model, Walters & Bonfil, 1999, Gelchu & Pauly 2007 ideal free
-# distribution - Blanchard et al 2008
+# Redistribute total effort across grid cells according to proportion of biomass 
+# in that grid cell using gravity model, Walters & Bonfil, 1999, Gelchu & Pauly 
+# 2007 ideal free distribution - Blanchard et al 2008
 def gravitymodel(effort, prop_b, depth, n_iter, sea_ice_mask):
     '''
     Inputs:
     - effort (Data array) Fishing effort for a single time step
-    - prop_b (Data array) Proportion of total fishable biomass for each grid cell at a 
-    single time step
+    - prop_b (Data array) Proportion of total fishable biomass for each grid 
+    cell at a single time step
     - depth (Data array) Bathymetry of the area of interest
-    - n_iter (integer) Number of iterations needed to redistribute fishing effort
-    - sea_ice_mask (Data array) Mask describing sea ice covered areas inaccessible to 
-    fishers
+    - n_iter (integer) Number of iterations needed to redistribute fishing 
+    effort
+    - sea_ice_mask (Data array) Mask describing sea ice covered areas 
+    inaccessible to fishers
     
     Outputs:
     eff (data array) Containing redistributed fishing effort
@@ -961,8 +974,8 @@ def effort_calculation(predators, detritivores, effort, depth, size_bin_vals,
     - depth (2D data array) Bathymetry of the area of interest
     - size_bins_vals (1D data array) Size classes in grams
     - gridded_params (dictionary) DBPM parameters
-    - sea_ice_mask (Data array) Mask describing sea ice covered areas inaccessible 
-    to fishers
+    - sea_ice_mask (Data array) Mask describing sea ice covered areas 
+    inaccessible to fishers
 
     Outputs:
     - new_effort (2D data array) Fishing effort calculated for next time step
@@ -1003,11 +1016,12 @@ def effort_calculation(predators, detritivores, effort, depth, size_bin_vals,
 def loading_dbpm_fixed_inputs(base_folder):
     '''
     Inputs:
-    - base_folder (character) Full path to folder where fixed DBPM gridded inputs
-    are stored
+    - base_folder (character) Full path to folder where fixed DBPM gridded
+    inputs are stored
 
     Outputs:
-    - dbpm_inputs (xarray Dataset) Contains fixed gridded inputs needed to run DBPM
+    - dbpm_inputs (xarray Dataset) Contains fixed gridded inputs needed to run 
+    DBPM
     '''
     #Loading data from base folder
     #Depth
@@ -1085,13 +1099,14 @@ def loading_dbpm_fixed_inputs(base_folder):
 def loading_dbpm_biomass_inputs(data_folder, init_time = None):
     '''
     Inputs:
-    - data_folder (character) Full path to folder where initialising DBPM gridded inputs
-    are stored
-    - init_time (character) Default is None. Year and month from when to restart gridded 
-    DBPM runs. If set to None, DBPM is run from the beginning
+    - data_folder (character) Full path to folder where initialising DBPM 
+    gridded inputs are stored
+    - init_time (character) Default is None. Year and month from when to 
+    restart gridded DBPM runs. If set to None, DBPM is run from the beginning
 
     Outputs:
-    - ds_init (xarray Dataset) Contains initialising gridded inputs needed to run DBPM
+    - ds_init (xarray Dataset) Contains initialising gridded inputs needed to 
+    run DBPM
     '''
     if init_time is None:
         predators = xr.open_zarr(
@@ -1118,17 +1133,20 @@ def loading_dbpm_biomass_inputs(data_folder, init_time = None):
 
 
 # Loading initialising values for gridded DBPM biomass ------
-def loading_dbpm_dynamic_inputs(gridded_folder, init_time = None, fishing = True):
+def loading_dbpm_dynamic_inputs(gridded_folder, init_time = None, 
+                                fishing = True):
     '''
     Inputs:
-    - gridded_esm (character) Full path to folder where processed DBPM inputs are stored
-    - init_time (character) Default is None. Year and month from when to restart gridded 
-    DBPM runs. If set to None, DBPM is run from the beginning
-    - fishing (boolean) Default is True. It indicates whether or not fishing effort 
-    should be included in the dynamic inputs dataset
+    - gridded_esm (character) Full path to folder where processed DBPM inputs 
+    are stored
+    - init_time (character) Default is None. Year and month from when to 
+    restart gridded DBPM runs. If set to None, DBPM is run from the beginning
+    - fishing (boolean) Default is True. It indicates whether or not fishing 
+    effort should be included in the dynamic inputs dataset
     
     Outputs:
-    - ds_dynamic (xarray Dataset) Contains dynamic gridded inputs needed to run DBPM
+    - ds_dynamic (xarray Dataset) Contains dynamic gridded inputs needed to run
+    DBPM
     '''
 
     #Load data
@@ -1154,14 +1172,16 @@ def loading_dbpm_dynamic_inputs(gridded_folder, init_time = None, fishing = True
         ben_temp_search, chunks = {'time': -1, 'lon': -1, 
                                    'lat': -1})['ben_temp_eff']
 
-    sinking_rate_search = [f for f in glob(os.path.join(gridded_folder, '*_er_*')) 
+    sinking_rate_search = [f for f in glob(os.path.join(
+      gridded_folder, '*_er_*')) 
                            if 'ctrlclim' not in f]
     sinking_rate = xr.open_mfdataset(
         sinking_rate_search, engine = 'zarr', 
         parallel = True)['export_ratio'].chunk({'time': -1, 'lon': -1, 'lat': -1})
 
     if fishing:
-        [effort_search] = glob(os.path.join(gridded_folder, 'effort_spinup_obsclim*'))
+        [effort_search] = glob(os.path.join(
+          gridded_folder, 'effort_spinup_obsclim*'))
         effort = xr.open_zarr(
             effort_search, chunks = {'time': -1, 'lon': -1, 'lat': -1})['effort']
         simask_search = [f for f in glob(os.path.join(gridded_folder, '*_simask_*')) 
@@ -1206,18 +1226,18 @@ def feeding_satiation_rates(gridded_params, dbpm_fixed_inputs, dbpm_init_inputs,
     '''
     Inputs:
     - gridded_params (dictionary) Gridded DBPM parameters obtained in step 04.
-    - dbpm_fixed_inputs (xarray Dataset) Contains fixed gridded inputs needed to run 
-    DBPM
-    - dbpm_init_inputs (xarray Dataset) Contains gridded inputs with initialisation 
-    values for predators, detritivores and detritus
-    - dbpm_dynamic_inputs (xarray Dataset) Contains dynamic gridded inputs need to run
-    DBPM
-    - group (character): Choose the group for which feeding and satiation rates will 
-    be calculated for. Choices: predators, detritivores, detritus.
+    - dbpm_fixed_inputs (xarray Dataset) Contains fixed gridded inputs needed 
+    to run DBPM
+    - dbpm_init_inputs (xarray Dataset) Contains gridded inputs with 
+    initialisation values for predators, detritivores and detritus
+    - dbpm_dynamic_inputs (xarray Dataset) Contains dynamic gridded inputs 
+    needed to run DBPM
+    - group (character): Choose the group for which feeding and satiation rates
+    will be calculated for. Choices: predators, detritivores, detritus.
 
     Outputs:
-    - feed_sat_rates (xarray Dataset). Contains feeding and satiation rates for chosen
-    group
+    - feed_sat_rates (xarray Dataset). Contains feeding and satiation rates for
+    chosen group
     '''
     
     if group == 'predators':
@@ -1232,7 +1252,8 @@ def feeding_satiation_rates(gridded_params, dbpm_fixed_inputs, dbpm_init_inputs,
                         dot(dbpm_fixed_inputs['constant_growth']).
                        rename({'sc': 'size_class'}))*feed_mult_pel)
         feed_rate_pel = (dbpm_dynamic_inputs['pel_tempeffect']*
-                         (pred_growth/(1 + gridded_params['handling']*pred_growth)))
+                         (pred_growth/(1 + gridded_params['handling']*
+                         pred_growth)))
         # Satiation level of predator for pelagic prey (sat.pel)
         sat_pel = xr.where(feed_rate_pel > 0, feed_rate_pel/pred_growth, 0)
 
@@ -1252,7 +1273,8 @@ def feeding_satiation_rates(gridded_params, dbpm_fixed_inputs, dbpm_init_inputs,
                           dot(dbpm_fixed_inputs['constant_growth']).
                           rename({'sc': 'size_class'}))*feed_mult_ben)
         feed_rate_bent = (dbpm_dynamic_inputs['pel_tempeffect']*
-                          (detrit_growth/(1 + gridded_params['handling']*detrit_growth)))
+                          (detrit_growth/(1 + gridded_params['handling']*
+                          detrit_growth)))
         # Satiation level of predator for benthic prey
         calc_growth = ((gridded_params['hr_volume_search']*
                         (10**(dbpm_fixed_inputs['log10_size_bins']*
@@ -1276,7 +1298,8 @@ def feeding_satiation_rates(gridded_params, dbpm_fixed_inputs, dbpm_init_inputs,
                                10**(dbpm_fixed_inputs['log10_size_bins']*
                                     gridded_params['metabolic_req_detritivore'])*
                                dbpm_init_inputs['detritus'])
-        feed_rate_det = (dbpm_dynamic_inputs['ben_tempeffect']*detritus_multiplier/
+        feed_rate_det = (dbpm_dynamic_inputs['ben_tempeffect']*
+                         detritus_multiplier/
                          (1 + gridded_params['handling']*detritus_multiplier))
         
         #Create dataset with feeding and satiation outputs
@@ -1303,35 +1326,39 @@ def mortality_calc(gridded_params, dbpm_fixed_inputs, dbpm_init_inputs,
     '''
     Inputs:
     - gridded_params (dictionary) Gridded DBPM parameters obtained in step 04.
-    - dbpm_fixed_inputs (xarray Dataset) Contains fixed gridded inputs needed to run 
-    DBPM
-    - dbpm_init_inputs (xarray Dataset) Contains gridded inputs with initialisation 
-    values for predators, detritivores and detritus
-    - dbpm_dynamic_inputs (xarray Dataset) Contains dynamic gridded inputs need to run
-    DBPM
-    - feed_sat_rates (xarray Dataset) Contains feeding and satiation rates for the 
-    group for which mortality rates will be calculated. This is the output of the
-    "feeding_satiation_rates" function
-    - group (character): Choose the group for which mortality rates will be calculated.
-    Choices: predators, detritivores.
+    - dbpm_fixed_inputs (xarray Dataset) Contains fixed gridded inputs needed 
+    to run DBPM
+    - dbpm_init_inputs (xarray Dataset) Contains gridded inputs with 
+    initialisation values for predators, detritivores and detritus
+    - dbpm_dynamic_inputs (xarray Dataset) Contains dynamic gridded inputs 
+    needed to run DBPM
+    - feed_sat_rates (xarray Dataset) Contains feeding and satiation rates for 
+    the group for which mortality rates will be calculated. This is the output 
+    of the "feeding_satiation_rates" function
+    - group (character): Choose the group for which mortality rates will be 
+    calculated. Choices: predators, detritivores.
 
     Outputs:
-    - mortality_terms (xarray Dataset). Contains mortality terms for all groups modelled
+    - mortality_terms (xarray Dataset). Contains mortality terms for all groups
+    modelled
     '''
 
     if group == 'predators': 
-        # Fishing mortality (FVec.u, FVec.v) from Benoit & Rochet 2004. Here fish_mort_pred 
-        # and fish_mort_pred= fixed catchability term for predators and detritivores to be 
-        # estimated along with ind_min_det and ind_min_fish_pred
+        # Fishing mortality (FVec.u, FVec.v) from Benoit & Rochet 2004. Here 
+        # fish_mort_pred and fish_mort_pred= fixed catchability term for 
+        # predators and detritivores to be estimated along with ind_min_det and
+        # ind_min_fish_pred
         fishing_mort_pred = (dbpm_fixed_inputs['fish_mort_pred']*
                              dbpm_dynamic_inputs['effort']).drop_vars('time')
         #Time dimension matches feed rates time stamp
-        fishing_mort_pred = fishing_mort_pred.expand_dims({'time': dbpm_init_inputs.time})
+        fishing_mort_pred = fishing_mort_pred.expand_dims(
+          {'time': dbpm_init_inputs.time})
         # Predator death integrals
         # Predation mortality
         # Predators (PM.u)
         pred_mort_pred = (dbpm_fixed_inputs['consume_pelagic']*
-                          ((dbpm_init_inputs['predators']*feed_sat_rates['sat_pel']*
+                          ((dbpm_init_inputs['predators']*
+                             feed_sat_rates['sat_pel']*
                              gridded_params['log_size_increase']).
                            dot(dbpm_fixed_inputs['constant_mortality'])).
                           rename({'sc': 'size_class'}))
@@ -1339,7 +1366,8 @@ def mortality_calc(gridded_params, dbpm_fixed_inputs, dbpm_init_inputs,
         # Predators (Z.u)
         tot_mort_pred = (pred_mort_pred + dbpm_dynamic_inputs['pel_tempeffect']*
                          dbpm_fixed_inputs['other_mort_pred'] +
-                         dbpm_fixed_inputs['senes_mort_pred'] + fishing_mort_pred)
+                         dbpm_fixed_inputs['senes_mort_pred'] + 
+                         fishing_mort_pred)
         
         # Create dataset with mortality for predators
         mortality_terms = xr.Dataset(data_vars = {'Fvec_u': fishing_mort_pred,
@@ -1347,12 +1375,14 @@ def mortality_calc(gridded_params, dbpm_fixed_inputs, dbpm_init_inputs,
                                                   'Z_u': tot_mort_pred})
     elif group == 'detritivores':
         # Fishing mortality (FVec.u, FVec.v) from Benoit & Rochet 2004. Here 
-        # fish_mort_pred and fish_mort_pred= fixed catchability term for predators and 
-        # detritivores to be estimated along with ind_min_det and ind_min_fish_pred
+        # fish_mort_pred and fish_mort_pred= fixed catchability term for 
+        # predators and detritivores to be estimated along with ind_min_det and
+        # ind_min_fish_pred
         fishing_mort_det = (dbpm_fixed_inputs['fish_mort_det']*
                             dbpm_dynamic_inputs['effort']).drop_vars('time')
         #Time dimension matches feed rates time stamp
-        fishing_mort_det = fishing_mort_det.expand_dims({'time': dbpm_init_inputs.time})
+        fishing_mort_det = fishing_mort_det.expand_dims(
+          {'time': dbpm_init_inputs.time})
         # Predation mortality
         # Detritivores (PM.v)
         pred_mort_det = xr.where(feed_sat_rates['sat_ben'] > 0, 
@@ -1377,7 +1407,8 @@ def mortality_calc(gridded_params, dbpm_fixed_inputs, dbpm_init_inputs,
         
     #Reorganise dimensions
     try:
-        mortality_terms = mortality_terms.transpose('time', 'size_class', 'lat', 'lon')
+        mortality_terms = mortality_terms.transpose('time', 'size_class', 
+                                                    'lat', 'lon')
     except:
         mortality_terms = mortality_terms.transpose('time', 'size_class')
     #Apply spatial mask
@@ -1392,21 +1423,25 @@ def growth_rates_calc(gridded_params, feed_sat_rates, dbpm_fixed_inputs):
     '''
     Inputs:
     - gridded_params (dictionary) Gridded DBPM parameters obtained in step 04.
-    - feed_sat_rates (xarray Dataset) Contains feeding rates calculated for predators,
-    detritivores and detritus calculated with the "feeding_satiation_rates" function
-    - dbpm_fixed_inputs (xarray Dataset) Contains fixed gridded inputs needed to run 
-    DBPM
+    - feed_sat_rates (xarray Dataset) Contains feeding rates calculated for 
+    predators, detritivores and detritus calculated with the 
+    "feeding_satiation_rates" function
+    - dbpm_fixed_inputs (xarray Dataset) Contains fixed gridded inputs needed 
+    to run DBPM
     
     Outputs:
-    - growth_rates (xarray Dataset). Contains growth and estimates for detritivores 
-    and predators
+    - growth_rates (xarray Dataset). Contains growth and estimates for 
+    detritivores and predators
     '''
     # Predator growth integral (GG_u)
-    growth_int_pred = (gridded_params['growth_prop']*gridded_params['growth_pred']*
+    growth_int_pred = (gridded_params['growth_prop']*
+                       gridded_params['growth_pred']*
                        feed_sat_rates['f_pel'] + gridded_params['high_prop']*
-                       gridded_params['growth_detritivore']*feed_sat_rates['f_ben'])
+                       gridded_params['growth_detritivore']*
+                       feed_sat_rates['f_ben'])
     # Benthos growth integral yr-1 (GG_v)
-    growth_int_det = (gridded_params['high_prop']*gridded_params['growth_detritus']*
+    growth_int_det = (gridded_params['high_prop']*
+                      gridded_params['growth_detritus']*
                       feed_sat_rates['f_det'])
     # Create dataset with growth rates for detritivores and predators
     growth_reprod = xr.Dataset(data_vars = {'GG_u': growth_int_pred,
@@ -1414,7 +1449,8 @@ def growth_rates_calc(gridded_params, feed_sat_rates, dbpm_fixed_inputs):
 
     #Reorganise dimensions
     try:
-        growth_reprod = growth_reprod.transpose('time', 'size_class', 'lat', 'lon')
+        growth_reprod = growth_reprod.transpose('time', 'size_class', 
+                                                'lat', 'lon')
     except:
         growth_reprod = growth_reprod.transpose('time', 'size_class')
     #Apply spatial mask
@@ -1429,23 +1465,25 @@ def reproduction_rates(gridded_params, feed_sat_rates, dbpm_fixed_inputs, group)
     '''
     Inputs:
     - gridded_params (dictionary) Gridded DBPM parameters obtained in step 04.
-    - feed_sat_rates (xarray Dataset) Contains feeding rates calculated for predators,
-    detritivores and detritus calculated with the "feeding_satiation_rates" function
-    - dbpm_fixed_inputs (xarray Dataset) Contains fixed gridded inputs needed to run 
-    DBPM
+    - feed_sat_rates (xarray Dataset) Contains feeding rates calculated for 
+    predators, detritivores and detritus calculated with the 
+    "feeding_satiation_rates" function
+    - dbpm_fixed_inputs (xarray Dataset) Contains fixed gridded inputs needed 
+    to run DBPM
     - group (character): Choose the group for which mortality rates will be 
     calculated. Choices: predators, detritivores.
     
     Outputs:
-    - growth_rates (xarray Dataset). Contains growth and estimates for detritivores 
-    and predators
+    - growth_rates (xarray Dataset). Contains growth and estimates for 
+    detritivores and predators
     '''
 
     if group == 'predators':
         #Keep relevant size classes
         feed_sat_rates = (feed_sat_rates.
                           isel(size_class = 
-                               slice(gridded_params['ind_min_pred_size'] + 1, None)))
+                               slice(gridded_params['ind_min_pred_size'] + 1, 
+                                     None)))
         #Predators
         reprod_pred = (gridded_params['growth_prop']*
                        (1-(gridded_params['growth_pred'] +
@@ -1476,7 +1514,8 @@ def reproduction_rates(gridded_params, feed_sat_rates, dbpm_fixed_inputs, group)
 
     #Reorganise dimensions
     try:
-        reprod_rates = reprod_rates.transpose('time', 'size_class', 'lat', 'lon')
+        reprod_rates = reprod_rates.transpose('time', 'size_class', 
+                                              'lat', 'lon')
     except:
         reprod_rates = reprod_rates.transpose('time', 'size_class')
     #Apply spatial mask
@@ -1492,16 +1531,16 @@ def detritus_output(gridded_params, dbpm_fixed_inputs, dbpm_init_inputs,
     '''
     Inputs:
     - gridded_params (dictionary) Gridded DBPM parameters obtained in step 04.
-    - dbpm_fixed_inputs (xarray Dataset) Contains fixed gridded inputs needed to run 
-    DBPM
-    - dbpm_init_inputs (xarray Dataset) Contains gridded inputs with initialisation 
-    values for predators, detritivores and detritus
-    - feed_detritus (xarray Data Array) Contains detritus rates calculated with the 
-    "feeding_satiation_rates" function
+    - dbpm_fixed_inputs (xarray Dataset) Contains fixed gridded inputs needed 
+    to run DBPM
+    - dbpm_init_inputs (xarray Dataset) Contains gridded inputs with 
+    initialisation values for predators, detritivores and detritus
+    - feed_detritus (xarray Data Array) Contains detritus rates calculated with
+    the "feeding_satiation_rates" function
     
     Outputs:
-    - output_w (xarray Data Array). Contains detritus output (g.m-2.yr-1), which are
-    defined as losses from detritivore scavenging/filtering only.
+    - output_w (xarray Data Array). Contains detritus output (g.m-2.yr-1), 
+    which are defined as losses from detritivore scavenging/filtering only.
     '''
     # Detritus output (g.m-2.yr-1)
     # losses from detritivore scavenging/filtering only:
@@ -1528,15 +1567,16 @@ def defecation_predators(gridded_params, dbpm_fixed_inputs, dbpm_init_inputs,
     '''
     Inputs:
     - gridded_params (dictionary) Gridded DBPM parameters obtained in step 04.
-    - dbpm_fixed_inputs (xarray Dataset) Contains fixed gridded inputs needed to run 
-    DBPM
-    - dbpm_init_inputs (xarray Dataset) Contains gridded inputs with initialisation 
-    values for predators, detritivores and detritus
+    - dbpm_fixed_inputs (xarray Dataset) Contains fixed gridded inputs needed 
+    to run DBPM
+    - dbpm_init_inputs (xarray Dataset) Contains gridded inputs with 
+    initialisation values for predators, detritivores and detritus
     - feed_sat_rates (xarray Dataset) Contains feeding rates for predators and 
     detritivores calculated with the "feeding_satiation_rates" function
     
     Outputs:
-    - defbypred (xarray Data Array). Contains total biomass defecated by predators
+    - defbypred (xarray Data Array). Contains total biomass defecated by
+    predators
     '''
     # Select relevant predator size classes
     pred = (dbpm_init_inputs['predators'].
@@ -1567,20 +1607,20 @@ def detritus_pool(gridded_params, dbpm_fixed_inputs, dbpm_init_inputs,
     '''
     Inputs:
     - gridded_params (dictionary) Gridded DBPM parameters obtained in step 04.
-    - dbpm_fixed_inputs (xarray Dataset) Contains fixed gridded inputs needed to 
-    run DBPM
-    - dbpm_init_inputs (xarray Dataset) Contains gridded inputs with initialisation 
-    values for predators, detritivores and detritus
-    - dbpm_dynamic_inputs (xarray Dataset) Contains dynamic gridded inputs need to
-    run DBPM
-     - defbypred (xarray Data Array). Contains total biomass defecated by predators 
-     calculated with the "defecation_predators" function
+    - dbpm_fixed_inputs (xarray Dataset) Contains fixed gridded inputs needed
+    to run DBPM
+    - dbpm_init_inputs (xarray Dataset) Contains gridded inputs with 
+    initialisation values for predators, detritivores and detritus
+    - dbpm_dynamic_inputs (xarray Dataset) Contains dynamic gridded inputs 
+    needed to run DBPM
+     - defbypred (xarray Data Array). Contains total biomass defecated by 
+     predators calculated with the "defecation_predators" function
      - output_w (xarray Data Array). Contains detritus output (g.m-2.yr-1) 
      calculated with the "detritus_output" function
      **Optional**: 
-    - detritus_input (xarray Dataset) Contains gridded inputs for input_w, which is
-    the amount of the detritus new to the system. This data is derived from the 
-    GFDL`expc-bot` variable 
+    - detritus_input (xarray Dataset) Contains gridded inputs for input_w, 
+    which is the amount of the detritus new to the system. This data is derived 
+    from the GFDL `expc-bot` variable 
     
     Outputs:
     - det_pool (xarray Dataset). Contains detritus biomass density pool fluxes
@@ -1656,10 +1696,10 @@ def biomass_density(gridded_params, dbpm_fixed_inputs, growth_rate,
     '''
     Inputs:
     - gridded_params (dictionary) Gridded DBPM parameters obtained in step 04.
-    - dbpm_fixed_inputs (xarray Dataset) Contains fixed gridded inputs needed to 
-    run DBPM
-    - growth_rates (xarray Dataset). Contains growth and estimates for detritivores 
-    and predators estimated by the "growth_rate" function
+    - dbpm_fixed_inputs (xarray Dataset) Contains fixed gridded inputs needed 
+    to run DBPM
+    - growth_rates (xarray Dataset). Contains growth and estimates for 
+    detritivores and predators estimated by the "growth_rate" function
     - total_mortality (xarray Data Array). Contains total mortality for group of
     interest estimated by the "mortality_calc" function
     - biomass (xarray Data Array). Contains total biomass for group of interest
@@ -1791,7 +1831,8 @@ def tot_biomass_calc(gridded_params, dbpm_fixed_inputs, group, biomass_current,
     biomass_next.name = group
     #Reorganise dimensions
     try:
-        biomass_next = biomass_next.transpose('time', 'size_class', 'lat', 'lon')
+        biomass_next = biomass_next.transpose('time', 'size_class', 
+                                              'lat', 'lon')
     except:
         biomass_next = biomass_next.transpose('time', 'size_class')
     #Apply spatial mask
@@ -1817,20 +1858,25 @@ def detritus_rk4_step(gridded_params, dbpm_fixed_inputs, dbpm_init_inputs,
         temp_inputs['detritus'] = detritus_state
         
         # Recalculate feeding rates with updated detritus
-        feed_detritus = feeding_satiation_rates(gridded_params, dbpm_fixed_inputs, 
-                                               temp_inputs, dbpm_dynamic_inputs, 
-                                               group = 'detritus')
+        feed_detritus = feeding_satiation_rates(gridded_params, 
+                                                dbpm_fixed_inputs, 
+                                                temp_inputs, 
+                                                dbpm_dynamic_inputs,  
+                                                group = 'detritus')
         
         # Calculate outputs and defecation (these depend on current biomass)
-        output_w = detritus_output(gridded_params, dbpm_fixed_inputs, temp_inputs,
-                                  feed_detritus.f_det)
+        output_w = detritus_output(gridded_params, dbpm_fixed_inputs, 
+                                   temp_inputs, feed_detritus.f_det)
         
-        feed_sat_pred = feeding_satiation_rates(gridded_params, dbpm_fixed_inputs, 
+        feed_sat_pred = feeding_satiation_rates(gridded_params, 
+                                                dbpm_fixed_inputs, 
+                                                temp_inputs, 
+                                                dbpm_dynamic_inputs, 
+                                                group = 'predators')
+        feed_sat_det = feeding_satiation_rates(gridded_params, 
+                                               dbpm_fixed_inputs, 
                                                temp_inputs, dbpm_dynamic_inputs, 
-                                               group = 'predators')
-        feed_sat_det = feeding_satiation_rates(gridded_params, dbpm_fixed_inputs, 
-                                              temp_inputs, dbpm_dynamic_inputs, 
-                                              group = 'detritivores')
+                                               group = 'detritivores')
         
         defbypred = defecation_predators(gridded_params, dbpm_fixed_inputs,
                                         temp_inputs, 
@@ -1839,7 +1885,8 @@ def detritus_rk4_step(gridded_params, dbpm_fixed_inputs, dbpm_init_inputs,
         
         # Calculate detritus pool changes
         det_pool = detritus_pool(gridded_params, dbpm_fixed_inputs, temp_inputs,
-                                dbpm_dynamic_inputs, defbypred, output_w, **kwargs)
+                                dbpm_dynamic_inputs, defbypred, output_w,
+                                **kwargs)
         
         return det_pool['dW']
     
@@ -1865,30 +1912,32 @@ def gridded_sizemodel_rk4(gridded_params, dbpm_fixed_inputs, dbpm_init_inputs,
     
     Inputs:
     - gridded_params (dictionary) Gridded DBPM parameters obtained in step 04.
-    - dbpm_fixed_inputs (xarray Dataset) Contains fixed gridded inputs needed to run 
-    DBPM
-    - dbpm_init_inputs (xarray Dataset) Contains gridded inputs with initialisation 
-    values for predators, detritivores and detritus
-    - dbpm_dynamic_inputs (xarray Dataset) Contains dynamic gridded inputs need to run
-    DBPM
-    - region (character) Name of region being processed (as included in folder and file
-    names)
-    - model_res (character) Spatial resolution of DBPM inputs (as included in folder
-    and file names)
-    - out_folder (character) Full path to folder where DBPM outputs will be stored
-    - weekly (boolean) Default is False. If set to True, the model will run at weekly
-    timesteps
+    - dbpm_fixed_inputs (xarray Dataset) Contains fixed gridded inputs needed 
+    to run DBPM
+    - dbpm_init_inputs (xarray Dataset) Contains gridded inputs with 
+    initialisation values for predators, detritivores and detritus
+    - dbpm_dynamic_inputs (xarray Dataset) Contains dynamic gridded inputs 
+    needed to run DBPM
+    - region (character) Name of region being processed (as included in folder
+    and filenames)
+    - model_res (character) Spatial resolution of DBPM inputs (as included in 
+    folder and filenames)
+    - out_folder (character) Full path to folder where DBPM outputs will be 
+    stored
+    - weekly (boolean) Default is False. If set to True, the model will run at 
+    weekly timesteps
     **Optional**: 
-    - detritus_input (xarray Dataset) Contains gridded inputs for input_w, which is
-    the amount of the detritus new to the system. This data is derived from the 
-    GFDL`expc-bot` variable 
+    - detritus_input (xarray Dataset) Contains gridded inputs for input_w, 
+    which is the amount of the detritus new to the system. This data is derived
+    from the GFDL `expc-bot` variable 
     - benthic_habitat_depth (numeric) - Default is 20 meters. This refers to the 
-    thickness of vertical habitat for the benthic group. This should be the same value
-    as used in script `00_processing_dbpm_global_inputs.py` (see line 78)
+    thickness of vertical habitat for the benthic group. This should be the 
+    same value as used in script `00_processing_dbpm_global_inputs.py` (see 
+    line 78)
 
     Outputs:
-    - None. This function does not return any objects. Instead outputs are saved in
-    the path provided in the "out_folder" argument
+    - None. This function does not return any objects. Instead outputs are 
+    saved in the path provided in the "out_folder" argument
     """
     
     # Storing date from dynamic dataset
@@ -1908,15 +1957,18 @@ def gridded_sizemodel_rk4(gridded_params, dbpm_fixed_inputs, dbpm_init_inputs,
     # Feeding and satiation rates ----
     # Predators
     feed_sat_pred = feeding_satiation_rates(gridded_params, dbpm_fixed_inputs, 
-                                            dbpm_init_inputs, dbpm_dynamic_inputs, 
+                                            dbpm_init_inputs, 
+                                            dbpm_dynamic_inputs, 
                                             group = 'predators')
     # Detritivores
     feed_sat_det = feeding_satiation_rates(gridded_params, dbpm_fixed_inputs, 
-                                           dbpm_init_inputs, dbpm_dynamic_inputs, 
+                                           dbpm_init_inputs, 
+                                           dbpm_dynamic_inputs, 
                                            group = 'detritivores')
     # Detritus
     feed_detritus = feeding_satiation_rates(gridded_params, dbpm_fixed_inputs, 
-                                            dbpm_init_inputs, dbpm_dynamic_inputs, 
+                                            dbpm_init_inputs, 
+                                            dbpm_dynamic_inputs, 
                                             group = 'detritus')
     
     
@@ -2001,8 +2053,9 @@ def gridded_sizemodel_rk4(gridded_params, dbpm_fixed_inputs, dbpm_init_inputs,
                          pred_next, 0)
 
     predators = tot_biomass_calc(gridded_params, dbpm_fixed_inputs, 
-                                 'predators', dbpm_init_inputs['predators'], pred_next, 
-                                 pred_density, reprod_rate = reprod_pred['R_u'],
+                                 'predators', dbpm_init_inputs['predators'], 
+                                 pred_next, pred_density, 
+                                 reprod_rate = reprod_pred['R_u'],
                                  growth_rate = growth_rates_pred_det['GG_u'], 
                                  total_mortality = mortality_pred['Z_u']).load()
     
@@ -2035,13 +2088,15 @@ def gridded_sizemodel_rk4(gridded_params, dbpm_fixed_inputs, dbpm_init_inputs,
     detriti_next['time'] = [dbpm_time]
 
     detritivores = tot_biomass_calc(gridded_params, dbpm_fixed_inputs, 
-                                    'detritivores', dbpm_init_inputs['detritivores'],
+                                    'detritivores', 
+                                    dbpm_init_inputs['detritivores'],
                                     detriti_next, det_density, 
                                     reprod_rate = reprod_det['R_v'],
                                     growth_rate = growth_rates_pred_det['GG_v'], 
                                     total_mortality = mortality_det['Z_v']).load()
-    #If values are negative, assign a value of 0 - Detritivores outputs are multiplied
-    #by benthic habitat depth (see new parameter in `sizemodel` function)
+    #If values are negative, assign a value of 0 - Detritivores outputs are 
+    #multiplied by benthic habitat depth (see new parameter in `sizemodel`
+    #function)
     detritivores = xr.where(detritivores < 0, 0, detritivores*benthic_habitat_depth)
     if force_finite:
         detritivores = detritivores.where(np.isfinite(detritivores))
@@ -2050,7 +2105,8 @@ def gridded_sizemodel_rk4(gridded_params, dbpm_fixed_inputs, dbpm_init_inputs,
     fn = f'detritivores_{model_res}_{region}_{pred_ts_next}.nc'
     detritivores.to_netcdf(os.path.join(out_folder, fn))
 
-    #Creating dataset with new values for predators and detritivores biomass, and detritus
+    #Creating dataset with new values for predators and detritivores biomass, 
+    #and detritus
     ds_next = xr.Dataset(data_vars = {'predators': predators, 
                                       'detritivores': detritivores, 
                                       'detritus': detritus})
@@ -2065,23 +2121,24 @@ def gridded_sizemodel(gridded_params, dbpm_fixed_inputs, dbpm_init_inputs,
     '''
     Inputs:
     - gridded_params (dictionary) Gridded DBPM parameters obtained in step 04.
-    - dbpm_fixed_inputs (xarray Dataset) Contains fixed gridded inputs needed to run 
-    DBPM
-    - dbpm_init_inputs (xarray Dataset) Contains gridded inputs with initialisation 
-    values for predators, detritivores and detritus
-    - dbpm_dynamic_inputs (xarray Dataset) Contains dynamic gridded inputs need to run
-    DBPM
-    - region (character) Name of region being processed (as included in folder and file
-    names)
-    - model_res (character) Spatial resolution of DBPM inputs (as included in folder
-    and file names)
-    - out_folder (character) Full path to folder where DBPM outputs will be stored
-    - weekly (boolean) Default is False. If set to True, the model will run at weekly
-    timesteps
+    - dbpm_fixed_inputs (xarray Dataset) Contains fixed gridded inputs needed 
+    to run DBPM
+    - dbpm_init_inputs (xarray Dataset) Contains gridded inputs with 
+    initialisation values for predators, detritivores and detritus
+    - dbpm_dynamic_inputs (xarray Dataset) Contains dynamic gridded inputs 
+    needed to run DBPM
+    - region (character) Name of region being processed (as included in folder 
+    and filenames)
+    - model_res (character) Spatial resolution of DBPM inputs (as included in 
+    folder and filenames)
+    - out_folder (character) Full path to folder where DBPM outputs will be
+    stored
+    - weekly (boolean) Default is False. If set to True, the model will run at 
+    weekly timesteps
 
     Outputs:
-    - None. This function does not return any objects. Instead outputs are saved in
-    the path provided in the "out_folder" argument
+    - None. This function does not return any objects. Instead outputs are 
+    saved in the path provided in the "out_folder" argument
     '''
     
     # Storing date from dynamic dataset
@@ -2101,15 +2158,18 @@ def gridded_sizemodel(gridded_params, dbpm_fixed_inputs, dbpm_init_inputs,
     # Feeding and satiation rates ----
     # Predators
     feed_sat_pred = feeding_satiation_rates(gridded_params, dbpm_fixed_inputs, 
-                                            dbpm_init_inputs, dbpm_dynamic_inputs, 
+                                            dbpm_init_inputs, 
+                                            dbpm_dynamic_inputs, 
                                             group = 'predators')
     # Detritivores
     feed_sat_det = feeding_satiation_rates(gridded_params, dbpm_fixed_inputs, 
-                                           dbpm_init_inputs, dbpm_dynamic_inputs, 
+                                           dbpm_init_inputs, 
+                                           dbpm_dynamic_inputs, 
                                            group = 'detritivores')
     # Detritus
     feed_detritus = feeding_satiation_rates(gridded_params, dbpm_fixed_inputs, 
-                                            dbpm_init_inputs, dbpm_dynamic_inputs, 
+                                            dbpm_init_inputs, 
+                                            dbpm_dynamic_inputs, 
                                             group = 'detritus')
     
     
@@ -2151,9 +2211,11 @@ def gridded_sizemodel(gridded_params, dbpm_fixed_inputs, dbpm_init_inputs,
         reprod_pred = reproduction_rates(gridded_params, 
                                          xr.Dataset({'f_pel': feed_sat_pred.f_pel,
                                                      'f_ben': feed_sat_det.f_ben}),
-                                         dbpm_fixed_inputs, group = 'predators')
+                                         dbpm_fixed_inputs, 
+                                         group = 'predators')
         reprod_det = reproduction_rates(gridded_params, feed_detritus,
-                                        dbpm_fixed_inputs, group = 'detritivores')
+                                        dbpm_fixed_inputs, 
+                                        group = 'detritivores')
     
     # Detritus output (g.m-2.yr-1) ----
     # losses from detritivore scavenging/filtering only:
@@ -2168,18 +2230,18 @@ def gridded_sizemodel(gridded_params, dbpm_fixed_inputs, dbpm_init_inputs,
                                                  'f_ben': feed_sat_det.f_ben}))
 
     # Detritus Biomass Density Pool ----
-    # Fluxes in and out (g.m-2.yr-1) of detritus pool. Solve for detritus biomass
-    # density in next timestep 
+    # Fluxes in and out (g.m-2.yr-1) of detritus pool. Solve for detritus 
+    # biomass density in next timestep 
     # Increment values of detritus, predators & detritivores for next 
     # timestep
-    det_pool = detritus_pool(gridded_params, dbpm_fixed_inputs, dbpm_init_inputs,
-                             dbpm_dynamic_inputs, defbypred, output_w)
+    det_pool = detritus_pool(gridded_params, dbpm_fixed_inputs, 
+                             dbpm_init_inputs, dbpm_dynamic_inputs, defbypred, 
+                             output_w)
 
     # Biomass density of detritus g.m-2
     detritus = (dbpm_init_inputs['detritus'] + det_pool['dW']*
                 gridded_params['timesteps_years']).load()
-    # detritus = (dbpm_init_inputs['detritus']*det_pool['dW']).load()
-
+    
     #If values are negative, assign a value of 0
     detritus = xr.where(detritus < 0, 0, detritus)
     if force_finite:
@@ -2212,8 +2274,9 @@ def gridded_sizemodel(gridded_params, dbpm_fixed_inputs, dbpm_init_inputs,
                          pred_next, 0)
 
     predators = tot_biomass_calc(gridded_params, dbpm_fixed_inputs, 
-                                 'predators', dbpm_init_inputs['predators'], pred_next, 
-                                 pred_density, reprod_rate = reprod_pred['R_u'],
+                                 'predators', dbpm_init_inputs['predators'], 
+                                 pred_next, pred_density, 
+                                 reprod_rate = reprod_pred['R_u'],
                                  growth_rate = growth_rates_pred_det['GG_u'], 
                                  total_mortality = mortality_pred['Z_u']).load()
     
@@ -2245,7 +2308,8 @@ def gridded_sizemodel(gridded_params, dbpm_fixed_inputs, dbpm_init_inputs,
     detriti_next['time'] = [dbpm_time]
 
     detritivores = tot_biomass_calc(gridded_params, dbpm_fixed_inputs, 
-                                    'detritivores', dbpm_init_inputs['detritivores'],
+                                    'detritivores', 
+                                    dbpm_init_inputs['detritivores'],
                                     detriti_next, det_density, 
                                     reprod_rate = reprod_det['R_v'],
                                     growth_rate = growth_rates_pred_det['GG_v'], 
@@ -2259,7 +2323,8 @@ def gridded_sizemodel(gridded_params, dbpm_fixed_inputs, dbpm_init_inputs,
     fn = f'detritivores_{model_res}_{region}_{pred_ts_next}.nc'
     detritivores.to_netcdf(os.path.join(out_folder, fn))
 
-    #Creating dataset with new values for predators and detritivores biomass, and detritus
+    #Creating dataset with new values for predators and detritivores biomass, 
+    #and detritus
     ds_next = xr.Dataset(data_vars = {'predators': predators, 
                                       'detritivores': detritivores, 
                                       'detritus': detritus})
@@ -2318,7 +2383,8 @@ def merge_files(var, folder, merge_by = 'decade', **kwargs):
             ymax = max([y for y in yrs if str(d) in str(y)])
             ymin = min([y for y in yrs if str(d) in str(y)])
             #Create file name to save merged data
-            f_out = re.sub('\\d{4}-\\d{2}|\\d{4}', f'{str(ymin)}-{str(ymax)}', base_file)
+            f_out = re.sub('\\d{4}-\\d{2}|\\d{4}', f'{str(ymin)}-{str(ymax)}',
+                           base_file)
             #Open dataset
             ds = xr.open_mfdataset(sub_list)
             #Save dataset
