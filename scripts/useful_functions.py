@@ -421,7 +421,7 @@ def detrital_input_seafloor(folder_gridded_data, gfdl_exp,
 
 # Integrating (mean) phytoplankton and ocean temperature inputs 
 def integrating_inputs(folder_gridded_data, gfdl_exp, thresh_depth = 200,
-                       averaging = 'biomass_weighted'):
+                       averaging = 'biomass_weighted', **kwargs):
     '''
     Inputs:
     - folder_gridded_data (character) File path pointing to folder containing
@@ -430,8 +430,8 @@ def integrating_inputs(folder_gridded_data, gfdl_exp, thresh_depth = 200,
     - gfdl_exp (character) Select GFDL experiment 'ctrl_clim' or 'obs_clim'
     - thresh_depth (numeric) Default 200 (m). Maximum depth in meters to be 
     considered when processing DBPM phytoplankton inputs.
-     - averaging (character) Default 'biomass_weighted'. Defines how to collapse 
-     the depth dimension. There are four choices available:
+    - averaging (character) Default 'biomass_weighted'. Defines how to collapse 
+    the depth dimension. There are four choices available:
          'fixed'            thickness-weighted mean over the `thresh_depth`.
          'mld'              thickness-weighted mean over the mixed layer
                             (out from `get_threshold_depth` function). De-biases 
@@ -449,6 +449,10 @@ def integrating_inputs(folder_gridded_data, gfdl_exp, thresh_depth = 200,
                             experiences. It captures surface and deep 
                             chlorophyll maximum, ignores phytoplankton-
                             poor waters it passes through but does not feed in.
+         'custom'           If 'custom', then user must provide own weights in
+                            the "weights" paramater.
+    - weights (data array) This parameter is optional, but it must be provided 
+    if selecting "custom" under the `averaging` parameter.
 
     Outputs:
     - phyc_weighted, phypico_weighted (data arrays, mol m-3). Integrated 
@@ -492,6 +496,17 @@ def integrating_inputs(folder_gridded_data, gfdl_exp, thresh_depth = 200,
         weights = depth_bins.where(bio_90, 0)
     elif averaging == 'biomass_weighted':
         weights = phyc*depth_bins
+    elif averaging == 'custom':       
+        if kwargs.get('weights') is not None:
+            if isinstance(kwargs.get('weights'), str):
+                weights = xr.open_zarr(kwargs.get('weights'))['weights']
+            elif isinstance(lphy_file, xr.DataArray) or isinstance(lphy_file, np.ndarray):
+                weights = kwargs.get('weights')
+            else:
+                raise ValueError(
+                    "The 'weights' parameter must be provided if the " +
+                    "averaging parameter is set to 'custom'. No 'weights'" +
+                    "were provided.")
     else:
         raise ValueError("the 'averaging' parameter must be 'fixed', 'mld', " +
                          "'cumulative90' or 'biomass_weighted'. Instead " +
@@ -600,6 +615,77 @@ def getExportRatio(folder_gridded_data, gfdl_exp,
     return sphy, lphy, er.drop_encoding()
 
 
+# Create sea ice masks from sea ice concentration outputs
+def sea_ice_masks(sic_file, area_file, sic_limit = 15, si_lat_north = 42, 
+                  si_lat_south = -52):
+    '''
+    Inputs:
+    - sic_file (character or data array) Either a filepath to a file containing
+    global sea ice concentration outputs or a data array containing global sea 
+    ice concentration data
+    - area_file (character or data array) Either a filepath to a file 
+    containing the area of grid cells (global) or a data array containing the 
+    area of grid cells (global) 
+    - sic_limit (numeric) The maximum sea ice concentration considered to be 
+    accessible to fishers
+    - si_lat_north (numeric) Default is 42 (Sea of Okhost). Lowest northern 
+    latitude where sea ice is present
+    - si_lat_south (numeric) Default is -52. Lowest southern latitude where 
+    sea ice is present
+    
+    Outputs:
+    - da_mask (data array) Global sea ice mask
+    '''
+
+    if isinstance(area_file, str):
+        area = xr.open_zarr(area_file)['cellareao']
+    elif isinstance(area_file, xr.DataArray):
+        area = area_file
+    else:
+        raise ValueError('You must provide either a full file path to ' + 
+                         'the area of grid cells or data array containing ' + 
+                         ' area of grid cells, but neither was provided.')
+
+    if isinstance(sic_file, str):
+        sic = xr.open_zarr(sic_file)['siconc'].where(np.isfinite(area))
+    elif isinstance(sic_file, xr.DataArray):
+        sic = sic_file.where(np.isfinite(area))
+    else:
+        raise ValueError('You must provide either a full file path to ' + 
+                         'the sea ice concentration outputs or data array ' + 
+                         'containing sea ice concentration data, but ' +
+                         'neither was provided.')
+
+    da_mask = xr.where(sic >= sic_limit, True, False)
+    
+    # Split into northern and southern hemispheres
+    
+    # Sea ice kept from 42N towards the north pole as the Sea of Okhotsk 
+    # (45N) is the lowest latitude area where sea ice forms each winter 
+    # according to NASA's Earth Observatory
+    da_mask_north = (xr.where(da_mask.lat >= si_lat_north, da_mask, False).
+        isel(lat = slice(None, None, -1)).cumsum('lat'))
+    
+    # Sea ice kept from 52S towards the south pole as 55S is the lowest 
+    # latitude area where sea ice forms each winter according to NASA's
+    # Earth Observatory
+    da_mask_south = xr.where(da_mask.lat <= si_lat_south, da_mask, 
+                             False).cumsum('lat')
+
+    # Creating a single global sea ice mask
+    da_mask = (da_mask_north+da_mask_south).drop_attrs()
+    da_mask = xr.where(da_mask > 0, np.nan, 1).where(np.isfinite(area))
+    #Rechunk data
+    da_mask = da_mask.chunk({'time': '500MB'}).drop_encoding()
+    #Update data array variable name
+    da_mask.name = 'simask'
+    da_mask = da_mask.assign_attrs({
+        'long_name': 'Sea ice mask for spatial distribution of fishing'})
+    da_mask = da_mask.transpose('time', 'lat', 'lon')
+
+    return da_mask
+
+    
 #Calculate slope and intercept
 def GetPPIntSlope(gfdl_folder = None, gfdl_exp = None, lphy_file = None, 
                   sphy_file = None, mmin = 10**(-14.25), mmid = 10**(-10.184), 
@@ -758,10 +844,13 @@ def gridded_spinup(file_path_or_data_array, start_spin, end_spin, spinup_period,
 
     #Loading data
     if isinstance(file_path_or_data_array, str):
-        da = xr.open_zarr(file_path_or_data_array)
-        #Getting name of variable contained in dataset
-        [var] = list(da.keys())
-        da = da[var]
+        if file_path_or_data_array.endswith('.zarr/'):
+            da = xr.open_zarr(file_path_or_data_array)
+            #Getting name of variable contained in dataset
+            [var] = list(da.keys())
+            da = da[var]
+        else:
+            da = xr.open_dataarray(file_path_or_data_array)
     elif isinstance(file_path_or_data_array, xr.DataArray):
         da = file_path_or_data_array
     else:
