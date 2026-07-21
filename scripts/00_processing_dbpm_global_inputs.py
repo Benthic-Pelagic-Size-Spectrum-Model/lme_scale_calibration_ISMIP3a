@@ -30,7 +30,7 @@ if __name__ == '__main__':
     grid_dir = '/g/data/vf71/shared_resources/grid_cell_vars_ESMs/isimip3a'
     
     #Define experiments and resolution
-    exp_name = ['obsclim', 'ctrlclim']
+    exp_name = ['ctrlclim', 'obsclim']
     resolutions = ['1deg', '025deg']
 
     #Define variables of interest
@@ -76,6 +76,21 @@ if __name__ == '__main__':
                 f_out = os.path.join(gfdl_out, f_out)
                 #Apply function
                 uf.netcdf_to_zarr(gfdl_file, f_out)
+
+                if var == 'phyc' and exp == 'ctrlclim':
+                    depths = (xr.open_dataarray(thick_file).drop_vars('time').
+                        squeeze().fillna(0))
+                    phyc = (xr.open_dataarray(f_out).
+                        sel(time = slice('1961', '1980')).mean('time').fillna(0))
+                    weights = phyc*depths
+                    weights.name = 'weights'
+                    weights = weights.drop_attrs()
+                    weights = weights.assign_attrs({
+                        'long_name':
+                        'Climatological mean (1961-1980) biomass weighting'})
+                    fn_weights = f_out.replace('_phyc_', '_bio-weights_')
+                    weights.drop_encoding().to_zarr(
+                        fn_weights, consolidated = True, mode = 'w')
                 
             # Transforming expc-bot (mol m-2 s-1) to input_w (gWW m-3 yr-1)
             input_w = uf.detrital_input_seafloor(gfdl_out, exp,
@@ -87,9 +102,10 @@ if __name__ == '__main__':
                 consolidated = True, mode = 'w')
 
             # Vertically integrate phytoplankton inputs up to threshold depth
+            [weight_file] = glob(os.path.join(gfdl_out, '*_bio-weights_*'))
             phyc, phypico, temp_ocean = uf.integrating_inputs(
                 gfdl_out, exp, thresh_depth = 200, 
-                averaging = 'biomass_weighted')
+                averaging = 'custom', weights = weight_file)
             #Save outputs
             phyc.to_zarr(
                 os.path.join(gfdl_out, base_fn.replace(
@@ -116,54 +132,3 @@ if __name__ == '__main__':
             er.to_zarr(
                 os.path.join(gfdl_out, base_fn.replace('_var_', '_er_')),
                 consolidated = True, mode = 'w')
-            
-            #Calculate intercept and slope
-            intercept, slope = uf.GetPPIntSlope(gfdl_folder = gfdl_out, 
-                                                gfdl_exp = exp)
-            #Save outputs
-            intercept.to_zarr(
-                os.path.join(gfdl_out, base_fn.replace('_var_', '_intercept_')), 
-                consolidated = True, mode = 'w')
-            slope.to_zarr(
-                os.path.join(gfdl_out, base_fn.replace('_var_', '_slope_')), 
-                consolidated = True, mode = 'w')
-
-            # Create sea ice masks 
-            # Any grid cells with sea ice concentration of 15% or above will 
-            # not be available for fishing
-            # Identify sea ice files
-            si_files = glob(os.path.join(gfdl_out, '*siconc*'))
-
-            #Create masks for all sea ice files
-            for f in si_files:
-                #Load files
-                da = xr.open_zarr(f)['siconc'].where(np.isfinite(area))
-                #Identify grid cells with at least 15% SIC
-                da_mask = xr.where(da >= 15, True, False)
-                #Split into northern and southern hemispheres before calculating
-                #cumulative sum
-                
-                #Sea ice kept from 42N towards the north pole as the Sea of 
-                #Okhotsk (45N) is the lowest latitude area where sea ice 
-                #forms each winter according to NASA's Earth Observatory
-                da_mask_north = (xr.where(da_mask.lat > 42, da_mask, False).
-                    isel(lat = slice(None, None, -1)).cumsum('lat'))
-                #Sea ice kept from 52S towards the south pole as 55S is the
-                #lowest latitude area where sea ice forms each winter 
-                #according to NASA's Earth Observatory
-                da_mask_south = xr.where(da_mask.lat <= -52, 
-                                         da_mask, False).cumsum('lat')
-                #Create a single global mask
-                da_mask = (da_mask_north+da_mask_south)
-                #Remove any grid cells that are on land or have sea ice within
-                #their boundaries
-                da_mask = xr.where(da_mask > 0,
-                                   np.nan, 1).where(np.isfinite(area))
-                #Rechunk data
-                da_mask = da_mask.chunk({'time': '500MB'})
-                #Update data array variable name
-                da_mask.name = 'simask'
-                #Create file path to save outputs
-                f_out = f.replace('siconc', 'simask')
-                #Save results
-                da_mask.to_zarr(f_out, consolidated = True, mode = 'w')
