@@ -1,5 +1,5 @@
-# Processing fishing and effort inputs for Dynamic Benthic-Pelagic Size 
-# Spectrum Model (DBPM)
+# Creating a single file with all ocean and fishing inputs to run the 
+# Dynamic Benthic-Pelagic Size Spectrum Model (DBPM) calibration runs
 
 # Activate local R library
 .libPaths("/g/data/vf71/la6889/R_personal_lib/")
@@ -14,126 +14,48 @@ library(ggplot2)
 library(stringr)
 library(lubridate)
 
-
-# Defining base folder
-fishing_folder <- "/g/data/vf71/fishmip_inputs/ISIMIP3a"
-
-# Processing global effort data -------------------------------------------
-# This step needs to be completed only once at a global scale
-# Creating summaries of effort per year and region of interest
-effort_data_global <- file.path(fishing_folder, "DKRZ_EffortFiles",
-                                "effort_isimip3a_histsoc_1841_2010.csv") |> 
-  read_csv_arrow(col_select = c("Year", "fao_area", "LME", "NomActive")) |> 
-  clean_names() |>
-  mutate(region = case_when(lme == 0 ~ fao_area+100, .default = lme)) |> 
-  # calculate sum of effort by area
-  group_by(year, region) |> 
-  summarise(total_nom_active = sum(nom_active, na.rm = T)) |> 
-  ungroup()
-
-# Saving summarised data
-effort_data_global |> 
-  write_csv_arrow(
-    file.path(fishing_folder, "DKRZ_EffortFiles",
-              "yearly_effort_fao-lme_isimip3a_histsoc_1841_2010.csv")) 
-
-
-# Processing global catch data (Watson) -----------------------------------
-# This step needs to be completed only once at a global scale
-catch_watson <- file.path(fishing_folder, "DKRZ_EffortFiles",
-                          "catch_histsoc_1869_2017_EEZ_addFAO.csv") |> 
-  read_csv_arrow(col_select = c("Year", "fao_area", "LME", "Reported", 
-                                "IUU")) |>
-  clean_names() |> 
-  mutate(region = case_when(lme == 0 ~ fao_area+100, .default = lme)) |> 
-  group_by(year, region) |> 
-  summarise(tot_reported = sum(reported, na.rm = T),
-            tot_iuu = sum(iuu, na.rm = T)) |> 
-  rowwise() |> 
-  # catch is in tonnes. This was checked in "FishingEffort" project
-  mutate(catch_tonnes = sum(tot_reported, tot_iuu, na.rm = T)) |>
-  # also Reg advise to exclude discards 
-  ungroup() |> 
-  select(!starts_with("tot_")) 
-
-# Saving summarised data
-catch_watson |> 
-  write_csv_arrow(
-    file.path(fishing_folder, "DKRZ_EffortFiles",
-              "yearly_catch_fao-lme_isimip3a_histsoc_1869_2017.csv")) 
-
-
-# Processing size spectrum - catches --------------------------------------
-# Size spectra data from Reg (original file name: SizesinLMET2.csv")
-ss_catches <- read_csv_arrow(file.path(fishing_folder, "effort_catch_data", 
-                                       "size_spectrum_catches_fao-lme.csv")) |> 
-  clean_names()
-# Loading names of LMEs and FAO regions
-lme_names <- read_csv_arrow(file.path("/g/data/vf71/shared_resources", 
-                                      "fao_lme_masks/fao-major_lme_keys.csv"),
-                      col_select = c("fao_lme", "corrected_name"))
-
-# Finding maximum and minimum weight classes of catches (per year and AOI)
-# The 'Log10MidWt' column was selected based on the 'Plot Size Data 8.R' script 
-# from Reg that produces the figure of size spectrum plots for each region
-ss_catches_summ <- ss_catches |> 
-  left_join(lme_names, by = c("area"="fao_lme")) |> 
-  group_by(year, area, corrected_name) |> 
-  summarise(min_fished_weight_class = min(log10mid_wt, na.rm = T),
-            max_fished_weight_class = max(log10mid_wt, na.rm = T), 
-            .groups = "drop") |> 
-  mutate(region = case_when(area < 100 ~ paste0("LME ", area),
-                            .default = paste0("FAO ", area)), .after = year) |> 
-  rename(region_name = corrected_name) 
-
-# Saving summarised data
-ss_catches_summ |> 
-  write_csv_arrow(file.path(fishing_folder, "effort_catch_data", 
-                            "summary_size_spectrum_catches_fao-lme.csv"))
-
-
 # Define base variables ---------------------------------------------------
 base_folder <- "/g/data/vf71/fishmip_inputs/ISIMIP3a/fao_lme_inputs"
-fao_lme <- list.dirs(base_folder, recursive = F, full.names = F) |> 
+fishing_folder <- "/g/data/vf71/fishmip_inputs/ISIMIP3a"
+fao_lme <- list.dirs(base_folder, recursive = FALSE, full.names = FALSE) |> 
   str_subset(pattern = "fao_lme-")
 
-# "smoothed" can be either NULL to use original inputs, 'smoothed' to use LOESS
-# smoothed inputs or 'deseasoned' to use deseasoned inputs
-# outputs to force DBPM
-smoothed <- NULL
-if(!is.null(smoothed)){
-  fn_search <- "-smoothed"
-  smoothed <- paste0("-", smoothed)
-}else{
-  fn_search <- ""
-  smoothed <- ""
-}
+
+# Loading fishing datasets ------------------------------------------------
+global_effort_data <- read_csv_arrow(
+  file.path(fishing_folder, "DKRZ_EffortFiles",
+            "yearly_effort_fao-lme_isimip3a_histsoc_1841_2010.csv"))
+
+global_catch_watson <- read_csv_arrow(
+  file.path(fishing_folder, "DKRZ_EffortFiles",
+            "yearly_catch_fao-lme_isimip3a_histsoc_1869_2017.csv"))
+
+global_ss_catches_summ <- read_csv_arrow(
+  file.path(fishing_folder, "effort_catch_data", 
+            "summary_size_spectrum_catches_fao-lme.csv"))
 
 # Applying workflow to all regions
 for(f in fao_lme){
   fao_lme_id <- as.numeric(str_extract(f, "[0-9]+"))
   #Creating path to ocean inputs
-  forcing_folder <- file.path(base_folder, f, 
-                              paste0("monthly_weighted", smoothed))
+  forcing_folder <- file.path(base_folder, f, "monthly_weighted")
   
   # Loading DBPM climate inputs ---------------------------------------------
   # We will double the timesteps for the stable spinup period
-  stable_spin <- list.files(forcing_folder, pattern = "^stable-spin_dbpm",
-                            full.names = T) |> 
+  stable_spin <- list.files(
+    forcing_folder, pattern = "^stable-spin_dbpm", full.names = TRUE) |> 
     read_parquet() |> 
-    replicate(2, expr = _, simplify = F) |> 
+    replicate(2, expr = _, simplify = FALSE) |> 
     bind_rows() |> 
     mutate(time = seq(as_date("1641-01-01"), as_date("1840-12-31"), 
                       by = "month"), 
-           year = year(time), month = month(time, label = T, abbr = F))
+           year = year(time), month = month(time, label = TRUE, abbr = FALSE))
     
-  
   # We will load climate inputs to merge with catch and effort data before 
   # saving results
-  clim_forcing_file <- list.files(forcing_folder, 
-                                  pattern = "obsclim|spinup",
-                                  full.names = T) |>
-    str_subset(paste0("inputs", fn_search, "_fao_lme")) |> 
+  clim_forcing_file <- list.files(
+    forcing_folder, pattern = "obsclim|spinup", full.names = TRUE) |>
+    str_subset("inputs_fao_lme") |> 
     map(\(x) read_parquet(x)) |> 
     bind_rows(stable_spin) |>
     arrange(time) |> 
@@ -142,16 +64,16 @@ for(f in fao_lme){
   
   ## Dynamic stable spinup period for the Arctic only -----------------------
   if(fao_lme_id == 64){
-    spinup <- list.files(forcing_folder, pattern = "spinup", full.names = T) |> 
-      read_parquet()
+    spinup <- read_parquet(list.files(
+      forcing_folder, pattern = "spinup", full.names = TRUE))
     
     dyn_spinup <- spinup |> 
       group_by(month) |> 
       summarise(across(where(is.double) & !c(year, time), 
-                       ~ mean(.x, na.rm = T))) |> 
-      mutate(month = factor(month, levels = month.name, ordered = T)) |> 
+                       ~ mean(.x, na.rm = TRUE))) |> 
+      mutate(month = factor(month, levels = month.name, ordered = TRUE)) |> 
       arrange(month) |> 
-      replicate(200, expr = _, simplify = F) |> 
+      replicate(200, expr = _, simplify = FALSE) |> 
       bind_rows() |> 
       mutate(region = str_replace(str_to_upper(f), "-", " "), 
              scenario = "stable-spin", 
@@ -159,7 +81,7 @@ for(f in fao_lme){
                         by = "month"), year = year(time), .before = month)
     
     clim_forcing_file <- list.files(forcing_folder, pattern = "obsclim",
-                                    full.names = T) |> 
+                                    full.names = TRUE) |> 
       read_parquet() |> 
       bind_rows(dyn_spinup, spinup) |> 
       arrange(time) |> 
@@ -172,9 +94,7 @@ for(f in fao_lme){
     distinct(depth, area_m2)
 
   ## Loading effort data ----------------------------------------------------
-  effort_data <- read_csv_arrow(
-    file.path(fishing_folder, "DKRZ_EffortFiles",
-              "yearly_effort_fao-lme_isimip3a_histsoc_1841_2010.csv")) |> 
+  effort_data <- global_effort_data |> 
     #Selecting data for area of interest
     filter(region == fao_lme_id) 
   
@@ -199,9 +119,7 @@ for(f in fao_lme){
   
   # Loading catches data ----------------------------------------------------
   #From Watson et al 2018
-  catch_watson <- read_csv_arrow(
-    file.path(fishing_folder, "DKRZ_EffortFiles",
-              "yearly_catch_fao-lme_isimip3a_histsoc_1869_2017.csv")) |> 
+  catch_watson <- global_catch_watson |> 
     #Selecting area of interest
     filter(region == fao_lme_id & year <= 2010) |> 
     mutate(depth = depth_area$depth, 
@@ -217,18 +135,16 @@ for(f in fao_lme){
   }
   catch_pauly <- read.csv(
     list.files(file.path(fishing_folder, "SAU_catch_data"), 
-               pattern = pat_look, full.names = T)) |> 
+               pattern = pat_look, full.names = TRUE)) |> 
     # Keep data up to 2010 and removing discards to match processing of Watson
     # data
     filter(year <= 2010 & catch_type != "Discards") |> 
     group_by(year) |> 
     #Calculate total tonnes caught per year
-    summarise(catch_tonnes_pauly = sum(tonnes, na.rm = T))
+    summarise(catch_tonnes_pauly = sum(tonnes, na.rm = TRUE))
   
   # Load minimum and maximum fish sizes harvested 
-  ss_catches_summ <- read_csv_arrow(
-    file.path(fishing_folder, "effort_catch_data", 
-              "summary_size_spectrum_catches_fao-lme.csv")) |> 
+  ss_catches_summ <- global_ss_catches_summ |> 
     filter(area == fao_lme_id & year <= 2010) |> 
     select(!c(region, area))
   
@@ -239,10 +155,10 @@ for(f in fao_lme){
     filter(!if_all(c(catch_tonnes_area_m2, catch_pauly_tonnes_area_m2), 
                    is.na)) |> 
     rowwise() |>
-    mutate(min_catch_density = min(catch_tonnes_area_m2, 
-                                   catch_pauly_tonnes_area_m2, na.rm = T),
-           max_catch_density = max(catch_tonnes_area_m2, 
-                                   catch_pauly_tonnes_area_m2, na.rm = T)) |> 
+    mutate(min_catch_density = min(
+      catch_tonnes_area_m2, catch_pauly_tonnes_area_m2, na.rm = TRUE),
+      max_catch_density = max(
+        catch_tonnes_area_m2, catch_pauly_tonnes_area_m2, na.rm = TRUE)) |> 
     select(!c(region, depth, area_m2)) |> 
     full_join(ss_catches_summ, by = "year")
     
@@ -260,9 +176,8 @@ for(f in fao_lme){
   
   #Saving summarised catch and effort data
   DBPM_effort_catch_input |> 
-    write_parquet(file.path(forcing_folder, 
-                            paste0("dbpm_effort-catch-inputs", fn_search, "_",
-                                   f, ".parquet")))
+    write_parquet(file.path(
+      forcing_folder, paste0("dbpm_effort-catch-inputs_", f, ".parquet")))
   
   #Removing individual data frames
   rm(effort_data, catch_data, ss_catches_summ)
@@ -299,7 +214,7 @@ for(f in fao_lme){
   folder_out <- file.path("/g/data/vf71/fishmip_outputs/ISIMIP3a",
                           "fao_lme_outputs", f)
   if(!dir.exists(folder_out)){
-    dir.create(folder_out, recursive = T)
+    dir.create(folder_out, recursive = TRUE)
   }
   
   #Saving results - only save once per FAO region
@@ -309,13 +224,13 @@ for(f in fao_lme){
   }
 
   ## Saving catch and effort, and inputs data -------------------------------
-  fout_forcing <- paste0("dbpm_clim-fish-inputs", fn_search, "_", f, "_", 
-                         min(forcing_file$year), "-", max(forcing_file$year),
-                         ".parquet")
+  fout_forcing <- paste0(
+    "dbpm_clim-fish-inputs_", f, "_", min(forcing_file$year), "-", 
+    max(forcing_file$year), ".parquet")
   if(fao_lme_id == 64){
-    fout_forcing <- paste0("dbpm_dynamic_clim-fish-inputs", fn_search, "_", f, 
-                           "_", min(forcing_file$year), "-", 
-                           max(forcing_file$year), ".parquet")
+    fout_forcing <- paste0(
+      "dbpm_dynamic_clim-fish-inputs_", f, "_", min(forcing_file$year), "-", 
+      max(forcing_file$year), ".parquet")
   }
   
   forcing_file |> 
