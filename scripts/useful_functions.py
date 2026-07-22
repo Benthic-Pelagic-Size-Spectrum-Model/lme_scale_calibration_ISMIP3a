@@ -460,9 +460,10 @@ def integrating_inputs(folder_gridded_data, gfdl_exp, thresh_depth = 200,
     '''
 
     #load depth bins
-    depth_bins = (xr.open_zarr(glob(
-        os.path.join(folder_gridded_data, f'*_thkcello_*'))[0])['thkcello'].
-        drop_vars('time').squeeze().fillna(0))
+    if averaging != 'custom':
+        depth_bins = (xr.open_zarr(glob(
+            os.path.join(folder_gridded_data, f'*_thkcello_*'))[0])['thkcello'].
+            drop_vars('time').squeeze().fillna(0))
     
     #Load phytoplankton and ocean temperature variables
     phypico = (xr.open_zarr(glob(os.path.join(
@@ -794,7 +795,7 @@ def GetPPIntSlope(gfdl_folder = None, gfdl_exp = None, lphy_file = None,
     slope = ((small-large)/(midsmall-midlarge))
     intercept = (large-(slope*midlarge))
     
-    if isinstance(lphy_file, xr.DataArray) or isinstance(sphy_file, xr.DataArray):
+    if isinstance(slope, xr.DataArray): 
         slope.name = 'slope'
         slope = slope.assign_attrs({
             'short_name': 'slope',
@@ -803,6 +804,7 @@ def GetPPIntSlope(gfdl_folder = None, gfdl_exp = None, lphy_file = None,
                         'Jefcoats et al 2013 (DOI: 10.1111/gcb.12076)')})
         slope = slope.drop_encoding()
 
+    if isinstance(intercept, xr.DataArray):
         intercept.name = 'intercept'
         intercept = intercept.assign_attrs({
             'short_name': 'intercept',
