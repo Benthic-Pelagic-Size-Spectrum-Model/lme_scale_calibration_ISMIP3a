@@ -5,6 +5,7 @@ import os
 import useful_functions as uf
 import xarray as xr
 import numpy as np
+import pandas as pd
 from glob import glob
 from distributed import Client
 from multiprocessing import Process, freeze_support
@@ -23,16 +24,16 @@ if __name__ == '__main__':
     base_dir = '/g/data/vf71/fishmip_inputs/ISIMIP3a/'
     
     # Define variables for which data will be extracted
-    vars_int = ['input-w20m', 'er', 'intercept', 'slope', 'expc-bot', 'simask',
-                'tob', 'tos', 'ocean-temp-weighted', 'deptho', 'areacello', 
-                'sphy', 'lphy']
-
+    vars_int = ['input-w20m', 'expc-bot', 'simask', 'tob', 'tos', 'deptho', 
+                'areacello', 'phyc', 'phypico', 'thetao', 'bio-weights',
+                'thkcello']
+    
     # Define resolutions
     resolutions = ['1deg', '025deg']
     
-    # Choose whether smoothing of inputs will be performed by LOESS (smoothed) 
-    # or deseasoning data (deseasoned). Select None for no smoothing.
-    smoothing = None
+    #Defining stable spin and spinup periods
+    stable_spin = pd.date_range('1741-01', end = '1840-12', freq = 'MS')
+    spinup_period = pd.date_range('1841-01', end = '1960-12', freq = 'MS')
     
     for res in resolutions:
         if res == '1deg':
@@ -49,23 +50,13 @@ if __name__ == '__main__':
             astype(int))
         
         #Define GFDL folder
-        if smoothing is None:
-            file_list = glob(os.path.join(base_dir, 'global_gridded_zarr', res,
-                                          '*'))
-            out_name = 'gridded'
-        else:
-            file_list = glob(
-                os.path.join(base_dir, f'global_gridded-{smoothing}_zarr', res,
-                             '*'))
-            si_list = glob(os.path.join(base_dir, 'global_gridded_zarr', res,
-                                        '*_simask_*'))
-            file_list = file_list+si_list
-            out_name = f'gridded-{smoothing}'
+        file_list = glob(os.path.join(
+            base_dir, 'global_gridded_zarr', res, '*'))
 
         #List all files to be extracted
         for aoi in fao_lme_id:
-            gfdl_out = os.path.join(base_dir, 'fao_lme_inputs', 
-                                    f'fao_lme-{aoi}', out_name, res)
+            gfdl_out = os.path.join(
+                base_dir, 'fao_lme_inputs', f'fao_lme-{aoi}', 'gridded', res)
             os.makedirs(gfdl_out, exist_ok = True)
             mask = xr.where(mask_all == aoi, 1, np.nan)
             for dv in vars_int:
@@ -85,4 +76,60 @@ if __name__ == '__main__':
                         cross_dateline = False
                     uf.extract_gfdl(f, mask, f_out, 
                                     cross_dateline = cross_dateline)
+
+            # Vertically integrate phytoplankton inputs up to threshold depth
+            [weight_file] = glob(os.path.join(gfdl_out, '*_bio-weights_*'))
+            for exp in ['ctrlclim', 'obsclim']:
+                base_fn = (weight_file.replace('_bio-weights_', '_var_').
+                    replace('_ctrlclim_', f'_{exp}_'))
+                phyc, phypico, temp_ocean = uf.integrating_inputs(
+                    gfdl_out, exp, thresh_depth = 200, averaging = 'custom', 
+                    weights = weight_file)
+                #Save outputs
+                phyc.to_zarr(base_fn.replace('_var_', '_phyc-vint-weighted_'),
+                             consolidated = True, mode = 'w')
+                phypico.to_zarr(base_fn.replace(
+                    '_var_', '_phypico-vint-weighted_'), 
+                                consolidated = True, mode = 'w')
+                temp_ocean.to_zarr(base_fn.replace(
+                    '_var_', '_ocean-temp-weighted_'), 
+                                   consolidated = True, mode = 'w')
+
+                #Calculate phytoplankton size distribution and export ratio
+                sphy, lphy, er = uf.getExportRatio(gfdl_out, exp)
+                #Save outputs
+                sphy.to_zarr(base_fn.replace('_var_', '_sphy_'), 
+                             consolidated = True, mode = 'w')
+                lphy.to_zarr(base_fn.replace('_var_', '_lphy_'),
+                             consolidated = True, mode = 'w')
+                er.to_zarr(base_fn.replace('_var_', '_er_'),
+                           consolidated = True, mode = 'w')
+
+            #The spinup period goes from 1841 and 1960. It is created by repeating 
+            #inputs from "ctrlclim" experiment between 1961 and 1980
+            #The stable spinup period goes from 1741 to 1840. It is created by 
+            #repeating the mean for the year 1841 in the spinup period
+            for dv in ['sphy', 'lphy', 'er', 'ocean-temp-weighted']:
+                [f_in] = glob(os.path.join(
+                    gfdl_out, f'gfdl-*ctrlclim_{dv}_*monthly*'))
+                f_out = (f_in.replace('ctrlclim', 'spinup').replace('1961', '1841').
+                    replace('2010', '1960'))
+                uf.gridded_spinup(f_in, '1961-01', '1980-12', spinup_period, 
+                                  file_out = f_out)
     
+                # The stable spinup period 
+                fout_stable = (f_in.replace('ctrlclim', 'stable-spin').
+                    replace('1961', '1741').replace('2010', '1840'))
+                uf.gridded_spinup(f_out, '1841-01', '1841-12', stable_spin,
+                                  mean_spinup = True, file_out = fout_stable)
+            
+            # Calculating slope and intercept
+            lphy_files = sorted(glob(os.path.join(gfdl_out, '*_lphy_*')))
+            sphy_files = sorted(glob(os.path.join(gfdl_out, '*_sphy_*')))
+            for l, s in zip(lphy_files, sphy_files):
+                intercept, slope = uf.GetPPIntSlope(sphy_file = s, lphy_file = l)
+                #Save outputs
+                intercept.to_zarr(l.replace('_lphy_', '_intercept_'), 
+                                  consolidated = True, mode = 'w')
+                slope.to_zarr(l.replace('_lphy_', '_slope_'), 
+                              consolidated = True, mode = 'w')
