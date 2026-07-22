@@ -100,35 +100,3 @@ if __name__ == '__main__':
                 os.path.join(gfdl_out, 
                              base_fn.replace('_var_', '_input-w20m_')), 
                 consolidated = True, mode = 'w')
-
-            # Vertically integrate phytoplankton inputs up to threshold depth
-            [weight_file] = glob(os.path.join(gfdl_out, '*_bio-weights_*'))
-            phyc, phypico, temp_ocean = uf.integrating_inputs(
-                gfdl_out, exp, thresh_depth = 200, 
-                averaging = 'custom', weights = weight_file)
-            #Save outputs
-            phyc.to_zarr(
-                os.path.join(gfdl_out, base_fn.replace(
-                    '_var_', '_phyc-vint-weighted_')), 
-                consolidated = True, mode = 'w')
-            phypico.to_zarr(
-                os.path.join(gfdl_out, base_fn.replace(
-                    '_var_', '_phypico-vint-weighted_')), 
-                consolidated = True, mode = 'w')
-            temp_ocean.to_zarr(
-                os.path.join(gfdl_out, base_fn.replace(
-                    '_var_', '_ocean-temp-weighted_')), 
-                consolidated = True, mode = 'w')
-
-            #Calculate phytoplankton size distribution and export ratio
-            sphy, lphy, er = uf.getExportRatio(gfdl_out, exp)
-            #Save outputs
-            sphy.to_zarr(
-                os.path.join(gfdl_out, base_fn.replace('_var_', '_sphy_')), 
-                consolidated = True, mode = 'w')
-            lphy.to_zarr(
-                os.path.join(gfdl_out, base_fn.replace('_var_', '_lphy_')),
-                consolidated = True, mode = 'w')
-            er.to_zarr(
-                os.path.join(gfdl_out, base_fn.replace('_var_', '_er_')),
-                consolidated = True, mode = 'w')
