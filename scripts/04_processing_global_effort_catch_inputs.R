@@ -12,13 +12,6 @@ library(janitor)
 library(tidyr)
 library(stringr)
 
-
-
-# library(purrr)
-# library(ggplot2)
-# library(lubridate)
-
-
 # Defining base folder
 fishing_folder <- "/g/data/vf71/fishmip_inputs/ISIMIP3a"
 
