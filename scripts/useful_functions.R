@@ -3,7 +3,7 @@
 # Functions have been adapted from previous DBPM work by JLB, CN, JB and others
 # 
 # Edited by: Denisse Fierro Arcos
-# Date of last update: 2026-07-02
+# Date of last update: 2026-07-20
 #
 # Choose local R library - Activate when using R 4.5 
 # .libPaths("/g/data/vf71/la6889/R_personal_lib/")
@@ -27,9 +27,9 @@ library(gridExtra)
 # Getting DBPM model parameters ready -------------------------------------
 sizeparam <- function(dbpm_inputs, fishing_params, dx = 0.1, xmin = -12, 
                       xmin_consumer_u = -7, xmin_consumer_v = -7, xmax = 6, 
-                      Ngrid = NA, pred_initial = NULL, 
-                      detritivore_initial = NULL, detritus_initial = NULL, 
-                      equilibrium = FALSE, gridded = FALSE){
+                      pred_initial = NULL, detritivore_initial = NULL, 
+                      detritus_initial = NULL, gridded = FALSE, 
+                      biomass_weighted = TRUE){
   
   #Inputs:
   # - dbpm_inputs (data frame) Containing climate and fishing data needed as 
@@ -45,16 +45,16 @@ sizeparam <- function(dbpm_inputs, fishing_params, dx = 0.1, xmin = -12,
   # - xmin_consumer_v (numeric) Default value is -7. Minimum log10 body size in
   #   dynamics benthic detritivores
   # - xmax (numeric). Default value is 6. Maximum log10 body size of predators
-  # - Ngrid (numeric) Optional. Number of grid cells.
   # - pred_initial (numeric). Optional. Default is NULL. Initialisation values 
   #   for predator biomass. 
   # - detritivore_initial (numeric). Optional. Default is NULL. Initialisation 
   #   values for detritivore biomass. 
   # - detritus_initial (numeric). Optional. Default is NULL. Initialisation 
   #   value for detritus biomass
-  # - equilibrium (boolean). Default value is FALSE.
-  # - gridded(boolean). Default value is FALSE. If set to TRUE, it will provide
+  # - gridded (boolean). Default value is FALSE. If set to TRUE, it will provide
   #   params for non-gridded model run.
+  # - biomass_weighted (boolean). Default is TRUE. This will result in biomass-
+  #   weighted "depth" and "mean ocean temperature" to be used as inputs
   #
   # Outputs:
   # er (numeric vector) Export ratio
@@ -69,7 +69,11 @@ sizeparam <- function(dbpm_inputs, fishing_params, dx = 0.1, xmin = -12,
   
   if(!gridded){
     # depth
-    param$depth <- mean(dbpm_inputs$depth)  
+    if(biomass_weighted){
+      param$depth <- mean(dbpm_inputs$depth_m_bio_weighted)
+    }else{
+      param$depth <- mean(dbpm_inputs$depth)
+    }
     # export ratio (er) replaced by fraction of sinking detritus reaching the 
     # seafloor (from export ratio input) (sinking.rate)
     param$sinking_rate <- dbpm_inputs$export_ratio 
@@ -80,7 +84,11 @@ sizeparam <- function(dbpm_inputs, fishing_params, dx = 0.1, xmin = -12,
     param$slope_phy_zoo <- dbpm_inputs$slope
     # temperature parameters 
     # sea-surface temperature - degrees Celsius (sst)
-    param$sea_surf_temp <- dbpm_inputs$weighted_sea_temp
+    if(biomass_weighted){
+      param$sea_surf_temp <- dbpm_inputs$weighted_sea_temp
+    }else{
+      param$sea_surf_temp <- dbpm_inputs$tos
+      }
     # near sea-floor temperature - degrees Celsius (sft)
     param$sea_floor_temp <- dbpm_inputs$tob
     
@@ -275,8 +283,6 @@ sizeparam <- function(dbpm_inputs, fishing_params, dx = 0.1, xmin = -12,
     # arbitrary initial value for detritus (W.init)
     param$init_detritus <- 0.00001
   }
-  
-  param$equilibrium <- equilibrium
   
   return(param)
 }
@@ -1012,7 +1018,7 @@ run_model <- function(fishing_params, dbpm_inputs, withinput = TRUE,
                       xmin_consumer_u = -3, xmin_consumer_v = -3, 
                       include_plankton = FALSE, pred_initial = NULL, 
                       detritivore_initial = NULL, detritus_initial = NULL,
-                      ...){
+                      biomass_weighted = TRUE, ...){
   #Inputs:
   # - fishing_params (list) - Fishing parameters produced by the `sizeparam` 
   #  function
@@ -1033,6 +1039,8 @@ run_model <- function(fishing_params, dbpm_inputs, withinput = TRUE,
   #   values for detritivore biomass. 
   # - detritus_initial (numeric). Optional. Default is NULL. Initialisation 
   #   value for detritus biomass
+  # - biomass_weighted (boolean). Default is TRUE. This will result in biomass-
+  #   weighted "depth" and "mean ocean temperature" to be used as inputs
   # '...' captures extra parameters for the `sizemodel` function
   #
   #Output:
@@ -1046,7 +1054,8 @@ run_model <- function(fishing_params, dbpm_inputs, withinput = TRUE,
                       xmin_consumer_v = xmin_consumer_v, 
                       pred_initial = pred_initial, 
                       detritivore_initial = detritivore_initial, 
-                      detritus_initial = detritus_initial)
+                      detritus_initial = detritus_initial, 
+                      biomass_weighted = biomass_weighted)
   
   # run model through time
   # TO DO IN SIZEMODEL CODE: make fishing function like one in model template
@@ -1100,7 +1109,7 @@ run_model <- function(fishing_params, dbpm_inputs, withinput = TRUE,
 # Comparing observed and predicted fish biomass ----
 getError <- function(fishing_params, dbpm_inputs, year_int = 1950, corr = F, 
                      figure_folder = NULL, xmin_consumer_u = -3,
-                     xmin_consumer_v = -3, ...){
+                     xmin_consumer_v = -3, biomass_weighted = TRUE, ...){
   #Inputs:
   # fishing_params (data frame) - Contains fishing parameters
   # dbpm_inputs (data frame) - Climate and fishing forcing data
@@ -1139,7 +1148,9 @@ getError <- function(fishing_params, dbpm_inputs, year_int = 1950, corr = F,
   #Running model
   result <- run_model(fishing_params, dbpm_inputs, 
                       xmin_consumer_u = xmin_consumer_u, 
-                      xmin_consumer_v = xmin_consumer_v, ...)
+                      xmin_consumer_v = xmin_consumer_v,
+                      biomass_weighted = biomass_weighted,
+                      ...)
 
   #Aggregate data by year (mean to conserve units)
   error_calc <- result |> 
@@ -1245,7 +1256,7 @@ getError <- function(fishing_params, dbpm_inputs, year_int = 1950, corr = F,
 #Carry out LHS param search ----
 LHSsearch <- function(num_iter = 1, seed = 1234, search_volume = "estimated",
                       forcing_file = NULL, gridded_forcing = NULL, 
-                      best_param = T, best_val_folder = NULL, 
+                      best_param = TRUE, best_val_folder = NULL, 
                       min_fish_size_pred = NULL, min_fish_size_detrit = NULL,
                       ...){
   #Inputs:
@@ -1317,6 +1328,7 @@ LHSsearch <- function(num_iter = 1, seed = 1234, search_volume = "estimated",
   fishing_params$rmse <- mclapply(1:nrow(fishing_params), 
                                   FUN = function(i) 
                                     getError(fishing_params[i,], dbpm_inputs,
+                                             biomass_weighted = biomass_weighted,
                                              ...), 
                                   mc.cores = no_cores) |> 
     unlist()
@@ -1361,8 +1373,8 @@ LHSsearch <- function(num_iter = 1, seed = 1234, search_volume = "estimated",
 
 
 # Correlation and calibration plots ----
-corr_calib_plots <- function(fishing_params, dbpm_inputs,
-                             figure_folder = NULL, ...){
+corr_calib_plots <- function(fishing_params, dbpm_inputs, figure_folder = NULL,
+                             ...){
   #Inputs:
   # fishing_params (named numeric vector) - Single column with named rows 
   # containing LHS parameters
