@@ -129,13 +129,13 @@ for(f in fao_lme){
 
   #From Pauly et al 2020
   if(fao_lme_id < 100){
-    pat_look <- str_c("LME ", fao_lme_id, " v50-1.csv")
+    reg_name <- str_c("LME ", fao_lme_id)
   }else{
-    pat_look <- str_c("FAO ", (fao_lme_id-100), " v50-1.csv")
+    reg_name <- str_c("FAO ", (fao_lme_id-100))
   }
   catch_pauly <- read.csv(
     list.files(file.path(fishing_folder, "SAU_catch_data"), 
-               pattern = pat_look, full.names = TRUE)) |> 
+               pattern = str_c(reg_name, " v50-1.csv"), full.names = TRUE)) |> 
     # Keep data up to 2010 and removing discards to match processing of Watson
     # data
     filter(year <= 2010 & catch_type != "Discards") |> 
@@ -167,9 +167,7 @@ for(f in fao_lme){
   # Merging catch and effort data -------------------------------------------
   DBPM_effort_catch_input <- effort_data |> 
     full_join(catch_data, by = "year") |> 
-    mutate(region = case_when(fao_lme_id < 100 ~ paste0("LME ", region),
-                              fao_lme_id >= 100 ~ paste0("FAO ", region-100),
-                              .unmatched = "error"),
+    mutate(region = reg_name,
            region_name = unique(ss_catches_summ$region_name)) |> 
     relocate(region_name, .after = region) |> 
     filter(year <= 2010)
