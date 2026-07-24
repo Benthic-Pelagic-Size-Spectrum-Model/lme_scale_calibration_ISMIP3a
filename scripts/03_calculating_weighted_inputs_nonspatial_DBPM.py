@@ -49,7 +49,7 @@ for aoi in fao_lme_code:
             depth = xr.open_zarr(glob(os.path.join(
                 gridded_folder, '*ctrlclim_deptho*'))[0])['deptho']
         
-       area_weighted_depth = (depth.weighted(area).
+        area_weighted_depth = (depth.weighted(area).
             mean(('lat', 'lon')).values)
         
         region_int = aoi.replace('-', ' ').upper()
@@ -71,12 +71,12 @@ for aoi in fao_lme_code:
              lphy_file = weighted_inputs['lphy'].values)
         
         weighted_inputs['depth'] = area_weighted_depth
-        weighted_inputs['depth_m_bio_weighted'] = (depth.weighted(weights.
-            fillna(0)).mean(('lat', 'lon')).values)
+        weighted_inputs['depth_m_bio_weighted'] = (depth.
+            weighted(weights).mean(('lat', 'lon')).values)
         
         #Saving data
-        start_yr = lphy.time.dt.year.min().values.tolist()
-        end_yr = lphy.time.dt.year.max().values.tolist()
+        start_yr = weighted_inputs.year.min()
+        end_yr = weighted_inputs.year.max()
         
         weighted_inputs.to_parquet(os.path.join(
             gfdl_out, 
