@@ -28,6 +28,18 @@ for aoi in fao_lme_code:
     # Load area of grid cells
     area = xr.open_zarr(glob(os.path.join(
         gridded_folder, '*area*'))[0])['cellareao'].fillna(0)
+
+    # Crearting biomass-area weights
+    # Calculating long-term (1961-1980) mean total phytoplankton 
+    # biomass from "ctrlclim" experiment
+    lphy = xr.open_zarr(glob(os.path.join(
+        gridded_folder, '*ctrlclim_lphy*'))[0])['lphy']
+    sphy = xr.open_zarr(glob(os.path.join(
+        gridded_folder, '*ctrlclim_sphy*'))[0])['sphy']
+    totphy = ((lphy+sphy).sel(time = slice('1961', '1980')).
+        mean('time')).fillna(0)
+    # Weighting by phytoplankton biomass per area of grid cell
+    weights = totphy*area
     
     for exp in exp_name:
         try:
@@ -37,17 +49,7 @@ for aoi in fao_lme_code:
             depth = xr.open_zarr(glob(os.path.join(
                 gridded_folder, '*ctrlclim_deptho*'))[0])['deptho']
         
-        # Calculating total phytoplankton biomass
-        lphy = xr.open_zarr(glob(os.path.join(
-            gridded_folder, f'*{exp}*lphy*'))[0])['lphy']
-        sphy = xr.open_zarr(glob(os.path.join(
-            gridded_folder, f'*{exp}*sphy*'))[0])['sphy']
-        totphy = ((lphy+sphy).sel(time = slice('1961', '1980')).
-            mean('time')).fillna(0)
-        # Weighting by phytoplankton biomass per area of grid cell
-        weights = totphy*area
-
-        area_weighted_depth = (depth.weighted(area).
+       area_weighted_depth = (depth.weighted(area).
             mean(('lat', 'lon')).values)
         
         region_int = aoi.replace('-', ' ').upper()
