@@ -63,10 +63,10 @@ for aoi in fao_lme_code:
         weighted_inputs = uf.weighted_mean_timestep(
             exp_fn, weights, area, region_int)
 
-        weighted_inputs['intercept'], weighted_inputs['slope'] = 
-        uf.GetPPIntSlope(
-            sphy_file = weighted_inputs['sphy'].values, 
-            lphy_file = weighted_inputs['lphy'].values)
+        (weighted_inputs['intercept'], 
+         weighted_inputs['slope']) = uf.GetPPIntSlope(
+             sphy_file = weighted_inputs['sphy'].values, 
+             lphy_file = weighted_inputs['lphy'].values)
         
         weighted_inputs['depth'] = area_weighted_depth
         weighted_inputs['depth_m_bio_weighted'] = (depth.weighted(weights.
