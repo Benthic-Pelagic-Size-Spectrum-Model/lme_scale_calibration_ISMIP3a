@@ -1,74 +1,138 @@
-# Gridded DBPM (dbpmr engine) — spatiotemporal, vertically biomass-weighted
+# Gridded DBPM (dbpmr) — how to run it
 
-A gridded extension of the LME/FAO DBPM calibration that runs **every 1° ocean cell** as an
-independent 0-D `dbpmr` column (compiled-C size-spectrum engine), coupled only through an annual
-**spatial-gravity** re-allocation of the region's fishing effort. It is the **engine-swap** analog of
-the Python gridded pipeline (`07_setup_gridded_DBPM.py` / `08_run_dbpm_gridded.py`), using the `dbpmr`
-solver and **per-cell, per-timestep, vertically BIOMASS-WEIGHTED** forcing.
+Runs **every 1° ocean cell** in an LME/FAO region as an independent 0-D `dbpmr` column (compiled-C
+size-spectrum engine), coupled only through an annual **spatial-gravity** re-allocation of the region's
+fishing effort, driven by **per-cell, per-timestep, vertically biomass-weighted** forcing. It is the
+`dbpmr` engine-swap analog of the Python gridded pipeline (`07_setup_gridded_DBPM.py`/`08_run_dbpm_gridded.py`).
 
-Full spec + assumptions: [`GRIDDED_WORKFLOW.md`](GRIDDED_WORKFLOW.md).
+Methodology + assumptions: [`GRIDDED_WORKFLOW.md`](GRIDDED_WORKFLOW.md). **This file is the run guide.**
 
-## Key methodology (what's new vs the 0-D calibration)
+--------------------------------------------------------------------------------
+## Quickstart — one region, end to end
 
-1. **Vertically biomass-weighted forcing (no climatology, no depth-weighting).** Predators feed through
-   the water column where the food is, so every plankton/temperature input is a phytoplankton-carbon
-   weighted vertical mean over 0–200 m, per cell **per timestep**:
-   `⟨X⟩ᵢ(t) = Σ_z Xᵢ(z,t)·phycᵢ(z,t)·Δz / Σ_z phycᵢ(z,t)·Δz`
-   → intercept(t), slope(t) via `GetPPIntSlope`, and experienced temperature `T_exp=⟨thetao⟩`.
-   Implemented as `integrating_phyto(..., weighting="biomass")` in `../useful_functions.py`.
-2. **LME-centering** so the biomass-weighted regional aggregate reproduces the exact 0-D calibration
-   input series (`intercept+dint`, `slope+dslope`, `tos+texp_offset`) — the calibrated q is preserved.
-3. **Gridded q refit.** Resolving spatial+seasonal productivity heterogeneity inflates fish biomass
-   (Jensen's inequality on a convex trophic response — FAO 58 ~26× more fish than the LME-mean), so the
-   0-D q does **not** transfer; q is re-fit inside the gridded model (drops ~1–2 orders of magnitude).
-4. **Time-varying, per-spectrum (U/V) fished-size selectivity** from the `_uv` parquet; the gravity/
-   effort split uses the fishable biomass within each window.
-
-## Scripts → ISIMIP3a pipeline stages
-
-| Script | Role | Relates to stage |
-|---|---|---|
-| `07b_gridded_calibration_inputs.R` | **shim**: map stage-07 `best-fishing-parameters_*.parquet` (fmort_u/v → q_pel/q_ben) + the stage-04 U/V catch split into the per-region rds the gridded scripts read | bridges `07_estimating_best_vals` → gridded |
-| `build_percell_bw.R` | per-cell, per-timestep biomass-weighted intercept/slope/T_exp/tob/export from the gridded GFDL-MOM6-COBALT2 netcdfs (+ gridded spin-up, 6× cycle of 1961-1980) | `01`, `03`, `07_setup_gridded` + `integrating_phyto(weighting="biomass")` |
-| `build_center.R` | LME-center per-cell series on the biomass-weighted aggregate (preserves 0-D q) | new (post-`03`) |
-| `gridded_calib.R` | re-fit (q_pel,q_ben) inside the gridded model (spin cached, BOBYQA on the transient aggregate) | new (post-`07_estimating_best_vals`) |
-| `gridded_run.R` | the gridded dbpmr run: unfished spin → fished 1841-2010, annual gravity, warm-restart | dbpmr analog of `08_run_dbpm_gridded.py` |
-| `run_gridded.sh` | resumable, retry-looped multi-region runner (RAM-disk TMPDIR, `caffeinate`) | orchestration |
-| `plot_gridded.R` | per-region catch obs-vs-gridded + circumpolar maps | synthesis (`09`) |
-
-## Southern Ocean validation (FAO 48/58/88 + LME 61 Antarctica)
-
-| region | gridded q_pel | vs 0-D | corr (log10 catch) | level | verdict |
-|---|---|---|---|---|---|
-| FAO 58 Indian | 4.3e-5 | ÷83 | **+0.92** | 1.3× | good |
-| FAO 48 Atlantic | 2.1e-4 | ÷15 | **+0.90** | 1.8× | good |
-| FAO 88 Pacific | 2.5e-5 | ÷4 | −0.24 | ~0× | krill/ice-edge mismatch |
-| LME 61 Antarctica | 4.5e-6 | ÷100 | +0.33 | ~0× | weak (krill/ice) |
-
-**Finding:** the gridded DBPM reproduces conventional shelf/slope fisheries (Indian, Atlantic sectors:
-r≈0.9, level within ~2×) but breaks down where the fishery is krill/ice-edge driven (Pacific sector,
-coastal Antarctica) — the catch there tracks marginal-ice-zone dynamics outside the biomass-gravity
-mechanics. A reportable model–data boundary, not a calibration artifact.
-
-## Running
-
-Requires: `dbpmr` installed (set `DBPMR_LIB`), the gridded GFDL netcdfs (`phyc/phypico/thetao/tob/
-expc-bot/intpp`, 60 arcmin, in `gridded_nc/`), the `_uv` region parquets (`INPUT_PARQUET_DIR` or
-`./dbpm_inputs_uv`), the 1° FAO-LME mask, and the 0-D calibration rds (`calib_A3/lme<L>.rds`).
+Runs region **LME 3 (California Current)** from a prepared working directory (see Prerequisites). All
+`Rscript` calls are run from that working dir. `<L>` is the region id (LMEs `1–66`; FAO areas = `area+100`).
 
 ```sh
-# bridge the pipeline's 0-D calibration (stage 07) into the rds the gridded scripts read:
-Rscript 07b_gridded_calibration_inputs.R --regions=158,148,.. --results=<07_out> --catch=<uv_split> --out=calib_A3
-Rscript build_percell_bw.R <L..> --par=4          # per-cell biomass-weighted spatiotemporal inputs
-Rscript build_center.R      <L..> --par=4          # LME-center -> percell_c_lme<L>.parquet
-sh run_gridded.sh                                  # per region: gridded_calib.R (q refit) -> gridded_run.R (full grid)
-Rscript plot_gridded.R                             # figures
+export DBPMR_LIB=$HOME/dbpmrlib            # where dbpmr is installed (see Prerequisites)
+export INPUT_PARQUET_DIR=$PWD/dbpm_inputs_uv     # the _uv region parquets
+L=3
+
+# 0. bridge the pipeline's 0-D calibration (stage 07) -> the per-region rds the gridded scripts read
+Rscript 07b_gridded_calibration_inputs.R --regions=$L --results=<stage07_out_dir> --catch=<uv_catch_split.csv> --out=calib_A3
+
+# 1. per-cell, per-timestep, biomass-weighted forcing  (reads gridded_nc/*.nc)   ~1 min/region
+Rscript build_percell_bw.R $L --par=4        # -> percell_bw/percell_bw_lme3.parquet
+
+# 2. LME-center the per-cell forcing (preserves the 0-D q)                        ~seconds
+Rscript build_center.R     $L --par=4        # -> percell_bw/percell_c_lme3.parquet
+
+# 3. refit q inside the gridded model (subsample, BOBYQA)                         ~2-3 h/region
+Rscript gridded_calib.R    $L --ncell=400 --maxeval=40 --cores=10   # -> gridded_calib_lme3.rds
+
+# 4. full-grid run at the fitted q                                                ~40-60 min/region
+QP=$(Rscript -e "cat(readRDS('gridded_calib_lme3.rds')\$qg[1])")
+QB=$(Rscript -e "cat(readRDS('gridded_calib_lme3.rds')\$qg[2])")
+Rscript gridded_run.R      $L --qpel=$QP --qben=$QB --spinyr=80 --cores=10   # -> gridded_A3_lme3.rds
+
+# 5. figures
+Rscript plot_gridded.R                       # -> figs/*.pdf
 ```
 
-`<CALIB_DIR>/lme<L>.rds` schema (produced by `07b`, read by the gridded scripts): `q_pel, q_ben`
-(0-D catchabilities), `year, obs_pel, obs_ben` (observed U/V catch density — needed for the gridded
-q refit), `region, corr_pel, corr_ben`.
+For many regions use the orchestrator `run_gridded.sh` (edit the `REGS=` line): it does step 3→4 per
+region, is **resumable** (skips completed regions), retries on failure, and manages the RAM disk.
+Steps 1–2 are cheap; run them for all regions first (`Rscript build_percell_bw.R 1 2 3 .. --par=6`).
 
-Compute notes (laptop): dbpmr's warm-restart is file-I/O heavy — use a RAM-disk `TMPDIR` and (on
-managed machines) exclude it from real-time AV scanning; `run_gridded.sh` is resumable at the region
-level with a per-region retry loop.
+--------------------------------------------------------------------------------
+## Prerequisites
+
+### 1. Install the engine
+```sh
+git clone https://github.com/Benthic-Pelagic-Size-Spectrum-Model/spatial-dbpm
+R CMD INSTALL --library=$HOME/dbpmrlib spatial-dbpm/dbpmr   # then: export DBPMR_LIB=$HOME/dbpmrlib
+```
+R packages: `arrow`, `dplyr`, `tidyr`, `ncdf4`, `nloptr`, `jsonlite`, `parallel`, `ggplot2`, `pdftools`.
+
+### 2. Assemble the working directory — every input the scripts read
+
+| file (in the working dir) | what | where to get it | bundled? |
+|---|---|---|---|
+| `gridded_nc/*.nc` | depth-resolved GFDL-MOM6-COBALT2 obsclim: `phyc, phypico, thetao, tob, expc-bot, intpp` (60 arcmin) | THREDDS `…/climate/ocean/obsclim/…/GFDL-MOM6-COBALT2/` (~6.7 GB) | no (download) |
+| `dbpm_inputs_uv/` | `_uv` region parquets (per-LME: intercept, slope, tos, tob, export, effort, catch, **min/max_fished_U/V**) | pipeline stage 04 + `augment_parquets_uv.R` (`INPUT_PARQUET_DIR`) | no |
+| `fao_lme_mask_1deg.csv` | 1° FAO-LME mask (`Lon,Lat,ID_merged`) — region→cells | THREDDS `masks/FAO-LME_masks` | **yes** (`data/`, 540 K) |
+| `gfw_static.csv` | per-cell depth + dist-to-shore/port (`lat,lon,elevation_m,distance_from_shore`) | GFW / Clawson `effort_manuscript` static layers | no (3 MB) |
+| `all_dint.csv` | region→mask_id map + biomass-weighted intercept (`lme,mask_id,name,cells,int200,int_bw,dint`) | generated by `helpers/all_int.R` | **yes** (`data/`, 4 K) |
+| `lme_dint_hbw_all.csv` | horizontal+vertical biomass-weighted intercept/slope offsets (`lme,dint,dslope`) | generated by `helpers/build_dint_hw.R` | **yes** (`data/`, 4 K) |
+| `lme_texp_offset.csv` | water-column experienced-temperature offset (`lme,mask_id,t_surf,t_exp,offset`) | generated by `helpers/build_texp_offset.R` | **yes** (`data/`, 4 K) |
+| `siconc_lme<L>.csv` | per-cell sea-ice by year (high-latitude regions only; else no ice gate) | generated by `helpers/prep_siconc.R` from THREDDS `siconc` | no (per-region) |
+| `calib_A3/lme<L>.rds` | 0-D calibration output (q + obs catch) — produced by step 0 (`07b` shim) | stage 07 (+ `07b` here) | produced |
+
+The three tiny `data/*.csv` are **bundled in this PR** so the run isn't blocked on them; their generators
+live in `helpers/` for full reproducibility. The large data (netcdfs, parquets, `gfw_static`, `siconc`)
+are pointed to their sources.
+
+### 3. Directory layout the scripts expect
+```
+working_dir/
+├── gridded_nc/                     # the 6 depth-resolved netcdfs
+├── dbpm_inputs_uv/                 # _uv region parquets            (INPUT_PARQUET_DIR)
+├── fao_lme_mask_1deg.csv           # }
+├── gfw_static.csv                  # }  copied from data/ + sources
+├── all_dint.csv                    # }
+├── lme_dint_hbw_all.csv            # }
+├── lme_texp_offset.csv             # }
+├── siconc_lme<L>.csv               # per high-lat region
+├── calib_A3/lme<L>.rds             # step 0 output
+├── percell_bw/                     # steps 1-2 outputs (percell_bw_*, percell_c_*)
+├── gridded_calib_lme<L>.rds        # step 3 output
+├── gridded_A3_lme<L>.rds           # step 4 output
+└── figs/                           # step 5 output
+```
+
+--------------------------------------------------------------------------------
+## What each step consumes → produces
+
+| step | script | reads | writes | ~time |
+|---|---|---|---|---|
+| 0 | `07b_gridded_calibration_inputs.R` | stage-07 params + U/V catch split | `calib_A3/lme<L>.rds` | s |
+| 1 | `build_percell_bw.R` | `gridded_nc/*.nc`, mask, `all_dint.csv` | `percell_bw/percell_bw_lme<L>.parquet` | ~1 min |
+| 2 | `build_center.R` | percell_bw parquet, region parquet, `lme_dint_hbw_all.csv`, `lme_texp_offset.csv` | `percell_bw/percell_c_lme<L>.parquet` | s |
+| 3 | `gridded_calib.R` | percell_c parquet, region parquet, mask, `gfw_static.csv`, `siconc_lme<L>.csv`, `calib_A3/lme<L>.rds` | `gridded_calib_lme<L>.rds` (fitted q) | ~2–3 h |
+| 4 | `gridded_run.R` | same + fitted q | `gridded_A3_lme<L>.rds` (per-cell biomass, effort, catch) | ~40–60 min |
+| 5 | `plot_gridded.R` | `gridded_A3_lme<L>.rds`, `calib_A3` | `figs/*.pdf` | s |
+
+--------------------------------------------------------------------------------
+## Expected results (Southern Ocean validation — is it working?)
+
+Run on FAO 48/58/88 + LME 61: catch level within ~2× of observed and correlation r≈0.9 for conventional
+shelf/slope fisheries; the gridded q sits **1–2 orders of magnitude below the 0-D q** (heterogeneity
+convexity — expected, see GRIDDED_WORKFLOW.md).
+
+| region | fitted q_pel | corr | level |
+|---|---|---|---|
+| FAO 58 Indian | 4.3e-5 (0-D ÷83) | +0.92 | 1.3× |
+| FAO 48 Atlantic | 2.1e-4 (÷15) | +0.90 | 1.8× |
+| FAO 88 Pacific | 2.5e-5 | −0.24 | ~0× (krill/ice mismatch) |
+| LME 61 Antarctica | 4.5e-6 | +0.33 | ~0× (krill/ice) |
+
+--------------------------------------------------------------------------------
+## Methodology (short) — what's new vs the 0-D calibration
+
+1. **Vertically biomass-weighted forcing** (no climatology, no depth-weighting): every plankton/temperature
+   input is a phyto-carbon-weighted vertical mean over 0–200 m, per cell **per timestep**
+   `⟨X⟩=Σ X·phyc·Δz / Σ phyc·Δz` → intercept/slope via `GetPPIntSlope`, `T_exp=⟨thetao⟩`
+   (`integrating_phyto(weighting="biomass")` in `../useful_functions.py`).
+2. **LME-centering** so the biomass-weighted regional aggregate matches the 0-D calibration input → 0-D q
+   stays valid *before* refit. (Optional gridded-native alternative in GRIDDED_WORKFLOW.md.)
+3. **Gridded q refit** — heterogeneity inflates fish biomass (~26× for FAO 58), so 0-D q does not transfer.
+4. **Time-varying per-spectrum (U/V) fished-size selectivity** from the `_uv` parquet.
+
+## Scripts → ISIMIP3a stages
+`07b`→bridges `07`; `build_percell_bw`→`01/03/07_setup_gridded`+biomass mode; `build_center`→new post-`03`;
+`gridded_calib`→new post-`07`; `gridded_run`→dbpmr analog of `08`; `plot_gridded`→`09`.
+
+## Compute notes
+dbpmr's warm-restart is file-I/O heavy → use a **RAM-disk `TMPDIR`** and, on managed machines, **exclude
+it from real-time AV scanning** (re-apply on every RAM-disk recreate). `run_gridded.sh` handles the RAM
+disk, `caffeinate`, resumability, and a per-region retry loop. Calibration (step 3) is the bottleneck
+(~7.7 min/BOBYQA-eval); steps 1–2 are seconds/region because the netcdfs are read locally.
