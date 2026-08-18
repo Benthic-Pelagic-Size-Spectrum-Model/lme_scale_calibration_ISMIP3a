@@ -1,11 +1,11 @@
-# GRIDDED q-CALIBRATION for FAO 58 (region 158), SEEDED FROM THE 0-D q's.
+# GRIDDED q-CALIBRATION for region <L>, SEEDED FROM THE 0-D q's.
 # The 0-D q does not transfer 1:1 to the gridded model because spatial gravity co-locates effort with
 # biomass (higher catch-per-effort). Here we re-estimate (q_pel,q_ben) INSIDE the gridded model:
 #   spin (unfished, q-independent) computed ONCE and cached; each objective eval runs the 1841-2010
 #   transient (annual gravity + warm-restart) at candidate q; aggregate catch = area-weighted (cos-lat)
 #   mean of per-cell catch density; objective = wlogmse(agg_pel,obs_pel)+wlogmse(agg_ben,obs_ben)
 #   (same as tier1); BOBYQA on log10(q) seeded at the 0-D q. Optimiser runs on a cell SUBSAMPLE for
-#   speed; validate the fitted q on the full grid with gridded_A3.R afterwards.
+#   speed; validate the fitted q on the full grid with gridded_run.R afterwards.
 #   NOTE (scope): a q refit fixes the LEVEL (obs-weighted) + pel/ben split and keeps the r~0.93 shape,
 #   but CANNOT flatten the over-steep catch trend -- that residual is the documented depletion limitation.
 #   Rscript gridded_calib.R [158] --ncell=500 --maxeval=40 --cores=10 [--seedqp=..][--seedqb=..]
@@ -20,7 +20,7 @@ maxeval<-as.integer(opt("maxeval","40")); subseed<-as.integer(opt("subseed","7")
 ascl<-as.numeric(opt("A_SCALE","0.3333")); mu0s<-as.numeric(opt("MU0_SCALE","0.5"))
 Sys.setenv(PEL_IMM_FRAC=opt("PEL_IMM_FRAC","0.15"))
 Hacc<-as.numeric(opt("H","800")); Sacc<-as.numeric(opt("S","150")); icethr<-as.numeric(opt("icethr","0.15"))
-siccsv<-opt("siconc_csv","siconc_lme158.csv"); pcsv<-opt("percell","fao58_percell.csv")
+siccsv<-opt("siconc_csv",sprintf("siconc_lme%d.csv",L))   # per-region sea-ice (skipped if absent); was hardcoded to lme158
 base<-Sys.getenv("DBPM_DATA","DBPM_data")
 
 p<-fromJSON(Sys.glob(file.path(base,"equilibrium_runs",sprintf("init_dbpm_nonspatial_fao_lme-%d_searchvol_*.json",L)))[1])$params

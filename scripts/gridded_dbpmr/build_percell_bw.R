@@ -6,7 +6,7 @@
 suppressMessages({library(ncdf4); library(arrow); library(parallel)})
 NCDIR<-"gridded_nc"; THRESH<-200
 fn<-function(v)sprintf("%s/gfdl-mom6-cobalt2_obsclim_%s_60arcmin_global_monthly_1961_2010.nc",NCDIR,v)
-# GetPPIntSlope constants (Barnes 2010 / Woodworth-Jefcoats 2013), same as fao58_percell.R & the calib
+# GetPPIntSlope constants (Barnes 2010 / Woodworth-Jefcoats 2013), same as the calib
 mmin<-10^-14.25; mmid<-10^-10.184; mmax<-10^-5.25; midS<-log10((mmin+mmid)/2); midL<-log10((mmid+mmax)/2)
 ppintslope<-function(cb,pb){                 # cb=<phyc>, pb=<phypico> (biomass-weighted, mol/m3)
   s<-pb*12.0107; l<-(cb-pb)*12.0107          # small / large phyto, g C /m3

@@ -1,10 +1,11 @@
-# GRIDDED FAO 58 following the SAME approach as the A3 LME calibration:
+# GRIDDED DBPM full-grid run for region L (the A3 calibration recipe, per-cell spatiotemporal forcing):
 #   engine: A/3 (A_SCALE) + mu0=0.1 (MU0_SCALE) + connectivity floor (PEL_IMM_FRAC) + spin-80;
 #   forcing: 1841-2010 (spinup+obsclim), unfished spin -> fished from unfished equilibrium;
-#   per-cell plankton = whole-column biomass-weighted intercept+slope (fao58_percell.csv, as spatial
-#   anomalies on the LME temporal series); per-cell water-column temperature (texp);
-#   q from calib_A3 (region 158). Spatial gravity re-allocates LME effort across cells each year.
-#   Rscript gridded_A3.R [L] --ncell=N --spinyr=Y --cores=K --percell=fao58_percell.csv
+#   per-cell plankton/temperature = per-cell, per-timestep, biomass-weighted, LME-centered series
+#   read from percell_bw/percell_c_lme<L>.parquet (build_percell_bw.R + build_center.R).
+#   q defaults to the 0-D calibration (calib_A3/lme<L>.rds); override with --qpel/--qben (fitted q).
+#   Spatial gravity re-allocates the region's effort across cells each year. Writes gridded_A3_lme<L>.rds.
+#   Rscript gridded_run.R <L> --qpel=Q --qben=Q --spinyr=80 --cores=K
 # load the FRESH floor engine (PEL_IMM_FRAC), same as the tier1 calibration -- NOT the stale installed lib
 .libPaths(c(Sys.getenv("DBPMR_LIB","/tmp/dbpmrlib"), .libPaths()))  # install dbpmr here (see README)
 suppressMessages({ library(jsonlite); library(dbpmr); library(arrow); library(dplyr); library(parallel) })
@@ -20,7 +21,6 @@ ascl<-as.numeric(opt("A_SCALE","0.3333")); mu0s<-as.numeric(opt("MU0_SCALE","0.5
 Sys.setenv(PEL_IMM_FRAC=opt("PEL_IMM_FRAC","0.15"))                                   # connectivity floor (C env)
 Hacc<-as.numeric(opt("H","800")); Sacc<-as.numeric(opt("S","150")); icethr<-as.numeric(opt("icethr","0.15"))
 siccsv<-opt("siconc_csv",sprintf("siconc_lme%d.csv",L))          # per-region sea-ice (skipped if absent)
-pcsv<-opt("percell",sprintf("percell/percell_lme%d.csv",L))      # per-region per-cell inputs
 base<-Sys.getenv("DBPM_DATA","DBPM_data")
 
 p<-fromJSON(Sys.glob(file.path(base,"equilibrium_runs",sprintf("init_dbpm_nonspatial_fao_lme-%d_searchvol_*.json",L)))[1])$params
